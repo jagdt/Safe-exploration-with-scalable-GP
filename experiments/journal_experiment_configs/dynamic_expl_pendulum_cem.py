@@ -14,7 +14,7 @@ class Config(DefaultConfigExploration):
     verbose = 0
     static_exploration = False
 
-    solver_type = "safempc_cem"
+    solver_type = "safempc"
 
     # safempc
     beta_safety = 2.0
