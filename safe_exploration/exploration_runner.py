@@ -157,9 +157,6 @@ def run_exploration(conf, visualize=False):
                 x_i, u_i = exploration_module.find_max_variance(x_i)
 
             if visualize or save_vis:
-                # TODO: Remove the line below so the exploration points all plot on the same axes. This is currently
-                # broken with PyCharm sciview.
-                fig, ax = env.plot_safety_bounds(color="b")
                 ax = env.plot_state(ax, x=x_i, color=c_sample(i), normalize=False)
                 fig.canvas.draw()
                 if visualize:
@@ -202,8 +199,16 @@ def run_exploration(conf, visualize=False):
         l_x_next_prior += [x_next_prior]
 
         if not save_path is None:
+            # TODO extend saving method for CemSafeMPC
+            if not hasattr(exploration_module.safempc, 'ssm'):
+                raise AttributeError(
+                    f"Cannot save results: The SafeMPC implementation "
+                    f"'{type(exploration_module.safempc).__name__}' does not have an 'ssm' attribute. "
+                    f"This save function is currently only compatible with SimpleSafeMPC. "
+                    f"If using CemSafeMPC, you may need to implement a custom save method or disable saving."
+                )
             save_results(save_path, l_sigm_sum, l_sigm, l_inf_gain, l_z_all, l_x_next_obs_all, l_x_next_pred,
-                         x_next_prior, safempc.ssm, safety_all, x_train_init)
+                         x_next_prior, exploration_module.safempc.ssm, safety_all, x_train_init)
 
 
 def save_results(save_path, sigm_sum, sigm, inf_gain, z_all, x_next_obs_all,
