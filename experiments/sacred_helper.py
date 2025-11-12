@@ -12,15 +12,17 @@ config_updates, _ = sacred.arg_parser.get_config_updates(sys.argv)
 
 # Disable saving to mongo using "with save_to_db=False"
 if ("save_to_db" not in config_updates) or config_updates["save_to_db"]:
-    mongo_observer = MongoObserver.create(url=sacred_auth_details.db_url, db_name='safe-exploration')
-    ex.observers.append(mongo_observer)
+    # TODO: Enable MongoDB observer
+    # mongo_observer = MongoObserver.create(url=sacred_auth_details.db_url, db_name='safe-exploration')
+    # ex.observers.append(mongo_observer)
+    pass
 else:
     ex.observers.append(FileStorageObserver.create('safe_exploration_results'))
 
 
 @ex.config
 def base_config():
-    save_to_db = True
+    save_to_db = False
     # File name of the base config file, or None to use the file associated with the environment below.
     scenario_file = None
 
