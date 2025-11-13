@@ -24,6 +24,7 @@ from .ssm_cem.gp_ssm_cem import GpCemSSM
 from .ssm_cem.ssm_cem import CemSSM, JunkDimensionsSSM
 # from .ssm_cem.dropout_ssm_cem import McDropoutSSM
 from .utils import dlqr, unavailable
+from .ssm_numpy.gp_numpy import NumpyGPModel
 
 try:
     _has_ssm_gpy = True
@@ -49,11 +50,22 @@ def _create_cem_ssm(conf: DefaultConfig, env: Environment) -> CemSSM:
         return ssm_constructor(state_dimen=env.n_s, action_dimen=env.n_u)
 
 
-@unavailable(not _has_ssm_gpy, "ssm_gpy")
-def _create_simple_gp(conf, env):
-    return SimpleGPModel(conf.gp_ns_out, conf.gp_ns_in, env.n_u, m=conf.m,
+def _create_gp(conf, env):
+    if conf.gp_type == "gpy":
+        if not _has_ssm_gpy:
+            raise ImportError(
+                "gp_type='gpy' requires ssm_gpy to be installed. "
+                "Either install the required dependencies or use gp_type='numpy' instead."
+            )
+        return SimpleGPModel(conf.gp_ns_out, conf.gp_ns_in, env.n_u, m=conf.m,
                          kern_types=conf.kern_types, Z=conf.Z)
-
+    elif conf.gp_type == "numpy":
+        return NumpyGPModel(conf.gp_ns_out, conf.gp_ns_in, env.n_u,
+                         kern_types=conf.kern_types)
+    elif conf.gp_type == "scalable":
+        raise NotImplementedError("Scalable GP not implemented for SimpleSafeMPC")
+    else:
+        raise ValueError(f"Unknown gp_type: {conf.gp_type}")
 
 def create_solver(conf, env: Environment):
     """ Create a solver from a set of options and environment information"""
@@ -107,7 +119,7 @@ def create_solver(conf, env: Environment):
         perf_opts_safempc["r"] = conf.r
         perf_opts_safempc["perf_has_fb"] = conf.perf_has_fb
 
-        gp = _create_simple_gp(conf, env)
+        gp = _create_gp(conf, env)
         solver = SimpleSafeMPC(conf.n_safe, gp, env_opts_safempc, wx_cost, wu_cost,
                                beta_safety=conf.beta_safety,
                                safe_policy=safe_policy,
@@ -122,7 +134,7 @@ def create_solver(conf, env: Environment):
     elif conf.solver_type == "cautious_mpc":
         T = conf.T
 
-        gp = _create_simple_gp(conf, env)
+        gp = _create_gp(conf, env)
         solver = CautiousMPC(T, gp, env_opts_safempc, conf.beta_safety,
                              lin_trafo_gp_input=lin_trafo_gp_input, perf_trajectory=conf.type_perf_traj, k_fb=k_fb)
     else:

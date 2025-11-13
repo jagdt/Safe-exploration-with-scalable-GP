@@ -427,6 +427,8 @@ class SimpleGPModel(StateSpaceModel):
         ----------
         kern_types: n_s x 0 array_like[str]
             The names of the kernels for each dimension
+        hyp: list[dict], optional
+            Hyperparameters for each kernel
 
         Returns
         -------
