@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 
 import numpy as np
+from casadi import horzcat
 import warnings
+from ..ssm_gpy.gp_models_utils_casadi import gp_pred_function, _get_kernel_function
 from ..state_space_models import StateSpaceModel
 
 
@@ -55,38 +57,52 @@ class NumpyGPModel(StateSpaceModel):
 
     def __call__(self, states, actions):
         """ Single input predictions
-
-        Note: CasADi symbolic prediction not supported in NumpyGPModel.
-        Use predict() method with NumPy arrays instead.
         """
-        raise NotImplementedError(
-            "CasADi symbolic predictions not supported in NumpyGPModel. "
-            "Use predict() method with NumPy arrays instead.")
+        N, n = np.shape(states)
+        if N > 1:
+            raise NotImplementedError("Currently do not support multiple state-action pairs to evaluate on.")
+        return self.predict_casadi_symbolic(horzcat(states, actions), True)
 
     def get_kern_func_casadi(self):
+        """Return CasADi kernel functions for each output dimension
         """
-        Note: CasADi kernel functions not supported in NumpyGPModel.
-        """
-        raise NotImplementedError(
-            "CasADi kernel functions not supported in NumpyGPModel.")
+        return [_get_kernel_function(kern_type, hyp) for (kern_type, hyp) in zip(self.kern_types, self.hyp)]
 
     def get_forward_model_casadi(self, compute_grads=False):
         """ Return a symbolic casadi function representing predictive mean/variance
-
-        Note: CasADi symbolic prediction not supported in NumpyGPModel.
         """
-        raise NotImplementedError(
-            "CasADi symbolic predictions not supported in NumpyGPModel. "
-            "Use predict() method with NumPy arrays instead.")
+        return lambda x_new, u_new: self.predict_casadi_symbolic(horzcat(x_new, u_new), compute_grads)
 
     def predict_casadi_symbolic(self, x_new, compute_grads=False):
         """ Return a symbolic casadi function representing predictive mean/variance
+        
+        Parameters
+        ----------
+        x_new : casadi.SX or casadi.MX
+            Test input (1 × (n_s_in + n_u))
+        compute_grads : bool
+            Whether to compute gradients
+            
+        Returns
+        -------
+        mu_new : casadi expression
+            Predictive mean (n_s_out × 1)
+        sigma_new : casadi expression  
+            Predictive standard deviation (n_s_out × 1)
+        jac_mu : casadi expression, optional
+            Jacobian of mean (n_s_out × (n_s_in + n_u))
+        """        
+        assert np.shape(x_new)[0] == 1, "We only support this for a single input vector right now"
 
-        Note: CasADi symbolic prediction not supported in NumpyGPModel.
-        """
-        raise NotImplementedError(
-            "CasADi symbolic predictions not supported in NumpyGPModel. "
-            "Use predict() method with NumPy arrays instead.")
+        out_dict = gp_pred_function(x_new, self.hyp, self.kern_types, self.z, self.beta,
+                                    self.inv_K, True, compute_grads)
+        mu_new = out_dict["pred_mu"]
+        sigma_new = out_dict["pred_sigma"]
+        if compute_grads:
+            jac_mu = out_dict["jac_mu"]
+            return mu_new.T, sigma_new.T, jac_mu
+
+        return mu_new.T, sigma_new.T
 
     @classmethod
     def from_dict(cls, gp_dict):
