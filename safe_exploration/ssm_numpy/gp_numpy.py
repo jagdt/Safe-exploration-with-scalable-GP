@@ -1,0 +1,546 @@
+# -*- coding: utf-8 -*-
+
+import numpy as np
+import warnings
+from ..state_space_models import StateSpaceModel
+
+
+class NumpyGPModel(StateSpaceModel):
+    """ Pure NumPy GP implementation (drop-in replacement for SimpleGPModel)
+
+    Pure NumPy implementation that mirrors SimpleGPModel structure
+    but uses NumPy instead of GPy for fair algorithmic comparison to scalable GP implementation.
+
+    Attributes:
+        gp_trained (bool): Is set to TRUE once the train() method
+            was called.
+        n_s (int): number of state dimensions of the dynamic system
+        n_u (int): number of action/control dimensions of the dynamic system
+        beta (np.ndarray): Posterior coefficients [N × n_s_out]
+        inv_K (list): List of inverse kernel matrices, one per dimension
+        z (np.ndarray): Training inputs
+        hyp (list[dict]): List of hyperparameter dictionaries
+    """
+
+    def __init__(self, n_s_out, n_s_in, n_u, X=None, y=None, kern_types=None,
+                 hyp=None, train=False):
+        """ Initialize GP Model (possibly without training set)
+
+        Parameters
+        ----------
+            X (np.ndarray[float], optional): Training inputs
+            y (np.ndarray[float], optional): Training targets
+            kern_types (list[str]): a list of pre-specified covariance function types
+            hyp (list[dict], optional): hyperparameters for each kernel
+
+        """
+        self.n_s_out = n_s_out
+        self.n_s_in = n_s_in
+        self.n_u = n_u
+        self.gp_trained = False
+
+        self.beta = None
+        self.inv_K = None
+        self.z = None
+        self._init_kernel_function(kern_types, hyp)
+        self.hyp = self._create_hyp_dict(self.kern_types)
+
+        if X is None or y is None:  # initialize without training (no data available)
+            train = False
+
+        if train:
+            self.train(X, y)
+
+        super(NumpyGPModel, self).__init__(n_s_out, n_u)
+
+    def __call__(self, states, actions):
+        """ Single input predictions
+
+        Note: CasADi symbolic prediction not supported in NumpyGPModel.
+        Use predict() method with NumPy arrays instead.
+        """
+        raise NotImplementedError(
+            "CasADi symbolic predictions not supported in NumpyGPModel. "
+            "Use predict() method with NumPy arrays instead.")
+
+    def get_kern_func_casadi(self):
+        """
+        Note: CasADi kernel functions not supported in NumpyGPModel.
+        """
+        raise NotImplementedError(
+            "CasADi kernel functions not supported in NumpyGPModel.")
+
+    def get_forward_model_casadi(self, compute_grads=False):
+        """ Return a symbolic casadi function representing predictive mean/variance
+
+        Note: CasADi symbolic prediction not supported in NumpyGPModel.
+        """
+        raise NotImplementedError(
+            "CasADi symbolic predictions not supported in NumpyGPModel. "
+            "Use predict() method with NumPy arrays instead.")
+
+    def predict_casadi_symbolic(self, x_new, compute_grads=False):
+        """ Return a symbolic casadi function representing predictive mean/variance
+
+        Note: CasADi symbolic prediction not supported in NumpyGPModel.
+        """
+        raise NotImplementedError(
+            "CasADi symbolic predictions not supported in NumpyGPModel. "
+            "Use predict() method with NumPy arrays instead.")
+
+    @classmethod
+    def from_dict(cls, gp_dict):
+        """ Initialize GP using data from a dict
+
+        Initialized the NumpyGPModel from a dictionary containing
+        the necessary information.
+
+        Parameters
+        ----------
+        gp_dict: dict
+            The dictionary containing the following entries:
+
+        """
+        data_available = False
+        y = None
+        x = None
+
+        if "data_path" in gp_dict and not gp_dict["data_path"] is None:
+            data_path = gp_dict["data_path"]
+            data = np.load(data_path)
+            x = data["S"]
+            y = data["y"]
+            data_available = True
+        elif "x" in gp_dict and "y" in gp_dict:
+            x = gp_dict["x"]
+            y = gp_dict["y"]
+            data_available = True
+        else:
+            warnings.warn("""In order to be trained, GP either needs a data_path or
+            the data itself (key 'data_path' or keys 'x' and 'y') -> we just instantiate the GP class, no training""")
+
+        if "prior_model" in gp_dict:
+            prior_model = gp_dict["prior_model"]
+            if data_available:
+                y = y - prior_model(x)
+
+        n_s_in = gp_dict["n_s_in"]
+        n_s_out = gp_dict["n_s_out"]
+        n_u = gp_dict["n_u"]
+
+        kern_types = None
+        if "kern_types" in gp_dict:
+            kern_types = gp_dict["kern_types"]
+
+        train = False
+        if "train" in gp_dict:
+            train = gp_dict["train"]
+        train = train and data_available
+
+        hyp = None
+        if "hyp" in gp_dict:
+            hyp = gp_dict["hyp"]
+
+        return cls(n_s_out, n_s_in, n_u, x, y, kern_types, hyp, train)
+
+    def to_dict(self):
+        """ return a dict summarizing the object """
+        gp_dict = dict()
+        gp_dict["x"] = self.x_train
+        gp_dict["y"] = self.y_train
+        gp_dict["kern_types"] = self.kern_types
+        gp_dict["hyp"] = self.hyp
+        gp_dict["beta"] = self.beta
+        gp_dict["inv_K"] = self.inv_K
+
+        return gp_dict
+
+
+    def _init_kernel_function(self, kern_types=None, hyp=None):
+        """ Initialize kernel functions based on name. Check if supported.
+
+        Utility function to set up kernels based on their type name.
+        Checks if the kernel type is supported.
+
+        Parameters
+        ----------
+        kern_types: n_s x 0 array_like[str]
+            The names of the kernels for each dimension
+        hyp: list[dict], optional
+            Hyperparameters for each kernel
+
+        """
+        if kern_types is None:
+            kern_types = [None] * self.n_s_out
+            for i in range(self.n_s_out):
+                kern_types[i] = "rbf"
+        
+        # Store kernel types
+        self.kern_types = kern_types
+        
+        # Validate kernel types
+        for kern_type in kern_types:
+            if kern_type not in ["rbf", "mat52", "lin_rbf", "lin_mat52"]:
+                raise ValueError(
+                    "kernel type '{}' not supported".format(kern_type))
+
+    def _create_hyp_dict(self, kern_types):
+        """ Create a hyperparameter dict for the kernels
+
+        Parameters
+        ----------
+        kern_types: list[str]
+            The kernel identifiers
+
+        Returns
+        -------
+        hyp: list[dict]
+            A list of dictionaries containing the hyperparameters of the kernel type
+            for each dimension.
+        """
+        input_dim = self.n_s_in + self.n_u
+        hyp = [None] * self.n_s_out
+
+        for i in range(self.n_s_out):
+            hyp_i = dict()
+            if kern_types[i] == "rbf":
+                hyp_i["lengthscale"] = np.ones(input_dim)
+                hyp_i["variance"] = 1.0
+            elif kern_types[i] == "mat52":
+                hyp_i["lengthscale"] = np.ones(input_dim)
+                hyp_i["variance"] = 1.0
+            elif kern_types[i] == "lin_rbf":
+                hyp_i["prod.rbf.lengthscale"] = np.ones(input_dim)
+                hyp_i["prod.rbf.variance"] = 1.0
+                hyp_i["prod.linear.variances"] = np.ones(input_dim)
+                hyp_i["linear.variances"] = np.ones(input_dim)
+            elif kern_types[i] == "lin_mat52":
+                hyp_i["prod.mat52.lengthscale"] = np.ones(input_dim)
+                hyp_i["prod.mat52.variance"] = 1.0
+                hyp_i["prod.linear.variances"] = np.ones(input_dim)
+                hyp_i["linear.variances"] = np.ones(input_dim)
+            else:
+                raise ValueError("kernel type not supported")
+            hyp[i] = hyp_i
+        return hyp
+
+    def _squared_distances(self, X1, X2, lengthscale):
+        """Compute scaled squared distances.
+        
+        Parameters
+        ----------
+        X1 : ndarray [N × D]
+        X2 : ndarray [M × D]
+        lengthscale : ndarray [D]
+        
+        Returns
+        -------
+        sq_dists : ndarray [N × M]
+            Squared distances scaled by lengthscale
+        """
+        X1_scaled = X1 / lengthscale
+        X2_scaled = X2 / lengthscale
+        
+        # ||x1 - x2||^2 = ||x1||^2 + ||x2||^2 - 2*x1^T*x2
+        sq_norms1 = np.sum(X1_scaled**2, axis=1, keepdims=True)
+        sq_norms2 = np.sum(X2_scaled**2, axis=1)
+        sq_dists = sq_norms1 + sq_norms2 - 2 * X1_scaled @ X2_scaled.T
+        
+        # Numerical stability: ensure non-negative
+        sq_dists = np.maximum(sq_dists, 0.0)
+        
+        return sq_dists
+    
+    def _rbf_kernel(self, X1, X2, hyp):
+        """RBF (Gaussian) kernel: k(x,x') = σ² exp(-0.5 ||x-x'||²/ℓ²)"""
+        sq_dists = self._squared_distances(X1, X2, hyp['lengthscale'])
+        return hyp['variance'] * np.exp(-0.5 * sq_dists)
+    
+    def _matern52_kernel(self, X1, X2, hyp):
+        """Matérn 5/2 kernel: k(x,x') = σ²(1 + √5*r + 5*r²/3)exp(-√5*r)"""
+        sq_dists = self._squared_distances(X1, X2, hyp['lengthscale'])
+        r = np.sqrt(sq_dists + 1e-12)  # Add small epsilon for numerical stability
+        sqrt5_r = np.sqrt(5) * r
+        
+        return hyp['variance'] * (1.0 + sqrt5_r + 5.0 * sq_dists / 3.0) * np.exp(-sqrt5_r)
+    
+    def _linear_kernel(self, X1, X2, hyp):
+        """Linear kernel: k(x,x') = x^T Σ x'"""
+        variances = hyp.get('variances', np.ones(X1.shape[1]))
+        X1_scaled = X1 * np.sqrt(variances)
+        X2_scaled = X2 * np.sqrt(variances)
+        return X1_scaled @ X2_scaled.T
+    
+    def compute_kernel(self, X1, X2, kern_type, hyp):
+        """Compute kernel matrix based on type.
+        
+        Parameters
+        ----------
+        X1 : ndarray [N × D]
+        X2 : ndarray [M × D]
+        kern_type : str
+            One of 'rbf', 'mat52', 'lin_rbf', 'lin_mat52'
+        hyp : dict
+            Hyperparameters for the kernel
+        
+        Returns
+        -------
+        K : ndarray [N × M]
+        """
+        if kern_type == 'rbf':
+            return self._rbf_kernel(X1, X2, hyp)
+        elif kern_type == 'mat52':
+            return self._matern52_kernel(X1, X2, hyp)
+        elif kern_type == 'lin_rbf':
+            # Linear * RBF + Linear
+            hyp_rbf = {'lengthscale': hyp['prod.rbf.lengthscale'], 
+                       'variance': hyp['prod.rbf.variance']}
+            hyp_lin1 = {'variances': hyp['prod.linear.variances']}
+            hyp_lin2 = {'variances': hyp['linear.variances']}
+            return (self._linear_kernel(X1, X2, hyp_lin1) * 
+                    self._rbf_kernel(X1, X2, hyp_rbf) + 
+                    self._linear_kernel(X1, X2, hyp_lin2))
+        elif kern_type == 'lin_mat52':
+            # Linear * Matern52 + Linear
+            hyp_mat52 = {'lengthscale': hyp['prod.mat52.lengthscale'], 
+                         'variance': hyp['prod.mat52.variance']}
+            hyp_lin1 = {'variances': hyp['prod.linear.variances']}
+            hyp_lin2 = {'variances': hyp['linear.variances']}
+            return (self._linear_kernel(X1, X2, hyp_lin1) * 
+                    self._matern52_kernel(X1, X2, hyp_mat52) + 
+                    self._linear_kernel(X1, X2, hyp_lin2))
+        else:
+            raise ValueError(f"Unsupported kernel type: {kern_type}")
+
+
+    def train(self, X, y, opt_hyp=True, noise_diag=1e-5):
+        """ Train a GP for each state dimension
+
+        Args:
+            X: Training inputs of size [N, n_s + n_u]
+            y: Training targets of size [N, n_s]
+            opt_hyp: bool, optional. If True, optimize hyperparameters (not implemented)
+            noise_diag: float, optional. Additional noise added to diagonal
+        """
+        n_data, _ = np.shape(X)
+
+        n_beta = n_data
+        beta = np.empty((n_beta, self.n_s_out))
+
+        inv_K = [None] * self.n_s_out
+        process_noise = np.empty((self.n_s_out,))
+
+        for i in range(self.n_s_out):
+            y_i = y[:, i].reshape(-1, 1)
+            
+            # Compute kernel matrix
+            K = self.compute_kernel(X, X, self.kern_types[i], self.hyp[i])
+            
+            # Add noise
+            noise_var = 1e-4  # Default noise level
+            K += noise_var * np.eye(n_beta)
+            
+            if noise_diag > 0.:
+                K += noise_diag * np.eye(n_beta)
+            
+            # Cholesky decomposition for numerical stability
+            try:
+                L = np.linalg.cholesky(K)
+            except np.linalg.LinAlgError:
+                warnings.warn(f"Cholesky failed for dimension {i}, adding jitter")
+                K += 1e-6 * np.eye(n_beta)
+                L = np.linalg.cholesky(K)
+            
+            # Compute inverse using Cholesky
+            inv_K[i] = np.linalg.solve(L.T, np.linalg.solve(L, np.eye(n_beta)))
+            
+            # Compute beta = K^{-1} y (woodbury_vector equivalent)
+            beta[:, i] = np.linalg.solve(L.T, np.linalg.solve(L, y_i)).reshape(-1, )
+            
+            process_noise[i] = noise_var
+
+        # Update the class attributes
+        self.z = X
+        self.inv_K = inv_K
+        self.beta = beta
+        self.gp_trained = True
+        self.x_train = X
+        self.y_train = y
+        
+        if opt_hyp:
+            warnings.warn("Hyperparameter optimization not yet implemented in NumpyGPModel")
+
+
+    def predict(self, x_new, quantiles=None, compute_gradients=False):
+        """ Compute the predictive mean and variance for a set of test inputs
+
+        """
+
+        T = np.shape(x_new)[0]
+        y_mu_pred = np.empty((T, self.n_s_out))
+        y_sigm_pred = np.empty((T, self.n_s_out))
+
+        for i in range(self.n_s_out):
+            # Cross-covariance k(X*, X)
+            K_star = self.compute_kernel(x_new, self.z, 
+                                        self.kern_types[i], self.hyp[i])
+            
+            # Predictive mean: k(X*, X) beta
+            y_mu_pred[:, i] = K_star @ self.beta[:, i]
+            
+            # Predictive variance
+            K_ss = self.compute_kernel(x_new, x_new, 
+                                      self.kern_types[i], self.hyp[i])
+            
+            # var = k** - k* @ K^{-1} @ k*^T
+            var = np.diag(K_ss) - np.sum((K_star @ self.inv_K[i]) * K_star, axis=1)
+            
+            # Return standard deviation (not variance)
+            y_sigm_pred[:, i] = np.sqrt(np.maximum(var, 1e-10))
+
+        if quantiles is not None:
+            raise NotImplementedError()
+
+        if compute_gradients:
+            grad_mu = self.predictive_gradients(x_new)
+            return y_mu_pred, y_sigm_pred, grad_mu
+
+        return y_mu_pred, y_sigm_pred
+
+
+    def predictive_gradients(self, x_new, grad_sigma=False):
+        """ Compute the gradients of the predictive mean/variance w.r.t. inputs
+
+        Parameters
+        ----------
+        x_new: T x (n_s + n_u) array[float]
+            The test inputs to compute the gradients at
+        grad_sigma: bool, optional
+            Additionaly returns the gradients of the predictive variance w.r.t. the inputs if
+            this is set to TRUE
+
+        """
+
+        if grad_sigma:
+            raise NotImplementedError("Gradient of sigma not implemented")
+
+        T = np.shape(x_new)[0]
+        input_dim = self.n_s_in + self.n_u
+
+        grad_mu_pred = np.empty([T, self.n_s_out, input_dim])
+
+        for i in range(self.n_s_out):
+            if self.kern_types[i] == 'rbf':
+                grad_mu_pred[:, i, :] = self._rbf_gradient(x_new, i)
+            elif self.kern_types[i] == 'mat52':
+                grad_mu_pred[:, i, :] = self._matern52_gradient(x_new, i)
+            else:
+                warnings.warn(f"Gradient not implemented for kernel type {self.kern_types[i]}")
+                grad_mu_pred[:, i, :] = 0.0
+
+        return grad_mu_pred
+    
+    def _rbf_gradient(self, x_new, dim_idx):
+        """Compute gradient of RBF GP mean w.r.t. inputs.
+        
+        ∂μ/∂x* = ∂k(x*,X)/∂x* @ beta
+        """
+        T = x_new.shape[0]
+        N = self.z.shape[0]
+        input_dim = self.n_s_in + self.n_u
+        
+        K_star = self.compute_kernel(x_new, self.z, 
+                                     self.kern_types[dim_idx], 
+                                     self.hyp[dim_idx])
+        
+        # Compute gradient of kernel
+        lengthscale = self.hyp[dim_idx]['lengthscale']
+        grad_K = np.zeros((T, N, input_dim))
+        
+        for d in range(input_dim):
+            # ∂k/∂x*_d = k(x*,X) * (X_d - x*_d) / ℓ_d²
+            diff = (self.z[:, d] - x_new[:, d, np.newaxis]) / (lengthscale[d]**2)
+            grad_K[:, :, d] = K_star * diff
+        
+        # Chain rule: ∂μ/∂x* = ∂k/∂x* @ beta
+        grad_mu = np.einsum('tnd,n->td', grad_K, self.beta[:, dim_idx])
+        
+        return grad_mu
+    
+    def _matern52_gradient(self, x_new, dim_idx):
+        """Compute gradient of Matérn 5/2 GP mean w.r.t. inputs."""
+        warnings.warn("Matérn 5/2 gradient not implemented, returning zeros")
+        input_dim = self.n_s_in + self.n_u
+        return np.zeros((x_new.shape[0], input_dim))
+
+
+    def update_model(self, x, y, opt_hyp=False, replace_old=True, noise_diag=1e-5):
+        """ Update the model based on the current settings and new data
+
+        Parameters
+        ----------
+        x: n x (n_s + n_u) array[float]
+            The training set
+        y: n x n_s
+            The training targets
+        opt_hyp: bool, optional
+            If this is set to TRUE the hyperparameters are re-optimized
+        replace_old: bool, optional
+            If True, replace old data; if False, append to old data
+        noise_diag: float, optional
+            Additional noise added to diagonal
+        """
+        if replace_old:
+            x_new = x
+            y_new = y
+        else:
+            x_new = np.vstack((self.x_train, x))
+            y_new = np.vstack((self.y_train, y))
+
+        # TODO: implement efficient update without retraining from scratch
+        # Currently always retrains with the new data
+        self.train(x_new, y_new, opt_hyp=opt_hyp, noise_diag=noise_diag)
+
+    def sample_from_gp(self, inp, size=10):
+        """ Sample from GP predictive distribution
+
+
+        Args:
+            inp (numpy.ndarray[float]): array of shape n x (n_s + n_u); the
+                test inputs
+            size (int, optional): number of samples per test point
+
+        Returns:
+            S (numpy.ndarray[float]): array of shape n x size x n_s; array of size samples
+            of the posterior distribution per test input
+
+        """
+
+        n = np.shape(inp)[0]
+        S = np.empty((n, size, self.n_s_out))
+
+        mu, sigma = self.predict(inp)
+        
+        for i in range(self.n_s_out):
+            # Sample from Gaussian distribution
+            for j in range(size):
+                S[:, j, i] = mu[:, i] + sigma[:, i] * np.random.randn(n)
+
+        return S
+
+    def information_gain(self, x=None):
+        """ Mutual information between samples and system """
+
+        if x is None:
+            x = self.z
+
+        n_data = np.shape(x)[0]
+        inf_gain_x_f = [None] * self.n_s_out
+        
+        for i in range(self.n_s_out):
+            noise_var = 1e-4  # Default noise variance
+            K = self.compute_kernel(x, x, self.kern_types[i], self.hyp[i])
+            inf_gain_x_f[i] = np.log(
+                np.linalg.det(np.eye(n_data) + (1 / noise_var) * K))
+
+        return inf_gain_x_f
