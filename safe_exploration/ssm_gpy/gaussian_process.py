@@ -31,7 +31,7 @@ class SimpleGPModel(StateSpaceModel):
 
     def __init__(self, n_s_out, n_s_in, n_u, X=None, y=None, m=None, kern_types=None,
                  hyp=None, train=False, Z=None):
-        """ Initialize GP Model ( possibly without training set)
+        """ Initialize GP Model (possibly without training set)
 
         Parameters
         ----------
