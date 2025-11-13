@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import numpy as np
+from scipy.optimize import minimize
 from casadi import horzcat
 import warnings
 from ..ssm_gpy.gp_models_utils_casadi import gp_pred_function, _get_kernel_function
@@ -47,6 +48,7 @@ class NumpyGPModel(StateSpaceModel):
         self.z = None
         self._init_kernel_function(kern_types, hyp)
         self.hyp = self._create_hyp_dict(self.kern_types)
+        self.noise_var = np.zeros((self.n_s_out,))
 
         if X is None or y is None:  # initialize without training (no data available)
             train = False
@@ -308,7 +310,6 @@ class NumpyGPModel(StateSpaceModel):
         elif kern_type == 'mat52':
             return self._matern52_kernel(X1, X2, hyp)
         elif kern_type == 'lin_rbf':
-            # Linear * RBF + Linear
             hyp_rbf = {'lengthscale': hyp['prod.rbf.lengthscale'], 
                        'variance': hyp['prod.rbf.variance']}
             hyp_lin1 = {'variances': hyp['prod.linear.variances']}
@@ -317,7 +318,6 @@ class NumpyGPModel(StateSpaceModel):
                     self._rbf_kernel(X1, X2, hyp_rbf) + 
                     self._linear_kernel(X1, X2, hyp_lin2))
         elif kern_type == 'lin_mat52':
-            # Linear * Matern52 + Linear
             hyp_mat52 = {'lengthscale': hyp['prod.mat52.lengthscale'], 
                          'variance': hyp['prod.mat52.variance']}
             hyp_lin1 = {'variances': hyp['prod.linear.variances']}
@@ -329,37 +329,31 @@ class NumpyGPModel(StateSpaceModel):
             raise ValueError(f"Unsupported kernel type: {kern_type}")
 
 
-    def train(self, X, y, opt_hyp=True, noise_diag=1e-5):
+    def train(self, X, y, opt_hyp=True):
         """ Train a GP for each state dimension
 
         Args:
-            X: Training inputs of size [N, n_s + n_u]
-            y: Training targets of size [N, n_s]
-            opt_hyp: bool, optional. If True, optimize hyperparameters (not implemented)
-            noise_diag: float, optional. Additional noise added to diagonal
+            X: Training inputs of size [N, n_s_in + n_u]
+            y: Training targets of size [N, n_s_out]
+            opt_hyp: bool, optional. If True, optimize hyperparameters
         """
         n_data, _ = np.shape(X)
+
+        if opt_hyp:
+            for i in range(self.n_s_out):
+                self._optimize_hyperparameters(X, y[:, i], i)
 
         n_beta = n_data
         beta = np.empty((n_beta, self.n_s_out))
 
         inv_K = [None] * self.n_s_out
-        process_noise = np.empty((self.n_s_out,))
 
         for i in range(self.n_s_out):
             y_i = y[:, i].reshape(-1, 1)
             
-            # Compute kernel matrix
             K = self.compute_kernel(X, X, self.kern_types[i], self.hyp[i])
+            K += self.noise_var[i] * np.eye(n_beta)
             
-            # Add noise
-            noise_var = 1e-4  # Default noise level
-            K += noise_var * np.eye(n_beta)
-            
-            if noise_diag > 0.:
-                K += noise_diag * np.eye(n_beta)
-            
-            # Cholesky decomposition for numerical stability
             try:
                 L = np.linalg.cholesky(K)
             except np.linalg.LinAlgError:
@@ -367,24 +361,157 @@ class NumpyGPModel(StateSpaceModel):
                 K += 1e-6 * np.eye(n_beta)
                 L = np.linalg.cholesky(K)
             
-            # Compute inverse using Cholesky
             inv_K[i] = np.linalg.solve(L.T, np.linalg.solve(L, np.eye(n_beta)))
             
-            # Compute beta = K^{-1} y (woodbury_vector equivalent)
             beta[:, i] = np.linalg.solve(L.T, np.linalg.solve(L, y_i)).reshape(-1, )
-            
-            process_noise[i] = noise_var
 
-        # Update the class attributes
         self.z = X
         self.inv_K = inv_K
         self.beta = beta
         self.gp_trained = True
         self.x_train = X
         self.y_train = y
+
+    def _optimize_hyperparameters(self, X, y, dim_idx, max_iter=1000):
+        """Optimize hyperparameters for a single output dimension
         
-        if opt_hyp:
-            warnings.warn("Hyperparameter optimization not yet implemented in NumpyGPModel")
+        Uses the marginal log-likelihood as the objective function and scipy's
+        L-BFGS-B optimizer to find optimal hyperparameters.
+        
+        Parameters
+        ----------
+        X : ndarray [N × (n_s_in + n_u)]
+            Training inputs
+        y : ndarray [N]
+            Training targets for one output dimension
+        dim_idx : int
+            Index of the output dimension being optimized
+        max_iter : int, optional
+            Maximum number of optimization iterations
+        """        
+        hyp0 = self._pack_hyperparameters(self.hyp[dim_idx], self.kern_types[dim_idx], dim_idx)
+        
+        bounds = [(1e-5, None)] * len(hyp0)
+        
+        result = minimize(self._neg_log_marginal_likelihood, hyp0, 
+                        args=(X, y, dim_idx), method='L-BFGS-B', bounds=bounds,
+                        options={'maxiter': max_iter, 'disp': False})
+        
+        if result.success:
+            self.hyp[dim_idx] = self._unpack_hyperparameters(result.x[:-1], self.kern_types[dim_idx])
+            self.noise_var[dim_idx] = result.x[-1]
+        else:
+            warnings.warn(f"Hyperparameter optimization failed for dimension {dim_idx}: {result.message}")
+
+    def _neg_log_marginal_likelihood(self, hyp_array, X, y, dim_idx):
+        """Negative log marginal likelihood"""
+        hyp_dict = self._unpack_hyperparameters(hyp_array, self.kern_types[dim_idx])
+        
+        K = self.compute_kernel(X, X, self.kern_types[dim_idx], hyp_dict)
+        noise_var = hyp_array[-1]
+        K += noise_var * np.eye(X.shape[0])
+        
+        try:
+            L = np.linalg.cholesky(K)
+            
+            # Compute log marginal likelihood
+            # log p(y|X,θ) = -0.5*y^T*K^{-1}*y - sum(log(diag(L))) - n/2*log(2π)
+            alpha = np.linalg.solve(L.T, np.linalg.solve(L, y))
+            log_likelihood = -0.5 * y.T @ alpha - np.sum(np.log(np.diag(L))) - 0.5 * len(y) * np.log(2 * np.pi)
+            
+            return -log_likelihood
+        except np.linalg.LinAlgError:
+            return 1e10
+
+    def _pack_hyperparameters(self, hyp_dict, kern_type, dim_idx):
+        """Pack hyperparameter dict into 1D array for optimization
+        
+        Parameters
+        ----------
+        hyp_dict : dict
+            Hyperparameter dictionary
+        kern_type : str
+            Kernel type
+        dim_idx : int
+            Output dimension index
+            
+        Returns
+        -------
+        hyp_array : ndarray
+            1D array of hyperparameters (includes noise variance at end)
+        """
+        if kern_type == 'rbf' or kern_type == 'mat52':
+            hyp_array = np.concatenate([
+                hyp_dict['lengthscale'],
+                [hyp_dict['variance']],
+                [self.noise_var[dim_idx]]
+            ])
+        elif kern_type == 'lin_rbf':
+            hyp_array = np.concatenate([
+                hyp_dict['prod.rbf.lengthscale'],
+                [hyp_dict['prod.rbf.variance']],
+                hyp_dict['prod.linear.variances'],
+                hyp_dict['linear.variances'],
+                [self.noise_var[dim_idx]]
+            ])
+        elif kern_type == 'lin_mat52':
+            hyp_array = np.concatenate([
+                hyp_dict['prod.mat52.lengthscale'],
+                [hyp_dict['prod.mat52.variance']],
+                hyp_dict['prod.linear.variances'],
+                hyp_dict['linear.variances'],
+                [self.noise_var[dim_idx]]
+            ])
+        else:
+            raise ValueError(f"Unsupported kernel type: {kern_type}")
+        
+        return hyp_array
+    
+    def _unpack_hyperparameters(self, hyp_array, kern_type):
+        """Unpack 1D array into hyperparameter dict
+        
+        Parameters
+        ----------
+        hyp_array : ndarray
+            1D array of hyperparameters (without noise variance)
+        kern_type : str
+            Kernel type
+            
+        Returns
+        -------
+        hyp_dict : dict
+            Hyperparameter dictionary
+        """
+        hyp_dict = {}
+        
+        if kern_type == 'rbf' or kern_type == 'mat52':
+            n_lengthscales = self.input_dim
+            hyp_dict['lengthscale'] = hyp_array[:n_lengthscales]
+            hyp_dict['variance'] = hyp_array[n_lengthscales]
+        elif kern_type == 'lin_rbf':
+            n = self.input_dim
+            idx = 0
+            hyp_dict['prod.rbf.lengthscale'] = hyp_array[idx:idx+n]
+            idx += n
+            hyp_dict['prod.rbf.variance'] = hyp_array[idx]
+            idx += 1
+            hyp_dict['prod.linear.variances'] = hyp_array[idx:idx+n]
+            idx += n
+            hyp_dict['linear.variances'] = hyp_array[idx:idx+n]
+        elif kern_type == 'lin_mat52':
+            n = self.input_dim
+            idx = 0
+            hyp_dict['prod.mat52.lengthscale'] = hyp_array[idx:idx+n]
+            idx += n
+            hyp_dict['prod.mat52.variance'] = hyp_array[idx]
+            idx += 1
+            hyp_dict['prod.linear.variances'] = hyp_array[idx:idx+n]
+            idx += n
+            hyp_dict['linear.variances'] = hyp_array[idx:idx+n]
+        else:
+            raise ValueError(f"Unsupported kernel type: {kern_type}")
+        
+        return hyp_dict
 
 
     def predict(self, x_new, quantiles=None, compute_gradients=False):
