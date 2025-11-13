@@ -39,6 +39,7 @@ class NumpyGPModel(StateSpaceModel):
         self.n_s_out = n_s_out
         self.n_s_in = n_s_in
         self.n_u = n_u
+        self.input_dim = n_s_in + n_u
         self.gp_trained = False
 
         self.beta = None
@@ -214,27 +215,26 @@ class NumpyGPModel(StateSpaceModel):
             A list of dictionaries containing the hyperparameters of the kernel type
             for each dimension.
         """
-        input_dim = self.n_s_in + self.n_u
         hyp = [None] * self.n_s_out
 
         for i in range(self.n_s_out):
             hyp_i = dict()
             if kern_types[i] == "rbf":
-                hyp_i["lengthscale"] = np.ones(input_dim)
+                hyp_i["lengthscale"] = np.ones(self.input_dim)
                 hyp_i["variance"] = 1.0
             elif kern_types[i] == "mat52":
-                hyp_i["lengthscale"] = np.ones(input_dim)
+                hyp_i["lengthscale"] = np.ones(self.input_dim)
                 hyp_i["variance"] = 1.0
             elif kern_types[i] == "lin_rbf":
-                hyp_i["prod.rbf.lengthscale"] = np.ones(input_dim)
+                hyp_i["prod.rbf.lengthscale"] = np.ones(self.input_dim)
                 hyp_i["prod.rbf.variance"] = 1.0
-                hyp_i["prod.linear.variances"] = np.ones(input_dim)
-                hyp_i["linear.variances"] = np.ones(input_dim)
+                hyp_i["prod.linear.variances"] = np.ones(self.input_dim)
+                hyp_i["linear.variances"] = np.ones(self.input_dim)
             elif kern_types[i] == "lin_mat52":
-                hyp_i["prod.mat52.lengthscale"] = np.ones(input_dim)
+                hyp_i["prod.mat52.lengthscale"] = np.ones(self.input_dim)
                 hyp_i["prod.mat52.variance"] = 1.0
-                hyp_i["prod.linear.variances"] = np.ones(input_dim)
-                hyp_i["linear.variances"] = np.ones(input_dim)
+                hyp_i["prod.linear.variances"] = np.ones(self.input_dim)
+                hyp_i["linear.variances"] = np.ones(self.input_dim)
             else:
                 raise ValueError("kernel type not supported")
             hyp[i] = hyp_i
@@ -441,9 +441,8 @@ class NumpyGPModel(StateSpaceModel):
             raise NotImplementedError("Gradient of sigma not implemented")
 
         T = np.shape(x_new)[0]
-        input_dim = self.n_s_in + self.n_u
 
-        grad_mu_pred = np.empty([T, self.n_s_out, input_dim])
+        grad_mu_pred = np.empty([T, self.n_s_out, self.input_dim])
 
         for i in range(self.n_s_out):
             if self.kern_types[i] == 'rbf':
@@ -463,7 +462,6 @@ class NumpyGPModel(StateSpaceModel):
         """
         T = x_new.shape[0]
         N = self.z.shape[0]
-        input_dim = self.n_s_in + self.n_u
         
         K_star = self.compute_kernel(x_new, self.z, 
                                      self.kern_types[dim_idx], 
@@ -471,9 +469,9 @@ class NumpyGPModel(StateSpaceModel):
         
         # Compute gradient of kernel
         lengthscale = self.hyp[dim_idx]['lengthscale']
-        grad_K = np.zeros((T, N, input_dim))
+        grad_K = np.zeros((T, N, self.input_dim))
         
-        for d in range(input_dim):
+        for d in range(self.input_dim):
             # ∂k/∂x*_d = k(x*,X) * (X_d - x*_d) / ℓ_d²
             diff = (self.z[:, d] - x_new[:, d, np.newaxis]) / (lengthscale[d]**2)
             grad_K[:, :, d] = K_star * diff
@@ -481,13 +479,15 @@ class NumpyGPModel(StateSpaceModel):
         # Chain rule: ∂μ/∂x* = ∂k/∂x* @ beta
         grad_mu = np.einsum('tnd,n->td', grad_K, self.beta[:, dim_idx])
         
+        # TODO: Verify gradient implemention
+        warnings.warn("RBF gradient implementation needs testing")
+
         return grad_mu
     
     def _matern52_gradient(self, x_new, dim_idx):
         """Compute gradient of Matérn 5/2 GP mean w.r.t. inputs."""
         warnings.warn("Matérn 5/2 gradient not implemented, returning zeros")
-        input_dim = self.n_s_in + self.n_u
-        return np.zeros((x_new.shape[0], input_dim))
+        return np.zeros((x_new.shape[0], self.input_dim))
 
 
     def update_model(self, x, y, opt_hyp=False, replace_old=True, noise_diag=1e-5):
