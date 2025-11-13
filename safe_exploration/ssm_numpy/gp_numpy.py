@@ -617,7 +617,7 @@ class NumpyGPModel(StateSpaceModel):
         return np.zeros((x_new.shape[0], self.input_dim))
 
 
-    def update_model(self, x, y, opt_hyp=False, replace_old=True, noise_diag=1e-5):
+    def update_model(self, x, y, opt_hyp=False, replace_old=True):
         """ Update the model based on the current settings and new data
 
         Parameters
@@ -630,8 +630,6 @@ class NumpyGPModel(StateSpaceModel):
             If this is set to TRUE the hyperparameters are re-optimized
         replace_old: bool, optional
             If True, replace old data; if False, append to old data
-        noise_diag: float, optional
-            Additional noise added to diagonal
         """
         if replace_old:
             x_new = x
@@ -642,7 +640,7 @@ class NumpyGPModel(StateSpaceModel):
 
         # TODO: implement efficient update without retraining from scratch
         # Currently always retrains with the new data
-        self.train(x_new, y_new, opt_hyp=opt_hyp, noise_diag=noise_diag)
+        self.train(x_new, y_new, opt_hyp=opt_hyp)
 
     def sample_from_gp(self, inp, size=10):
         """ Sample from GP predictive distribution
