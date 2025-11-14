@@ -13,7 +13,7 @@ from GPy.kern import RBF, Linear, Matern52
 from GPy.util.linalg import pdinv
 from sklearn import cluster
 
-from .gp_models_utils_casadi import gp_pred_function
+from ..ssm_gp_base.gp_models_utils_casadi import gp_pred_function
 from ..utils import rgetattr, rsetattr
 
 

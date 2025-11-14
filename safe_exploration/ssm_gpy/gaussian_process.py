@@ -2,17 +2,15 @@
 
 import GPy
 import numpy as np
-from .gp_models_utils_casadi import gp_pred_function, _get_kernel_function
-from ..state_space_models import StateSpaceModel
 from GPy.util.linalg import pdinv
 import numpy.linalg as nLa
-from casadi import horzcat
 import warnings
 from sklearn import cluster
 from GPy.kern import RBF, Matern52, Linear
+from ..ssm_gp_base import GPModelBase
 
 
-class SimpleGPModel(StateSpaceModel):
+class SimpleGPModel(GPModelBase):
     """ Simple Wrapper around GPy
 
     Wrapper around the GPy library
@@ -131,47 +129,6 @@ class SimpleGPModel(StateSpaceModel):
             Z = gp_dict["Z"]
 
         return cls(n_s_out, n_s_in, n_u, x, y, m, kern_types, hyp, train, Z)
-
-    def __call__(self, states, actions):
-        """ Single input predictions
-
-
-        """
-
-        N, n = np.shape(states)
-        if N > 1:
-            raise NotImplementedError("Currently do not support multiple state-action pairs to evaluate on.")
-        return self.predict_casadi_symbolic(horzcat(states, actions), True)
-
-    def get_kern_func_casadi(self):
-        """
-
-        :return:
-        """
-        return [_get_kernel_function(kern_type, hyp) for (kern_type, hyp) in zip(self.kern_types, self.hyp)]
-
-    def get_forward_model_casadi(self, compute_grads=False):
-        """ Return a symbolic casadi function representing predictive mean/variance
-
-        """
-
-        return lambda x_new, u_new: self.predict_casadi_symbolic(horzcat(x_new, u_new), compute_grads)
-
-    def predict_casadi_symbolic(self, x_new, compute_grads=False):
-        """ Return a symbolic casadi function representing predictive mean/variance
-
-        """
-        assert np.shape(x_new)[0] == 1, "We only support this for a single input vector right now"
-
-        out_dict = gp_pred_function(x_new, self.hyp, self.kern_types, self.z, self.beta,
-                                    self.inv_K, True, compute_grads)
-        mu_new = out_dict["pred_mu"]
-        sigma_new = out_dict["pred_sigma"]
-        if compute_grads:
-            jac_mu = out_dict["jac_mu"]
-            return mu_new.T, sigma_new.T, jac_mu
-
-        return mu_new.T, sigma_new.T
 
     def to_dict(self):
         """ return a dict summarizing the object """
