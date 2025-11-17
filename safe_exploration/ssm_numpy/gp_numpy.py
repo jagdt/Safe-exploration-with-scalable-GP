@@ -464,8 +464,25 @@ class NumpyGPModel(GPModelBase):
 
 
     def predict(self, x_new, quantiles=None, compute_gradients=False):
-        """ Compute the predictive mean and variance for a set of test inputs
+        """ Compute the predictive mean and variance at test points
 
+        Parameters
+        ----------
+        x_new : ndarray [T × (n_s_in + n_u)]
+            Test inputs
+        quantiles : optional
+            Not implemented
+        compute_gradients : bool, optional
+            Whether to compute gradients (default: False)
+        
+        Returns
+        -------
+        y_mu_pred : ndarray [T × n_s_out]
+            Predictive mean
+        y_sigm_pred : ndarray [T × n_s_out]
+            Predictive standard deviation
+        grad_mu : ndarray [T × n_s_out × input_dim], optional
+            Gradients of mean (if compute_gradients=True)
         """
 
         T = np.shape(x_new)[0]
@@ -473,21 +490,16 @@ class NumpyGPModel(GPModelBase):
         y_sigm_pred = np.empty((T, self.n_s_out))
 
         for i in range(self.n_s_out):
-            # Cross-covariance k(X*, X)
             K_star = self.compute_kernel(x_new, self.z, 
                                         self.kern_types[i], self.hyp[i])
             
-            # Predictive mean: k(X*, X) beta
             y_mu_pred[:, i] = K_star @ self.beta[:, i]
             
-            # Predictive variance
             K_ss = self.compute_kernel(x_new, x_new, 
                                       self.kern_types[i], self.hyp[i])
             
-            # var = k** - k* @ K^{-1} @ k*^T
             var = np.diag(K_ss) - np.sum((K_star @ self.inv_K[i]) * K_star, axis=1)
             
-            # Return standard deviation (not variance)
             y_sigm_pred[:, i] = np.sqrt(np.maximum(var, 1e-10))
 
         if quantiles is not None:
@@ -612,7 +624,6 @@ class NumpyGPModel(GPModelBase):
         mu, sigma = self.predict(inp)
         
         for i in range(self.n_s_out):
-            # Sample from Gaussian distribution
             for j in range(size):
                 S[:, j, i] = mu[:, i] + sigma[:, i] * np.random.randn(n)
 
