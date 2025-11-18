@@ -344,13 +344,9 @@ class ScalableGPModel(GPModelBase):
         if self.kern_types[dim_idx] == "rbf":
             factor = params[0]
             decay_rates = params[1:-1]
-            old_factor = self.hyp[dim_idx]["factor"]
-            old_decay = self.hyp[dim_idx]["exponential_decay_rates"].copy()
             self.hyp[dim_idx]["factor"] = factor
             self.hyp[dim_idx]["exponential_decay_rates"] = decay_rates
             lambdas = self._compute_lambdas(dim_idx)
-            self.hyp[dim_idx]["factor"] = old_factor
-            self.hyp[dim_idx]["exponential_decay_rates"] = old_decay
         elif self.kern_types[dim_idx] == "individual":
             lambdas = params[:-1]
         else:
