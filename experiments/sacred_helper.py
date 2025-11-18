@@ -59,7 +59,11 @@ def base_config():
 
     # Type of state space model to use, one of exact_gp, mc_dropout, mc_dropout_gal.
     cem_ssm = 'exact_gp'
-    gp_type = 'numpy'  # one of 'gpy', 'numpy', 'scalable'
+
+    # -- GP model
+    gp_type = 'scalable'  # one of 'gpy', 'numpy', 'scalable'
+    n_frequencies = 5  # only for scalable gp
+    period = 10.0  # only for scalable gp
 
     # -- Episodic
     # The number of repeats of the experiment, over which we will average the metrics.

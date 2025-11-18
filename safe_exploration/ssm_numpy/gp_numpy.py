@@ -637,11 +637,10 @@ class NumpyGPModel(KernelGPModel):
 
         n_data = np.shape(x)[0]
         inf_gain_x_f = [None] * self.n_s_out
-        
         for i in range(self.n_s_out):
-            noise_var = 1e-4  # Default noise variance
+            noise_var_i = self.noise_var[i]
             K = self.compute_kernel(x, x, self.kern_types[i], self.hyp[i])
             inf_gain_x_f[i] = np.log(
-                np.linalg.det(np.eye(n_data) + (1 / noise_var) * K))
+                np.linalg.det(np.eye(n_data) + (1 / noise_var_i) * K))
 
         return inf_gain_x_f

@@ -25,6 +25,7 @@ from .ssm_cem.ssm_cem import CemSSM, JunkDimensionsSSM
 # from .ssm_cem.dropout_ssm_cem import McDropoutSSM
 from .utils import dlqr, unavailable
 from .ssm_numpy.gp_numpy import NumpyGPModel
+from .ssm_numpy.scalable_gp import ScalableGPModel
 
 try:
     _has_ssm_gpy = True
@@ -63,6 +64,9 @@ def _create_gp(conf, env):
         return NumpyGPModel(conf.gp_ns_out, conf.gp_ns_in, env.n_u,
                          kern_types=conf.kern_types)
     elif conf.gp_type == "scalable":
+        return ScalableGPModel(conf.gp_ns_out, conf.gp_ns_in, env.n_u,
+                         kern_types=conf.kern_types, n_frequencies=conf.n_frequencies,
+                         period=conf.period)
         raise NotImplementedError("Scalable GP not implemented for SimpleSafeMPC")
     else:
         raise ValueError(f"Unknown gp_type: {conf.gp_type}")

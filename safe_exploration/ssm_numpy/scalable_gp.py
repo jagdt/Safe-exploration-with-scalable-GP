@@ -3,8 +3,7 @@
 import numpy as np
 from scipy.optimize import minimize
 import warnings
-from casadi import horzcat, vertcat, mtimes, solve, sum1, sqrt, fmax, 
-                    dot, cos, sin, jacobian
+from casadi import horzcat, vertcat, mtimes, solve, sum1, sqrt, fmax, cos, sin, jacobian, SX, Function
 from ..ssm_gp_base import GPModelBase
 
 
@@ -71,7 +70,7 @@ class ScalableGPModel(GPModelBase):
         
         self._init_kernel_function(kern_types, hyp)
         self.hyp = self._create_hyp_dict(self.kern_types)
-        self.noise_var = np.zeros((self.n_s_out,))
+        self.noise_var = 0.01 * np.ones((self.n_s_out,))
         
         self.L_PhiT_Phi = [None] * n_s_out
         self.PhiT_y = [None] * n_s_out
@@ -288,14 +287,15 @@ class ScalableGPModel(GPModelBase):
         else:
             raise NotImplementedError(f"Optimization for {self.kern_types[dim_idx]} not implemented")
         
-        # Optimize in log space for positivity
         initial_params = np.log(initial_params)
-        
+        bounds = [(1e-5, None)] * len(initial_params)
+
         result = minimize(
             self._neg_log_marginal_likelihood,
             initial_params,
             args=(X, y, dim_idx),
             method='L-BFGS-B',
+            bounds=bounds,
             options={'maxiter': max_iter, 'disp': False}
         )
         
@@ -541,7 +541,18 @@ class ScalableGPModel(GPModelBase):
         inf_gain_x_f : list
             Information gain for each output dimension
         """
-        raise NotImplementedError("Information gain not implemented for ScalableGPModel")
+        if x is None:
+            x = self.x_train
+
+        inf_gain_x_f = [None] * self.n_s_out
+        for i in range(self.n_s_out):
+            noise_var_i = self.noise_var[i]
+            Phi = self._phi_features(x, self.lambdas[i])
+            PhiTPhi = Phi.T @ Phi
+            inf_gain_x_f[i] = np.log(
+                np.linalg.det(np.eye(self.n_features) + (1 / noise_var_i) * PhiTPhi))
+
+        return inf_gain_x_f
     
     def predict_casadi_symbolic(self, x_new, compute_grads=False):
         """Return symbolic CasADi expressions for predictive mean/variance
@@ -568,28 +579,35 @@ class ScalableGPModel(GPModelBase):
         assert x_new.shape[0] == 1, \
             "We only support this for a single input vector right now"
         
+        inp = SX.sym("input", x_new.shape)
+        
         mu_all = []
         pred_sigma_all = []
         jac_mu_all = []
         
         for i in range(self.n_s_out):
-            Phi = self._phi_features_casadi(x_new, self.lambdas[i])
+            Phi = self._phi_features_casadi(inp, self.lambdas[i])
             
-            mu_i = mtimes(Phi, self.posterior_mean_coeffs[i])
-            mu_all = horzcat(mu_all, mu_i)
+            mu_new = mtimes(Phi, self.posterior_mean_coeffs[i])
             
-            # Predictive variance: σ² * Φ (ΦᵀΦ + σ²I)⁻¹ Φᵀ
-            # V = (L⁻¹ Φᵀ)ᵀ = (Lᵀ)⁻¹ Φᵀ)ᵀ
             V = solve(self.L_PhiT_Phi[i], Phi.T)
             V = solve(self.L_PhiT_Phi[i].T, V)
             variance = self.noise_var[i] * sum1(Phi @ V)
-            sigma_i = sqrt(fmax(variance, 1e-10))
-            pred_sigma_all = horzcat(pred_sigma_all, sigma_i)
+            sigma_new = sqrt(fmax(variance, 1e-10))
+            
+            pred_func = Function("pred_func", [inp], [mu_new, sigma_new], ["inp"], ["mu_1", "sigma_1"])
+            F_1 = pred_func(inp=x_new)
+            mu_1 = F_1["mu_1"]
+            mu_all = horzcat(mu_all, mu_1)
+            pred_sigma = F_1["sigma_1"]
+            pred_sigma_all = horzcat(pred_sigma_all, pred_sigma)
             
             if compute_grads:
-                jac_i = jacobian(mu_i, x_new)
-                jac_mu_all = vertcat(jac_mu_all, jac_i)
-        
+                jac_func = pred_func.factory('dmudinp', ['inp'], ['jac:mu_1:inp'])
+                F_1_jac = jac_func(inp=x_new)
+                jac_mu = F_1_jac['jac_mu_1_inp']
+                jac_mu_all = vertcat(jac_mu_all, jac_mu)
+
         if compute_grads:
             return mu_all.T, pred_sigma_all.T, jac_mu_all
         

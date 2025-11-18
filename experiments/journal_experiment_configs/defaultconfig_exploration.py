@@ -59,7 +59,7 @@ class DefaultConfigExploration(DefaultConfig):
     gp_dict_path = None
     gp_data_path = None  # None means no initial training data
     m = 25  # subset of data of size m for training
-    kern_types = ["lin_mat52", "lin_mat52"]  # kernel type
+    kern_types = ["rbf", "rbf"]  # kernel type
     train_gp = False  # train the gp initially?
     retrain_gp = False  # retrain the gp after every sample?
     gp_hyp = None
@@ -84,8 +84,8 @@ class DefaultConfigExploration(DefaultConfig):
     kern_dict_1["mul.linear.variances"] = 1e-3
     kern_dict_1["linear.variances"] = np.array([2.88698464e-08, 3.05621919e-09, 2.86362642e-04])
 
-    gp_hyp = [kern_dict_0, kern_dict_1]
-    # gp_hyp = None
+    # gp_hyp = [kern_dict_0, kern_dict_1]
+    gp_hyp = None
     # exploration
     n_experiments = 1
     n_iterations = 50
