@@ -275,7 +275,7 @@ def gp_pred_function(x, hyp, kern_types, x_train=None, beta=None, k_inv_training
             jac_func = pred_func.factory('dmudinp', ['inp'], ['jac:mu_1:inp'])
 
             F_1_jac = jac_func(inp=x)
-            # print(F_1_jac)
+
             jac_mu = F_1_jac['jac_mu_1_inp']
             jac_mu_all = vertcat(jac_mu_all, jac_mu)
 

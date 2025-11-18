@@ -3,6 +3,8 @@
 import numpy as np
 from scipy.optimize import minimize
 import warnings
+from casadi import horzcat, vertcat, mtimes, solve, sum1, sqrt, fmax, 
+                    dot, cos, sin, jacobian
 from ..ssm_gp_base import GPModelBase
 
 
@@ -17,9 +19,6 @@ class ScalableGPModel(GPModelBase):
         gp_trained (bool): Is set to TRUE once the train() method was called
         n_s (int): number of state dimensions of the dynamic system
         n_u (int): number of action/control dimensions of the dynamic system
-        beta (np.ndarray): Posterior coefficients [E × n_s_out]
-        inv_K (list): Not used in scalable GP (kept for API compatibility)
-        z (np.ndarray): Training inputs
         hyp (list[dict]): List of hyperparameter dictionaries
         n_frequencies (int): Number of trigonometric frequencies to use
     """
@@ -70,10 +69,6 @@ class ScalableGPModel(GPModelBase):
         
         self._init_frequencies()
         
-        # GP parameters (for compatibility with base class)
-        self.beta = None
-        self.inv_K = None  # Not used in scalable GP, kept for API compatibility
-        self.z = None
         self._init_kernel_function(kern_types, hyp)
         self.hyp = self._create_hyp_dict(self.kern_types)
         self.noise_var = np.zeros((self.n_s_out,))
@@ -256,8 +251,6 @@ class ScalableGPModel(GPModelBase):
         """
         n_data, _ = np.shape(X)
         
-        # TODO redundant storage of X
-        self.z = X
         self.x_train = X
         self.y_train = y
         
@@ -265,14 +258,8 @@ class ScalableGPModel(GPModelBase):
             for i in range(self.n_s_out):
                 self._optimize_hyperparameters(X, y[:, i], i)
         
-        n_beta = self.n_features
-        beta = np.empty((n_beta, self.n_s_out))
-        
         for i in range(self.n_s_out):
             self._compute_posterior_params(X, y[:, i], i)
-            beta[:, i] = self.posterior_mean_coeffs[i].reshape(-1)
-
-        self.beta = beta
         self.gp_trained = True
     
     def _optimize_hyperparameters(self, X, y, dim_idx, max_iter=1000):
@@ -554,22 +541,85 @@ class ScalableGPModel(GPModelBase):
         inf_gain_x_f : list
             Information gain for each output dimension
         """
-        if x is None:
-            x = self.z
+        raise NotImplementedError("Information gain not implemented for ScalableGPModel")
+    
+    def predict_casadi_symbolic(self, x_new, compute_grads=False):
+        """Return symbolic CasADi expressions for predictive mean/variance
         
-        n_data = np.shape(x)[0]
-        inf_gain_x_f = [None] * self.n_s_out
+        Uses Fourier feature representation for symbolic computation.
+        
+        Parameters
+        ----------
+        x_new : casadi.SX or casadi.MX
+            Test input (1 × (n_s_in + n_u))
+        compute_grads : bool, optional
+            Whether to compute gradients of mean w.r.t. inputs (default: False)
+            
+        Returns
+        -------
+        mu_new : casadi expression
+            Predictive mean (n_s_out × 1)
+        sigma_new : casadi expression  
+            Predictive standard deviation (n_s_out × 1)
+        jac_mu : casadi expression, optional
+            Jacobian of mean w.r.t. inputs (n_s_out × (n_s_in + n_u))
+            Only returned if compute_grads=True
+        """
+        assert x_new.shape[0] == 1, \
+            "We only support this for a single input vector right now"
+        
+        mu_all = []
+        pred_sigma_all = []
+        jac_mu_all = []
         
         for i in range(self.n_s_out):
-            # For scalable GP, compute information gain using feature representation
-            Phi = self._phi_features(x, self.lambdas[i])
-            K_approx = Phi @ Phi.T
+            Phi = self._phi_features_casadi(x_new, self.lambdas[i])
             
-            inf_gain_x_f[i] = np.log(
-                np.linalg.det(np.eye(n_data) + (1 / self.noise_var[i]) * K_approx) + 1e-10
-            )
+            mu_i = mtimes(Phi, self.posterior_mean_coeffs[i])
+            mu_all = horzcat(mu_all, mu_i)
+            
+            # Predictive variance: σ² * Φ (ΦᵀΦ + σ²I)⁻¹ Φᵀ
+            # V = (L⁻¹ Φᵀ)ᵀ = (Lᵀ)⁻¹ Φᵀ)ᵀ
+            V = solve(self.L_PhiT_Phi[i], Phi.T)
+            V = solve(self.L_PhiT_Phi[i].T, V)
+            variance = self.noise_var[i] * sum1(Phi @ V)
+            sigma_i = sqrt(fmax(variance, 1e-10))
+            pred_sigma_all = horzcat(pred_sigma_all, sigma_i)
+            
+            if compute_grads:
+                jac_i = jacobian(mu_i, x_new)
+                jac_mu_all = vertcat(jac_mu_all, jac_i)
         
-        return inf_gain_x_f
+        if compute_grads:
+            return mu_all.T, pred_sigma_all.T, jac_mu_all
+        
+        return mu_all.T, pred_sigma_all.T
+    
+    def _phi_features_casadi(self, X, lambdas):
+        """Compute Fourier features symbolically using CasADi
+        
+        Parameters
+        ----------
+        X : casadi.SX or casadi.MX [1 × D]
+            Input data (single point)
+        lambdas : ndarray [E]
+            Spectral coefficients for the current output dimension
+        
+        Returns
+        -------
+        Phi : casadi expression [1 × (2E-1)]
+            Fourier feature vector
+        """
+        E = self.omegas.shape[0]
+
+        inner_products = 2 * np.pi * mtimes(self.omegas, X.T)
+
+        features = [lambdas[0]]
+        for e in range(1, E):
+            features.append(lambdas[e] * cos(inner_products[e]))
+            features.append(lambdas[e] * sin(inner_products[e]))
+        
+        return horzcat(*features)
     
     @classmethod
     def from_dict(cls, gp_dict):
@@ -639,8 +689,6 @@ class ScalableGPModel(GPModelBase):
         gp_dict["y"] = self.y_train
         gp_dict["kern_types"] = self.kern_types
         gp_dict["hyp"] = self.hyp
-        gp_dict["beta"] = self.beta
-        gp_dict["inv_K"] = self.inv_K
         gp_dict["n_frequencies"] = self.n_frequencies
         gp_dict["period"] = self.period
         gp_dict["lambdas"] = self.lambdas

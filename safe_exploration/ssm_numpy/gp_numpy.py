@@ -3,10 +3,10 @@
 import numpy as np
 from scipy.optimize import minimize
 import warnings
-from ..ssm_gp_base import GPModelBase
+from ..ssm_gp_base import KernelGPModel
 
 
-class NumpyGPModel(GPModelBase):
+class NumpyGPModel(KernelGPModel):
     """ Pure NumPy GP implementation (drop-in replacement for SimpleGPModel)
 
     Pure NumPy implementation that mirrors SimpleGPModel structure

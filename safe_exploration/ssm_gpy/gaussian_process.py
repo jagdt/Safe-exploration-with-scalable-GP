@@ -7,10 +7,10 @@ import numpy.linalg as nLa
 import warnings
 from sklearn import cluster
 from GPy.kern import RBF, Matern52, Linear
-from ..ssm_gp_base import GPModelBase
+from ..ssm_gp_base import KernelGPModel
 
 
-class SimpleGPModel(GPModelBase):
+class SimpleGPModel(KernelGPModel):
     """ Simple Wrapper around GPy
 
     Wrapper around the GPy library
