@@ -47,8 +47,9 @@ class ScalableGPModel(GPModelBase):
         n_frequencies : int or list[int], optional
             Number of Fourier frequencies per dimension. If int, same number used for all dimensions.
             If list, must have length equal to input_dim (n_s_in + n_u). (default: 25)
-        period : float, optional
-            Period for periodization (default: 10.0)
+        period : float or list[float], optional
+            Period for periodization of Fourier features (default: 10.0). If int, same period used for all dimensions.
+            If list, must have length equal to input_dim.
         """
 
         self.n_s_out = n_s_out
@@ -102,10 +103,20 @@ class ScalableGPModel(GPModelBase):
                     f"n_frequencies length ({len(n_frequencies_per_dim)}) must match "
                     f"input_dim ({self.input_dim})"
                 )
+
+        if isinstance(self.period, (int, float)):
+            self.period = [self.period] * self.input_dim
+        else:
+            self.period = list(self.period)
+            if len(self.period) != self.input_dim:
+                raise ValueError(
+                    f"period length ({len(self.period)}) must match "
+                    f"input_dim ({self.input_dim})"
+                )
         
         freq_grids = []
-        for E_d in n_frequencies_per_dim:
-            freq_grids.append(np.arange(0, E_d) / self.period)
+        for i, E_d in enumerate(n_frequencies_per_dim):
+            freq_grids.append(np.arange(0, E_d) / self.period[i])
         
         mesh = np.meshgrid(*freq_grids, indexing='ij')
         
@@ -309,6 +320,7 @@ class ScalableGPModel(GPModelBase):
                 self.hyp[dim_idx]["lambdas"] = params[:-1]
                 self.noise_var[dim_idx] = params[-1]
             self.lambdas[dim_idx] = self._compute_lambdas(dim_idx)
+            print(f"Optimized hyperparameters for dimension {dim_idx}: {self.hyp[dim_idx]}, noise_var: {self.noise_var[dim_idx]}")
         else:
             warnings.warn(
                 f"Hyperparameter optimization failed for dimension {dim_idx}: {result.message}"
