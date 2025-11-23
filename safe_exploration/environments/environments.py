@@ -730,13 +730,17 @@ class InvertedPendulum(Environment):
             x_polygon = np.dot(x_polygon, m_x.T)
 
         if plot_safe_bounds:
-            for simplex in self.ch_safety_bounds.simplices:
-                ax.plot(x_polygon[simplex, 0], x_polygon[simplex, 1], 'k-')
+            for i, simplex in enumerate(self.ch_safety_bounds.simplices):
+                label = 'Safe region' if i == 0 else None
+                ax.plot(x_polygon[simplex, 0], x_polygon[simplex, 1], 'k-', label=label)
 
             # ax.add_patch(mpatch.Polygon(x_polygon,fill = False))
         if new_fig:
             ax.set_xlim(-2., 2.)
             ax.set_ylim(-1., 1.)
+            ax.set_xlabel('θ (angle)')
+            ax.set_ylabel('dθ (angular velocity)')
+            ax.legend()
 
             return fig, ax
 

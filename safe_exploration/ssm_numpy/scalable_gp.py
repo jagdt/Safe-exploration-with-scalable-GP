@@ -170,7 +170,7 @@ class ScalableGPModel(GPModelBase):
             hyp_i = dict()
             if kern_types[i] == "rbf":
                 hyp_i["factor"] = 1.0
-                hyp_i["exponential_decay_rates"] = 0.5 * np.ones(self.input_dim)
+                hyp_i["exponential_decay_rates"] = 0.1 * np.ones(self.input_dim)
             elif kern_types[i] == "polynomial_decay":
                 raise NotImplementedError("Polynomial decay not implemented yet")
             elif kern_types[i] == "individual":
@@ -299,14 +299,12 @@ class ScalableGPModel(GPModelBase):
             raise NotImplementedError(f"Optimization for {self.kern_types[dim_idx]} not implemented")
         
         initial_params = np.log(initial_params)
-        bounds = [(1e-5, None)] * len(initial_params)
 
         result = minimize(
             self._neg_log_marginal_likelihood,
             initial_params,
             args=(X, y, dim_idx),
             method='L-BFGS-B',
-            bounds=bounds,
             options={'maxiter': max_iter, 'disp': False}
         )
         
@@ -333,6 +331,8 @@ class ScalableGPModel(GPModelBase):
         
         Uses Woodbury identity for efficient computation:
         log|K| = log|ΦᵀΦ + σ²I| + N*log(σ²)
+        
+        Optimizes in log-space for numerical stability and to ensure positivity.
         
         Parameters
         ----------

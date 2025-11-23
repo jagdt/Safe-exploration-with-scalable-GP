@@ -12,6 +12,7 @@ from .gp_reachability import verify_trajectory_safety, trajectory_inside_ellipso
 from .safempc_exploration import StaticSafeMPCExploration, DynamicSafeMPCExploration
 from .utils import generate_initial_samples, unavailable
 from .utils_config import create_env, create_solver
+from .visualization import plot_model_error_comparison
 
 try:
     import matplotlib.pyplot as plt
@@ -66,7 +67,7 @@ def run_exploration(conf, visualize=False):
         safempc, safe_policy = create_solver(conf, env)
         X, y = generate_initial_samples(env, conf, conf.relative_dynamics, safempc,
                                         safe_policy)
-        safempc.update_model(X, y, opt_hyp=conf.train_gp, reinitialize_solver=False)
+        safempc.update_model(X, y, opt_hyp=conf.train_gp, reinitialize_solver=True)
 
         if static_exploration:
             exploration_module = StaticSafeMPCExploration(safempc, env, conf.n_restarts_optimizer,
@@ -210,6 +211,7 @@ def run_exploration(conf, visualize=False):
             save_results(save_path, l_sigm_sum, l_sigm, l_inf_gain, l_z_all, l_x_next_obs_all, l_x_next_pred,
                          x_next_prior, exploration_module.safempc.ssm, safety_all, x_train_init)
 
+        plot_model_error_comparison(exploration_module.safempc, exploration_module.env, save_dir=save_path, n_points=50)
 
 def save_results(save_path, sigm_sum, sigm, inf_gain, z_all, x_next_obs_all,
                  x_next_pred, x_next_prior, gp, x_train_0, safety_all=None):

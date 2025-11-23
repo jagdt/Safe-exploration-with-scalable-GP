@@ -60,8 +60,8 @@ class DefaultConfigExploration(DefaultConfig):
     gp_data_path = None  # None means no initial training data
     m = 25  # subset of data of size m for training
     kern_types = ["rbf", "rbf"]  # kernel type
-    train_gp = False  # train the gp initially?
-    retrain_gp = False  # retrain the gp after every sample?
+    train_gp = True  # train the gp initially?
+    retrain_gp = True  # retrain the gp after every sample?
     gp_hyp = None
     Z = None
     lin_trafo_gp_input = None
@@ -88,7 +88,7 @@ class DefaultConfigExploration(DefaultConfig):
     gp_hyp = None
     # exploration
     n_experiments = 1
-    n_iterations = 50
+    n_iterations = 10
     n_restarts_optimizer = 20
 
     # general options

@@ -75,7 +75,13 @@ def onestep_reachability(p_center, ssm, k_ff, l_mu, l_sigma,
         p_lin = mtimes(a, p_center) + mtimes(b, u_p)
         p_1 = p_lin + mu_new
 
-        rkhs_bound = c_safety * sqrt(pred_var)
+        if hasattr(ssm, 'beta_safety') and ssm.beta_safety is not None:
+            c_safety = ssm.beta_safety
+        safety_offset = 0.0
+        if hasattr(ssm, 'projection_error') and ssm.projection_error is not None:
+            safety_offset = ssm.projection_error
+        
+        rkhs_bound = c_safety * sqrt(pred_var) + safety_offset
         q_1 = ellipsoid_from_rectangle(rkhs_bound)
 
         return p_1, q_1, pred_var

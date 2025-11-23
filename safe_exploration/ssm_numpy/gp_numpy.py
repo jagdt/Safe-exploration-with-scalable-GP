@@ -340,20 +340,22 @@ class NumpyGPModel(KernelGPModel):
         """        
         hyp0 = self._pack_hyperparameters(self.hyp[dim_idx], self.kern_types[dim_idx], dim_idx)
         
-        bounds = [(1e-5, None)] * len(hyp0)
+        hyp0 = np.log(hyp0)
         
         result = minimize(self._neg_log_marginal_likelihood, hyp0, 
-                        args=(X, y, dim_idx), method='L-BFGS-B', bounds=bounds,
+                        args=(X, y, dim_idx), method='L-BFGS-B',
                         options={'maxiter': max_iter, 'disp': False})
         
         if result.success:
             self.hyp[dim_idx] = self._unpack_hyperparameters(result.x[:-1], self.kern_types[dim_idx])
             self.noise_var[dim_idx] = result.x[-1]
+            print(f"Optimized hyperparameters for dimension {dim_idx}: {self.hyp[dim_idx]}, noise variance: {self.noise_var[dim_idx]}")
         else:
             warnings.warn(f"Hyperparameter optimization failed for dimension {dim_idx}: {result.message}")
 
     def _neg_log_marginal_likelihood(self, hyp_array, X, y, dim_idx):
         """Negative log marginal likelihood"""
+        hyp_array = np.exp(hyp_array)
         hyp_dict = self._unpack_hyperparameters(hyp_array, self.kern_types[dim_idx])
         
         K = self.compute_kernel(X, X, self.kern_types[dim_idx], hyp_dict)

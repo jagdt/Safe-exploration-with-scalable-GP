@@ -63,7 +63,7 @@ def base_config():
     # -- GP model
     gp_type = 'scalable'  # one of 'gpy', 'numpy', 'scalable'
     n_frequencies = 5  # only for scalable gp
-    period = 10.0  # only for scalable gp
+    period = [4.0, 0.5, 3.0] # only for scalable gp
 
     # -- Episodic
     # The number of repeats of the experiment, over which we will average the metrics.
@@ -76,7 +76,7 @@ def base_config():
     # One of None, 'random_rollouts' or 'safe_samples'.
     init_mode = 'safe_samples'
     # How many initial samples to give to the ssm.
-    n_safe_samples = 10
+    n_safe_samples = 50
     # Standard deviation of the initial samples.
     init_sample_std = 0.01
     # Whether to plot the locations of the initial samples given to the ssm.
