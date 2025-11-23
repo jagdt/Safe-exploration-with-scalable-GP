@@ -5,6 +5,7 @@ from scipy.optimize import minimize
 import warnings
 from casadi import horzcat, vertcat, mtimes, solve, sum1, sqrt, fmax, cos, sin, jacobian, SX, Function
 from ..ssm_gp_base import GPModelBase
+from .gp_bounds import ScalableGPBounds
 
 
 class ScalableGPModel(GPModelBase):
@@ -60,6 +61,7 @@ class ScalableGPModel(GPModelBase):
         
         # Scalable GP specific attributes
         self.n_frequencies = n_frequencies
+        self.n_frequencies_per_dim = None
         self.period = period
 
         # Spectral parameters
@@ -561,6 +563,16 @@ class ScalableGPModel(GPModelBase):
                 np.linalg.det(np.eye(self.n_features) + (1 / noise_var_i) * PhiTPhi))
 
         return inf_gain_x_f
+
+    def get_bounds(self, delta=0.05, R_subgaussian=1.0, projection_error=None):
+        """Return a helper object for computing scalable GP confidence bounds."""
+
+        return ScalableGPBounds(
+            self,
+            delta=delta,
+            R_subgaussian=R_subgaussian,
+            projection_error=projection_error,
+        )
     
     def predict_casadi_symbolic(self, x_new, compute_grads=False):
         """Return symbolic CasADi expressions for predictive mean/variance

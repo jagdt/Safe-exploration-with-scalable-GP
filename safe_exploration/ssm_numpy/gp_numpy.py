@@ -4,6 +4,7 @@ import numpy as np
 from scipy.optimize import minimize
 import warnings
 from ..ssm_gp_base import KernelGPModel
+from .gp_bounds import NumpyGPBounds
 
 
 class NumpyGPModel(KernelGPModel):
@@ -630,6 +631,11 @@ class NumpyGPModel(KernelGPModel):
                 S[:, j, i] = mu[:, i] + sigma[:, i] * np.random.randn(n)
 
         return S
+
+    def get_bounds(self, delta=0.05, R_subgaussian=1.0):
+        """Return a helper object for computing Abbasi-Yadkori style bounds."""
+
+        return NumpyGPBounds(self, delta=delta, R_subgaussian=R_subgaussian)
 
     def information_gain(self, x=None):
         """ Mutual information between samples and system """
