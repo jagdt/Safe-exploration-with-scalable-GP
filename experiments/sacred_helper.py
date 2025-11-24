@@ -62,8 +62,12 @@ def base_config():
 
     # -- GP model
     gp_type = 'scalable'  # one of 'gpy', 'numpy', 'scalable'
-    n_frequencies = 5  # only for scalable gp
-    period = [4.0, 0.5, 3.0] # only for scalable gp
+
+    # -- Scalable GP specific parameters
+    n_frequencies = 7
+    periods = [3.0, 1.5, 2.0]
+    domain_lengths = [3.0, 1.5, 2.0] # [dθ, θ, u]
+    lengthscale_multiple = 3.0
 
     # -- Episodic
     # The number of repeats of the experiment, over which we will average the metrics.
