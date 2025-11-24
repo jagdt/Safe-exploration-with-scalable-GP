@@ -738,8 +738,8 @@ class InvertedPendulum(Environment):
         if new_fig:
             ax.set_xlim(-2., 2.)
             ax.set_ylim(-1., 1.)
-            ax.set_xlabel('θ (angle)')
-            ax.set_ylabel('dθ (angular velocity)')
+            ax.set_xlabel('dθ (angular velocity)')
+            ax.set_ylabel('θ (angle)')
             ax.legend()
 
             return fig, ax
