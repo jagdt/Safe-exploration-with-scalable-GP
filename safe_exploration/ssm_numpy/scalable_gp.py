@@ -24,7 +24,7 @@ class ScalableGPModel(GPModelBase):
     """
     
     def __init__(self, n_s_out, n_s_in, n_u, X=None, y=None, kern_types=None,
-                 hyp=None, train=False, n_frequencies=25, period=10.0):
+                 hyp=None, train=False, n_frequencies=25, periods=10.0, domain_lengths=None, lengthscale_multiple=None):
         """Initialize Scalable GP Model
         
         Parameters
@@ -48,9 +48,12 @@ class ScalableGPModel(GPModelBase):
         n_frequencies : int or list[int], optional
             Number of Fourier frequencies per dimension. If int, same number used for all dimensions.
             If list, must have length equal to input_dim (n_s_in + n_u). (default: 25)
-        period : float or list[float], optional
-            Period for periodization of Fourier features (default: 10.0). If int, same period used for all dimensions.
-            If list, must have length equal to input_dim.
+        period : float, sequence, or array, optional
+            Period for periodization of Fourier features (default: 10.0).
+            Accepted formats:
+                - scalar: same period for all outputs and inputs
+                - sequence of length input_dim: shared per-input periods across outputs
+                - array of shape (n_s_out, input_dim): per-output, per-input periods
         """
 
         self.n_s_out = n_s_out
@@ -62,11 +65,14 @@ class ScalableGPModel(GPModelBase):
         # Scalable GP specific attributes
         self.n_frequencies = n_frequencies
         self.n_frequencies_per_dim = None
-        self.period = period
+        self.periods = self._init_periods(periods)
+        self.domain_lengths = domain_lengths
+        self.lengthscale_multiple = lengthscale_multiple
+        self.hyp_optimized = False
 
         # Spectral parameters
         self.n_features = None
-        self.omegas = None
+        self.omegas = [None] * n_s_out
         self.lambdas = [None] * n_s_out
         
         self._init_frequencies()
@@ -87,6 +93,67 @@ class ScalableGPModel(GPModelBase):
         
         super(ScalableGPModel, self).__init__(n_s_out, n_u)
     
+    def _init_periods(self, period):
+        """Normalize the user period argument to an (n_s_out × input_dim) array."""
+        if isinstance(period, (int, float)):
+            return np.full((self.n_s_out, self.input_dim), float(period))
+
+        period_array = np.array(period, dtype=float)
+
+        if period_array.ndim == 1:
+            if period_array.size != self.input_dim:
+                raise ValueError(
+                    f"period length ({period_array.size}) must match input_dim ({self.input_dim})"
+                )
+            return np.tile(period_array, (self.n_s_out, 1))
+
+        if period_array.ndim == 2:
+            if period_array.shape != (self.n_s_out, self.input_dim):
+                raise ValueError(
+                    "period array must have shape (n_s_out, input_dim); "
+                    f"got {period_array.shape}"
+                )
+            return period_array.copy()
+
+        raise ValueError(
+            "period must be a scalar, vector of length input_dim, or "
+            "(n_s_out × input_dim) array"
+        )
+    
+    def _set_periods_based_on_domain_and_lengthscales(self, max_period_multiple=10.0, dampening_alpha=0.5):
+        """Set periods based on domain lengths and lengthscale multiples.
+
+        Returns
+        -------
+        periods : ndarray [n_s_out × input_dim]
+            Updated periods for each output dimension
+        """
+        if self.domain_lengths is None or self.lengthscale_multiple is None:
+            raise ValueError("domain_lengths and lengthscale_multiple must be provided at initialization")
+
+        domain_lengths = np.asarray(self.domain_lengths, dtype=float)
+        lengthscale_multiple = float(self.lengthscale_multiple)
+        if domain_lengths.ndim != 1 or domain_lengths.size != self.input_dim:
+            raise ValueError(
+                f"domain_lengths must be a vector of length {self.input_dim}"
+            )
+        T_max = max_period_multiple * domain_lengths
+        
+        for dim_idx in range(self.n_s_out):
+            print("Old periods for dim", dim_idx, ":", self.periods[dim_idx])
+            if self.kern_types[dim_idx] != "rbf":
+                raise NotImplementedError(
+                    "Setting periods based on lengthscales only implemented for 'rbf' kernel."
+                )
+            decay_rates = self.hyp[dim_idx]["exponential_decay_rates"]
+            lengthscales = np.sqrt(decay_rates * self.periods[dim_idx]**2 / (2 * np.pi**2))
+            T_target = lengthscale_multiple * lengthscales + domain_lengths
+            T_damped = (1 - dampening_alpha) * self.periods[dim_idx] + dampening_alpha * T_target
+            T_bounded = np.minimum(T_damped, T_max)
+            self.periods[dim_idx] = T_bounded
+            print("New periods for dim", dim_idx, ":", self.periods[dim_idx])
+        self._init_frequencies()
+    
     def _init_frequencies(self):
         """Initialize trigonometric frequencies for spectral approximation
         
@@ -105,29 +172,26 @@ class ScalableGPModel(GPModelBase):
                     f"n_frequencies length ({len(n_frequencies_per_dim)}) must match "
                     f"input_dim ({self.input_dim})"
                 )
+        self.n_frequencies_per_dim = n_frequencies_per_dim
 
-        if isinstance(self.period, (int, float)):
-            self.period = [self.period] * self.input_dim
-        else:
-            self.period = list(self.period)
-            if len(self.period) != self.input_dim:
-                raise ValueError(
-                    f"period length ({len(self.period)}) must match "
-                    f"input_dim ({self.input_dim})"
-                )
-        
-        freq_grids = []
-        for i, E_d in enumerate(n_frequencies_per_dim):
-            freq_grids.append(np.arange(0, E_d) / self.period[i])
-        
-        mesh = np.meshgrid(*freq_grids, indexing='ij')
-        
-        omega_list = []
-        for idx in np.ndindex(*[len(g) for g in freq_grids]):
-            omega = np.array([mesh[d][idx] for d in range(self.input_dim)])
-            omega_list.append(omega)
-        
-        self.omegas = np.array(omega_list)
+        self.omegas = []
+        for dim_idx in range(self.n_s_out):
+            period_vector = self.periods[dim_idx]
+            freq_grids = []
+            for i, E_d in enumerate(n_frequencies_per_dim):
+                period_val = period_vector[i]
+                if period_val <= 0:
+                    raise ValueError("period values must be positive")
+                freq_grids.append(np.arange(0, E_d) / period_val)
+
+            mesh = np.meshgrid(*freq_grids, indexing='ij')
+
+            omega_list = []
+            for idx in np.ndindex(*[len(g) for g in freq_grids]):
+                omega = np.array([mesh[d][idx] for d in range(self.input_dim)])
+                omega_list.append(omega)
+
+            self.omegas.append(np.array(omega_list))
         
         E_total = np.prod(n_frequencies_per_dim)
         self.n_features = 2 * E_total - 1
@@ -176,7 +240,7 @@ class ScalableGPModel(GPModelBase):
             elif kern_types[i] == "polynomial_decay":
                 raise NotImplementedError("Polynomial decay not implemented yet")
             elif kern_types[i] == "individual":
-                hyp_i["lambdas"] = np.ones(self.omegas.shape[0])
+                hyp_i["lambdas"] = np.ones(self.omegas[i].shape[0])
             else:
                 raise ValueError("kernel type not supported")
             hyp[i] = hyp_i
@@ -201,13 +265,14 @@ class ScalableGPModel(GPModelBase):
         lambdas : ndarray
             Spectral decay coefficients
         """
-        E = self.omegas.shape[0]
+        omegas = self.omegas[dim_idx]
+        E = omegas.shape[0]
         lambdas = np.zeros(E)
         
         if self.kern_types[dim_idx] == "rbf":
             factor = self.hyp[dim_idx]["factor"]
             exponential_decay_rates = self.hyp[dim_idx]["exponential_decay_rates"]
-            quadratic_forms = -0.5 * np.sum(exponential_decay_rates * self.omegas ** 2, axis=1)
+            quadratic_forms = -0.5 * np.sum(exponential_decay_rates * omegas ** 2, axis=1)
             lambdas = factor * np.exp(quadratic_forms)
         elif self.kern_types[dim_idx] == "polynomial_decay":
             raise NotImplementedError("Polynomial decay not implemented yet")
@@ -216,7 +281,7 @@ class ScalableGPModel(GPModelBase):
         
         return lambdas
     
-    def _phi_features(self, X, lambdas):
+    def _phi_features(self, X, lambdas, dim_idx):
         """Compute Fourier features Φ(X) = [λ₀, λ₁·cos(2πω₁ᵀx), λ₂·sin(2πω₁ᵀx), ..., λ₂ₑ₋₁·sin(2πωₑᵀx)]
         
         Creates features using multivariate Fourier basis where each frequency
@@ -235,20 +300,21 @@ class ScalableGPModel(GPModelBase):
             Fourier feature matrix
         """
         N = X.shape[0]
-        E = self.omegas.shape[0]
+        omegas = self.omegas[dim_idx]
+        E = omegas.shape[0]
         
         Phi = np.zeros((N, self.n_features))
         
         Phi[:, 0] = lambdas[0]
 
-        inner_products = 2 * np.pi * (self.omegas @ X.T)
+        inner_products = 2 * np.pi * (omegas @ X.T)
 
         for e in range(1, E):
             Phi[:, 2*e - 1] = lambdas[e] * np.cos(inner_products[e, :])
             Phi[:, 2*e] = lambdas[e] * np.sin(inner_products[e, :])
         
         return Phi
-    
+
     def train(self, X, y, opt_hyp=True):
         """Train a scalable GP for each state dimension
         
@@ -267,8 +333,12 @@ class ScalableGPModel(GPModelBase):
         self.y_train = y
         
         if opt_hyp:
+            if self.hyp_optimized and self.domain_lengths is not None and self.lengthscale_multiple is not None:
+                # self._set_periods_based_on_domain_and_lengthscales()
+                pass
             for i in range(self.n_s_out):
                 self._optimize_hyperparameters(X, y[:, i], i)
+            self.hyp_optimized = True
         
         for i in range(self.n_s_out):
             self._compute_posterior_params(X, y[:, i], i)
@@ -367,7 +437,7 @@ class ScalableGPModel(GPModelBase):
             raise NotImplementedError(f"Optimization for {self.kern_types[dim_idx]} not implemented")
         
         # Compute features
-        Phi_train = self._phi_features(X, lambdas)
+        Phi_train = self._phi_features(X, lambdas, dim_idx)
         E = Phi_train.shape[1]
         N = len(X)
         
@@ -405,7 +475,7 @@ class ScalableGPModel(GPModelBase):
         dim_idx : int
             Output dimension index
         """
-        Phi_t = self._phi_features(X, self.lambdas[dim_idx])
+        Phi_t = self._phi_features(X, self.lambdas[dim_idx], dim_idx)
         
         # A = ΦᵀΦ + σ²I
         PhiT_Phi = Phi_t.T @ Phi_t + self.noise_var[dim_idx] * np.eye(self.n_features)
@@ -444,7 +514,7 @@ class ScalableGPModel(GPModelBase):
         y_sigm_pred = np.empty((T, self.n_s_out))
         
         for i in range(self.n_s_out):
-            Phi_test = self._phi_features(x_new, self.lambdas[i])
+            Phi_test = self._phi_features(x_new, self.lambdas[i], i)
             
             y_mu_pred[:, i] = Phi_test @ self.posterior_mean_coeffs[i]
             
@@ -557,7 +627,7 @@ class ScalableGPModel(GPModelBase):
         inf_gain_x_f = [None] * self.n_s_out
         for i in range(self.n_s_out):
             noise_var_i = self.noise_var[i]
-            Phi = self._phi_features(x, self.lambdas[i])
+            Phi = self._phi_features(x, self.lambdas[i], i)
             PhiTPhi = Phi.T @ Phi
             inf_gain_x_f[i] = np.log(
                 np.linalg.det(np.eye(self.n_features) + (1 / noise_var_i) * PhiTPhi))
@@ -606,7 +676,7 @@ class ScalableGPModel(GPModelBase):
         jac_mu_all = []
         
         for i in range(self.n_s_out):
-            Phi = self._phi_features_casadi(inp, self.lambdas[i])
+            Phi = self._phi_features_casadi(inp, self.lambdas[i], i)
             
             mu_new = mtimes(Phi, self.posterior_mean_coeffs[i])
             
@@ -633,7 +703,7 @@ class ScalableGPModel(GPModelBase):
         
         return mu_all.T, pred_sigma_all.T
     
-    def _phi_features_casadi(self, X, lambdas):
+    def _phi_features_casadi(self, X, lambdas, dim_idx):
         """Compute Fourier features symbolically using CasADi
         
         Parameters
@@ -648,9 +718,10 @@ class ScalableGPModel(GPModelBase):
         Phi : casadi expression [1 × (2E-1)]
             Fourier feature vector
         """
-        E = self.omegas.shape[0]
+        omegas = self.omegas[dim_idx]
+        E = omegas.shape[0]
 
-        inner_products = 2 * np.pi * mtimes(self.omegas, X.T)
+        inner_products = 2 * np.pi * mtimes(omegas, X.T)
 
         features = [lambdas[0]]
         for e in range(1, E):
@@ -728,7 +799,7 @@ class ScalableGPModel(GPModelBase):
         gp_dict["kern_types"] = self.kern_types
         gp_dict["hyp"] = self.hyp
         gp_dict["n_frequencies"] = self.n_frequencies
-        gp_dict["period"] = self.period
+        gp_dict["period"] = self.periods.tolist()
         gp_dict["lambdas"] = self.lambdas
         gp_dict["noise_var"] = self.noise_var
         

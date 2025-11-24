@@ -78,7 +78,7 @@ class ScalableGPBounds(GPBounds):
 
     def _feature_gram(self, dim_idx):
         """Return ΦᵀΦ for the scalable gp."""
-        Phi = self.gp._phi_features(self.gp.x_train, self.gp.lambdas[dim_idx])
+        Phi = self.gp._phi_features(self.gp.x_train, self.gp.lambdas[dim_idx], dim_idx)
         # TODO verify dimensions
         return Phi.T @ Phi
 
@@ -131,7 +131,7 @@ class ScalableGPBounds(GPBounds):
         projection_error_scalar = self.projection_error(dim_idx)
         projection_error_vector = np.full(X_train.shape[0], projection_error_scalar)
 
-        Phi_t = self.gp._phi_features(X_train, self.gp.lambdas[dim_idx])
+        Phi_t = self.gp._phi_features(X_train, self.gp.lambdas[dim_idx], dim_idx)
         Phi_T_Phi_plus_lambda = Phi_t.T @ Phi_t + lambda_reg * np.eye(Phi_t.shape[1])
 
         try:
