@@ -7,6 +7,7 @@ Created on Thu Sep 28 09:28:15 2017
 import warnings
 from functools import lru_cache
 from typing import Tuple, Union, List, Dict
+import inspect
 
 import casadi as cas
 import numpy as np
@@ -1130,11 +1131,18 @@ class SimpleSafeMPC(SafeMPC):
 
         if callable(compute_fn):
             try:
-                compute_fn(
-                    delta=self.delta,
-                    R_subgaussian=self.R_subgaussian,
-                    projection_error=self.projection_error
-                )
+                sig = inspect.signature(compute_fn)
+                if 'projection_error' in sig.parameters:
+                    compute_fn(
+                        delta=self.delta,
+                        R_subgaussian=self.R_subgaussian,
+                        projection_error=self.projection_error
+                    )
+                else:
+                    compute_fn(
+                        delta=self.delta,
+                        R_subgaussian=self.R_subgaussian
+                    )
             except ValueError:
                 warnings.warn(
                     "GP bounds could not be computed (likely untrained model).",
