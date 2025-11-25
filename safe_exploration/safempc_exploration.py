@@ -106,6 +106,8 @@ class StaticSafeMPCExploration(ExplorationModule):
             the safempc horizon
 
         """
+        self.beta_safety = self.safempc.beta_safety
+        self.safety_offset = getattr(self.safempc, "safety_offset", None)
 
         u_0 = MX.sym("init_control", (self.n_u, 1))
         k_ff_all = MX.sym("feed-forward control", (self.T - 1, self.n_u))
@@ -123,7 +125,8 @@ class StaticSafeMPCExploration(ExplorationModule):
                                                              self.l_sigma,
                                                              self.beta_safety, self.a,
                                                              self.b,
-                                                             self.lin_trafo_gp_input)
+                                                             self.lin_trafo_gp_input,
+                                                             projection_error=self.safety_offset)
 
         # generate open_loop trajectory function [vertcat(x_0,u_0)],[f_x])
         self.f_multistep_eval = cas.Function("safe_multistep",

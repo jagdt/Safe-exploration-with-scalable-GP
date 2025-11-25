@@ -64,10 +64,24 @@ def base_config():
     gp_type = 'scalable'  # one of 'gpy', 'numpy', 'scalable'
 
     # -- Scalable GP specific parameters
+    # Number of frequencies to use per dimension.
     n_frequencies = 5
+    # Periods for each dimension.
     periods = [3.0*4, 1.5*4, 2.0*4]
+    # Domain lengths for each dimension.
     domain_lengths = [3.0, 1.5, 2.0] # [dθ, θ, u]
+    # Lengthscale multiple for the scalable GP to compute periods.
     lengthscale_multiple = 3.0
+
+    # -- GP Bounds parameters
+    # Whether to compute GP bounds. Otherwise uses constant ß.
+    compute_bounds = True
+    # Confidence level for the GP bounds
+    delta = 0.05
+    # Subgaussian noise bound
+    R_subgaussian = 1.0
+    # Model mismatch offset
+    projection_error = None
 
     # -- Episodic
     # The number of repeats of the experiment, over which we will average the metrics.
@@ -80,7 +94,7 @@ def base_config():
     # One of None, 'random_rollouts' or 'safe_samples'.
     init_mode = 'safe_samples'
     # How many initial samples to give to the ssm.
-    n_safe_samples = 500
+    n_safe_samples = 1000
     # Standard deviation of the initial samples.
     init_sample_std = 0.01
     # Whether to plot the locations of the initial samples given to the ssm.

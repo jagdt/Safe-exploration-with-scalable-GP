@@ -38,7 +38,8 @@ class SimpleSafeMPC(SafeMPC):
 
     def __init__(self, n_safe, ssm, opt_env, wx_cost, wu_cost, beta_safety=2.5,
                  rhc=True,
-                 safe_policy=None, opt_perf_trajectory={}, lin_trafo_gp_input=None, opts_solver=None, verbosity=0):
+                 safe_policy=None, opt_perf_trajectory={}, lin_trafo_gp_input=None, opts_solver=None, verbosity=0,
+                 compute_bounds=False, delta=0.05, R_subgaussian=1.0, projection_error=None):
         """ Initialize the SafeMPC object with dynamic model information
 
         Parameters
@@ -71,7 +72,12 @@ class SimpleSafeMPC(SafeMPC):
             All values that are NOT specified in DEFAULT_OPT_PERF are mandatory.
         lin_trafo_gp_input: n_x_gp_in x n_x np.ndarray[float], optional
             Allows for a linear transformation of the gp input (e.g. removing an input)
-
+        delta: float, optional
+            Confidence level for GP bounds computation (default: 0.05)
+        R_subgaussian: float, optional
+            Subgaussian noise bound for GP bounds computation (default: 1.0)
+        projection_error: float or array-like, optional
+            Model mismatch offset for scalalble GP bounds computation (default: None)
 
         """
         self.rhc = rhc
@@ -137,6 +143,11 @@ class SimpleSafeMPC(SafeMPC):
         self.solver_initialized = False
 
         self.beta_safety = beta_safety
+        self.safety_offset = None
+        self.compute_bounds = compute_bounds
+        self.delta = delta
+        self.R_subgaussian = R_subgaussian
+        self.projection_error = projection_error
         self.verbosity = verbosity
 
         # SET ALL ATTRIBUTES FOR THE ENVIRONMENT
@@ -204,6 +215,9 @@ class SimpleSafeMPC(SafeMPC):
         """
         self.cost_func = cost_func
 
+        if self.compute_bounds:
+            self._get_gp_bounds()
+
         u_0 = MX.sym("init_control", (self.n_u, 1))
         k_ff_all = MX.sym("feed-forward control", (self.n_safe - 1, self.n_u))
         g = []
@@ -216,12 +230,20 @@ class SimpleSafeMPC(SafeMPC):
         k_fb_0 = MX.sym("base feedback matrices",
                         (self.n_safe - 1, self.n_s * self.n_u))
 
-        p_all, q_all, gp_sigma_pred_safe_all = cas_multistep(p_0, u_0, k_fb_0, k_ff_all,
-                                                             self.ssm_forward, self.l_mu,
-                                                             self.l_sigma,
-                                                             self.beta_safety, self.a,
-                                                             self.b,
-                                                             self.lin_trafo_gp_input)
+        p_all, q_all, gp_sigma_pred_safe_all = cas_multistep(
+            p_0,
+            u_0,
+            k_fb_0,
+            k_ff_all,
+            self.ssm_forward,
+            self.l_mu,
+            self.l_sigma,
+            self.beta_safety,
+            self.a,
+            self.b,
+            self.lin_trafo_gp_input,
+            safety_offset=self.safety_offset
+        )
 
         # generate open_loop trajectory function [vertcat(x_0,u_0)],[f_x])
 
@@ -1100,6 +1122,33 @@ class SimpleSafeMPC(SafeMPC):
 
     def collect_metrics(self) -> Dict[str, float]:
         raise NotImplementedError
+
+    def _get_gp_bounds(self):
+        """Ensure the underlying GP exposes up-to-date confidence bounds."""
+
+        compute_fn = getattr(self.ssm, "compute_bounds", None)
+
+        if callable(compute_fn):
+            try:
+                compute_fn(
+                    delta=self.delta,
+                    R_subgaussian=self.R_subgaussian,
+                    projection_error=self.projection_error
+                )
+            except ValueError:
+                warnings.warn(
+                    "GP bounds could not be computed (likely untrained model).",
+                    RuntimeWarning,
+                )
+
+        beta_attr = getattr(self.ssm, "beta_safety_per_dim", None)
+
+        if beta_attr is not None:
+            self.beta_safety = np.asarray(beta_attr, dtype=float).reshape(-1)
+
+        proj_attr = getattr(self.ssm, "projection_error_per_dim", None)
+        if proj_attr is not None:
+            self.safety_offset = np.asarray(proj_attr, dtype=float).reshape(-1)
 
 
 class LqrFeedbackController:

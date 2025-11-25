@@ -6,16 +6,32 @@ Created on Mon Sep 25 09:18:58 2017
 """
 
 import numpy as np
-from casadi import SX, MX, mtimes, vertcat, sum1, sqrt, Function
+from casadi import SX, MX, DM, mtimes, vertcat, sum1, sqrt, Function
 from casadi import reshape as cas_reshape
 
 from .utils_casadi import compute_remainder_overapproximations
 from .utils_ellipsoid_casadi import sum_two_ellipsoids, ellipsoid_from_rectangle
 
 
+def _normalize_vector_param(param, n_s, name):
+    """Return param as scalar or n_s×1 column suitable for CasADi ops."""
+
+    if isinstance(param, (SX, MX)):
+        return param
+
+    arr = np.asarray(param, dtype=float)
+    if arr.ndim == 0:
+        return float(arr)
+    if arr.size != n_s:
+        raise ValueError(f"{name} must have length {n_s}, got {arr.size}")
+
+    arr = arr.reshape((n_s, 1))
+    return DM(arr)
+
+
 def onestep_reachability(p_center, ssm, k_ff, l_mu, l_sigma,
                          q_shape=None, k_fb=None, c_safety=1., a=None, b=None,
-                         t_z_gp=None):
+                         t_z_gp=None, safety_offset=None):
     """ Overapproximate the reachable set of states under affine control law
 
     given a system of the form:
@@ -43,9 +59,12 @@ def onestep_reachability(p_center, ssm, k_ff, l_mu, l_sigma,
             Shape matrix of state ellipsoid
         k_fb: n_u x n_s array[float], optional
             The state feedback-matrix for the controls
-        c_safety: float, optional
-            The scaling of the semi-axes of the uncertainty matrix
-            corresponding to a level-set of the gaussian pdf.
+        c_safety: float or array-like, optional
+            Safety scaling (β). May be a scalar shared across outputs or a
+            length-n_s vector specifying one coefficient per state dimension.
+        safety_offset: float or array-like, optional
+            Model mismatch offset added to the RKHS bound. Either a scalar or
+            length-n_s vector.
 
     Returns:
     -------
@@ -56,6 +75,12 @@ def onestep_reachability(p_center, ssm, k_ff, l_mu, l_sigma,
     """
     n_s = np.shape(p_center)[0]
     n_u = np.shape(k_ff)[0]
+
+    c_safety = _normalize_vector_param(c_safety, n_s, "c_safety")
+    if safety_offset is None:
+        safety_offset = 0.0
+    else:
+        safety_offset = _normalize_vector_param(safety_offset, n_s, "safety_offset")
 
     if t_z_gp is None:
         t_z_gp = MX.eye(n_s)
@@ -75,12 +100,6 @@ def onestep_reachability(p_center, ssm, k_ff, l_mu, l_sigma,
         p_lin = mtimes(a, p_center) + mtimes(b, u_p)
         p_1 = p_lin + mu_new
 
-        if hasattr(ssm, 'beta_safety') and ssm.beta_safety is not None:
-            c_safety = ssm.beta_safety
-        safety_offset = 0.0
-        if hasattr(ssm, 'projection_error') and ssm.projection_error is not None:
-            safety_offset = ssm.projection_error
-        
         rkhs_bound = c_safety * sqrt(pred_var) + safety_offset
         q_1 = ellipsoid_from_rectangle(rkhs_bound)
 
@@ -116,7 +135,7 @@ def onestep_reachability(p_center, ssm, k_ff, l_mu, l_sigma,
         Q_lagrange_mu = ellipsoid_from_rectangle(ub_mean)
         p_lagrange_mu = MX.zeros((n_s, 1))
 
-        b_sigma_eps = c_safety * (sqrt(sigm_0) + ub_sigma)
+        b_sigma_eps = c_safety * (sqrt(sigm_0) + ub_sigma) + safety_offset
         Q_lagrange_sigm = ellipsoid_from_rectangle(b_sigma_eps)
         p_lagrange_sigm = MX.zeros((n_s, 1))
 
@@ -130,7 +149,7 @@ def onestep_reachability(p_center, ssm, k_ff, l_mu, l_sigma,
 
 
 def multi_step_reachability(p_0, u_0, k_fb_0, k_ff, gp, l_mu, l_sigm, c_safety=1.,
-                            a=None, b=None, t_z_gp=None):
+                            a=None, b=None, t_z_gp=None, safety_offset=None):
     """Generate trajectory reachset by iteratively computing the one-step reachability.
 
     Parameters
@@ -150,9 +169,11 @@ def multi_step_reachability(p_0, u_0, k_fb_0, k_ff, gp, l_mu, l_sigm, c_safety=1
         dimension)
     l_sigma: 1d_array of size n_s
         Set of Lipschitz constants of the predictive variance (per state dimension)
-    c_safety: float, optional
-        The scaling of the semi-axes of the uncertainty matrix
-        corresponding to a level-set of the gaussian pdf.
+    c_safety: float or array-like, optional
+        Safety scaling (β). Either a scalar or a length-n_s vector passed to
+        ``onestep_reachability``.
+    safety_offset: float or array-like, optional
+        Safety offset forwarded to ``onestep_reachability``.
     a: n_s x n_s ndarray[float]
         The A matrix of the linear model Ax + Bu
     b: n_s x n_u ndarray[float]
@@ -169,7 +190,8 @@ def multi_step_reachability(p_0, u_0, k_fb_0, k_ff, gp, l_mu, l_sigm, c_safety=1
     n_fb = np.shape(k_fb_0)[0]
 
     p_new, q_new, gp_pred_sigma = onestep_reachability(p_0, gp, u_0, l_mu, l_sigm, None,
-                                                       None, c_safety, a, b, t_z_gp)
+                                                       None, c_safety, a, b, t_z_gp,
+                                                       safety_offset)
 
     p_all = p_new.T
     q_all = q_new.reshape((1, n_s * n_s))
@@ -182,8 +204,9 @@ def multi_step_reachability(p_0, u_0, k_fb_0, k_ff, gp, l_mu, l_sigm, c_safety=1
         k_fb_i = cas_reshape(k_fb_0[i, :], (n_u, n_s))
 
         p_new, q_new, gp_pred_sigma = onestep_reachability(p_old, gp, k_ff_i, l_mu,
-                                                           l_sigm, q_old, k_fb_i,
-                                                           c_safety, a, b, t_z_gp)
+                                   l_sigm, q_old, k_fb_i,
+                                   c_safety, a, b, t_z_gp,
+                                   safety_offset)
 
         p_all = vertcat(p_all, p_new.T)
         q_all = vertcat(q_all, cas_reshape(q_new, (1, n_s * n_s)))

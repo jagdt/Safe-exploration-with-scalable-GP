@@ -129,7 +129,11 @@ def create_solver(conf, env: Environment):
                                beta_safety=conf.beta_safety,
                                safe_policy=safe_policy,
                                opt_perf_trajectory=perf_opts_safempc,
-                               lin_trafo_gp_input=lin_trafo_gp_input, verbosity=conf.verbose)
+                               lin_trafo_gp_input=lin_trafo_gp_input, verbosity=conf.verbose,
+                               compute_bounds=conf.compute_bounds,
+                               delta=conf.delta,
+                               R_subgaussian=conf.R_subgaussian,
+                               projection_error=conf.projection_error)
     elif conf.solver_type == "safempc_cem":
         ssm = _create_cem_ssm(conf, env)
         constraints = safempc_cem.construct_constraints(conf, env)

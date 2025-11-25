@@ -48,6 +48,7 @@ class NumpyGPModel(KernelGPModel):
         self._init_kernel_function(kern_types, hyp)
         self.hyp = self._create_hyp_dict(self.kern_types)
         self.noise_var = np.zeros((self.n_s_out,))
+        self.beta_safety_per_dim = None
 
         if X is None or y is None:  # initialize without training (no data available)
             train = False
@@ -636,6 +637,15 @@ class NumpyGPModel(KernelGPModel):
         """Return a helper object for computing Abbasi-Yadkori style bounds."""
 
         return NumpyGPBounds(self, delta=delta, R_subgaussian=R_subgaussian)
+
+    def compute_bounds(self, delta=0.05, R_subgaussian=1.0):
+        """Compute and store β-values derived from the current GP posterior."""
+
+        if not self.gp_trained:
+            raise ValueError("GP must be trained before integrating bounds")
+
+        bounds = self.get_bounds(delta=delta, R_subgaussian=R_subgaussian)
+        self.beta_safety_per_dim = np.array([bounds.beta(dim_idx) for dim_idx in range(self.n_s_out)])
 
     def information_gain(self, x=None):
         """ Mutual information between samples and system """

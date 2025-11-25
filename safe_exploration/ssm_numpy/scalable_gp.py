@@ -79,7 +79,10 @@ class ScalableGPModel(GPModelBase):
         
         self._init_kernel_function(kern_types, hyp)
         self.hyp = self._create_hyp_dict(self.kern_types)
-        self.noise_var = 0.01 * np.ones((self.n_s_out,))
+        self.noise_var = 1e-7 * np.ones((self.n_s_out,))
+
+        self.beta_safety_per_dim = None
+        self.projection_error_per_dim = None
         
         self.L_PhiT_Phi = [None] * n_s_out
         self.PhiT_y = [None] * n_s_out
@@ -120,7 +123,7 @@ class ScalableGPModel(GPModelBase):
             "(n_s_out × input_dim) array"
         )
     
-    def _set_periods_based_on_domain_and_lengthscales(self, max_period_multiple=10.0, dampening_alpha=0.5):
+    def _set_periods_based_on_domain_and_lengthscales(self, max_period_multiple=10.0, dampening_alpha=0.05):
         """Set periods based on domain lengths and lengthscale multiples.
 
         Returns
@@ -143,7 +146,7 @@ class ScalableGPModel(GPModelBase):
             print("Old periods for dim", dim_idx, ":", self.periods[dim_idx])
             if self.kern_types[dim_idx] != "rbf":
                 raise NotImplementedError(
-                    "Setting periods based on lengthscales only implemented for 'rbf' kernel."
+                    "Adjusting periods based on lengthscales only implemented for 'rbf' kernel."
                 )
             decay_rates = self.hyp[dim_idx]["exponential_decay_rates"]
             lengthscales = np.sqrt(decay_rates * self.periods[dim_idx]**2 / (2 * np.pi**2))
@@ -236,7 +239,7 @@ class ScalableGPModel(GPModelBase):
             hyp_i = dict()
             if kern_types[i] == "rbf":
                 hyp_i["factor"] = 1.0
-                hyp_i["exponential_decay_rates"] = 0.1 * np.ones(self.input_dim)
+                hyp_i["exponential_decay_rates"] = 1.0 * np.ones(self.input_dim)
             elif kern_types[i] == "polynomial_decay":
                 raise NotImplementedError("Polynomial decay not implemented yet")
             elif kern_types[i] == "individual":
@@ -645,6 +648,21 @@ class ScalableGPModel(GPModelBase):
             R_subgaussian=R_subgaussian,
             projection_error=projection_error,
         )
+    
+    def compute_bounds(self, delta=0.05, R_subgaussian=1.0, projection_error=None):
+        """Compute β-values and projection-error offsets from current data."""
+
+        if not self.gp_trained:
+            raise ValueError("GP must be trained before integrating bounds")
+
+        bounds = self.get_bounds(
+            delta=delta,
+            R_subgaussian=R_subgaussian,
+            projection_error=projection_error,
+        )
+
+        self.beta_safety_per_dim = np.array([bounds.beta(dim_idx) for dim_idx in range(self.n_s_out)])
+        self.projection_error_per_dim = np.array([bounds.projection_error(dim_idx) for dim_idx in range(self.n_s_out)])
     
     def predict_casadi_symbolic(self, x_new, compute_grads=False):
         """Return symbolic CasADi expressions for predictive mean/variance
