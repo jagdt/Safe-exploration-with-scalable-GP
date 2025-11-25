@@ -74,8 +74,34 @@ class ScalableGPBounds(GPBounds):
         if not gp_model.gp_trained:
             raise ValueError("GP must be trained before computing bounds")
         self.gp = gp_model
-        self._projection_error_value = projection_error
-        self._computed_projection_errors = {}
+        self.projection_errors = self._initialize_projection_errors(projection_error)
+
+    def _initialize_projection_errors(self, projection_error):
+        """Initialize projection errors for all dimensions.
+        
+        Parameters
+        ----------
+        projection_error : float, array-like, or None
+            User-provided projection errors or None to compute automatically
+            
+        Returns
+        -------
+        ndarray
+            Array of projection errors for each output dimension
+        """
+        if projection_error is None:
+            return np.array([
+                self.compute_projection_error(dim_idx) 
+                for dim_idx in range(self.gp.n_s_out)
+            ])
+        else:
+            arr = np.asarray(projection_error, dtype=float)
+            if arr.ndim == 0:
+                return np.full(self.gp.n_s_out, float(arr))
+            elif arr.ndim == 1 and arr.size == self.gp.n_s_out:
+                return arr
+            else:
+                raise ValueError("projection_error must be scalar or length n_s_out")
 
     def _feature_gram(self, dim_idx):
         """Return ΦᵀΦ for the scalable gp."""
@@ -111,27 +137,12 @@ class ScalableGPBounds(GPBounds):
         
         return projection_error
 
-    def projection_error(self, dim_idx):
-        """Return the projection bias term used outside the σβ interval."""
-        if self._projection_error_value is not None:
-            arr = np.asarray(self._projection_error_value)
-            if arr.ndim == 0:
-                return float(arr)
-            if arr.ndim == 1 and arr.size == self.gp.n_s_out:
-                return float(arr[dim_idx])
-            raise ValueError("projection_error must be scalar or length n_s_out")
-        
-        if dim_idx not in self._computed_projection_errors:
-            self._computed_projection_errors[dim_idx] = self.compute_projection_error(dim_idx)
-        
-        return self._computed_projection_errors[dim_idx]
-
     def projection_error_term(self, dim_idx):
         """Compute σ̃-dependent projection error term added to β for scalable GP."""
 
         X_train = self.gp.x_train
         lambda_reg = float(max(self.gp.noise_var[dim_idx], 1e-12))
-        projection_error_scalar = self.projection_error(dim_idx)
+        projection_error_scalar = self.projection_errors[dim_idx]
         projection_error_vector = np.full(X_train.shape[0], projection_error_scalar)
 
         Phi_t = self.gp._phi_features(X_train, self.gp.lambdas[dim_idx], dim_idx)
@@ -163,7 +174,7 @@ class ScalableGPBounds(GPBounds):
         mu_dim = mu[:, dim_idx]
         sigma_dim = sigma[:, dim_idx]
         beta_val = self.beta(dim_idx)
-        proj = self.projection_error(dim_idx)
+        proj = self.projection_errors[dim_idx]
         lower = mu_dim - beta_val * sigma_dim - proj
         upper = mu_dim + beta_val * sigma_dim + proj
         return mu_dim, sigma_dim, lower, upper
