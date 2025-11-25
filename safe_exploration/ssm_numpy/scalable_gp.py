@@ -304,14 +304,16 @@ class ScalableGPModel(GPModelBase):
         E = omegas.shape[0]
         
         Phi = np.zeros((N, self.n_features))
-        
+
         Phi[:, 0] = lambdas[0]
 
         inner_products = 2 * np.pi * (omegas @ X.T)
-
-        for e in range(1, E):
-            Phi[:, 2*e - 1] = lambdas[e] * np.cos(inner_products[e, :])
-            Phi[:, 2*e] = lambdas[e] * np.sin(inner_products[e, :])
+        if E > 1:
+            phases = inner_products[1:, :]
+            cos_block = (lambdas[1:, None] * np.cos(phases)).T
+            sin_block = (lambdas[1:, None] * np.sin(phases)).T
+            Phi[:, 1::2] = cos_block
+            Phi[:, 2::2] = sin_block
         
         return Phi
 

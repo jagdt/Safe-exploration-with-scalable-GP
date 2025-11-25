@@ -64,8 +64,8 @@ def base_config():
     gp_type = 'scalable'  # one of 'gpy', 'numpy', 'scalable'
 
     # -- Scalable GP specific parameters
-    n_frequencies = 7
-    periods = [3.0, 1.5, 2.0]
+    n_frequencies = 5
+    periods = [3.0*4, 1.5*4, 2.0*4]
     domain_lengths = [3.0, 1.5, 2.0] # [dθ, θ, u]
     lengthscale_multiple = 3.0
 
@@ -80,7 +80,7 @@ def base_config():
     # One of None, 'random_rollouts' or 'safe_samples'.
     init_mode = 'safe_samples'
     # How many initial samples to give to the ssm.
-    n_safe_samples = 50
+    n_safe_samples = 500
     # Standard deviation of the initial samples.
     init_sample_std = 0.01
     # Whether to plot the locations of the initial samples given to the ssm.
