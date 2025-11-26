@@ -404,7 +404,7 @@ class SimpleGPModel(KernelGPModel):
         """
         if kern_types[i] == "rbf":
                     kern_i = RBF(input_dim, ARD = True)
-                elif kern_types[i] == "lin_rbf":
+                elif kern_types[i] == "prod_lin_rbf":
                     kern_i = Linear(1,active_dims = [1])*RBF(1,active_dims=[1]) + Linear(input_dim,ARD=True)
                 elif kern_types[i] == "lin_mat52":
                     kern_i = Linear(1,active_dims = [1])*Matern52(1,active_dims=[1]) + Linear(input_dim,ARD=True)
@@ -424,7 +424,7 @@ class SimpleGPModel(KernelGPModel):
                     kern_i = RBF(input_dim, ARD=True)
                 elif kern_types[i] == "mat52":
                     kern_i = Matern52(input_dim, ARD=True)
-                elif kern_types[i] == "lin_rbf":
+                elif kern_types[i] == "prod_lin_rbf":
                     kern_i = Linear(input_dim) * RBF(input_dim) + Linear(input_dim,
                                                                          ARD=True)
                 elif kern_types[i] == "lin_mat52":
@@ -480,7 +480,7 @@ class SimpleGPModel(KernelGPModel):
                 hyp_i["lengthscale"] = np.reshape(kerns[i].lengthscale, (-1,))
                 hyp_i["variance"] = kerns[i].variance
 
-            elif kern_types[i] == "lin_rbf":
+            elif kern_types[i] == "prod_lin_rbf":
 
                 hyp_i["prod.rbf.lengthscale"] = np.array(
                     [kerns[i].mul.rbf.lengthscale])

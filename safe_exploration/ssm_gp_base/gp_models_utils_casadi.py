@@ -70,9 +70,10 @@ def _k_mat52(x, y=None, variance=1., lengthscale=None, diag_only=False, ARD=Fals
     return variance * (1. + sqrt(5.) * r + 5. / 3 * r ** 2) * exp(-sqrt(5.) * r)
 
 
-def _k_lin_rbf(x, hyp, y=None, diag_only=False):
-    """ Evaluate the prdocut of linear and rbf kernel function symbolically using Casadi
-
+def _k_prod_lin_rbf(x, hyp, y=None, diag_only=False):
+    """ Evaluate the product of linear and rbf kernel function symbolically using Casadi
+    
+    Kernel: k_lin(x,x') * k_rbf(x,x') + k_lin(x,x')
     """
     prod_rbf_lengthscale = hyp["prod.rbf.lengthscale"]
     prod_rbf_variance = hyp["prod.rbf.variance"]
@@ -97,6 +98,21 @@ def _k_lin_rbf(x, hyp, y=None, diag_only=False):
     k_linear = _k_lin(x, y, linear_variances, diag_only)
 
     return k_prod_lin * k_prod_rbf + k_linear
+
+
+def _k_sum_lin_rbf(x, hyp, y=None, diag_only=False):
+    """ Evaluate the sum of linear and rbf kernel function symbolically using Casadi
+    
+    Kernel: k_rbf(x,x') + k_lin(x,x')
+    """
+    rbf_lengthscale = hyp["rbf.lengthscale"]
+    rbf_variance = hyp["rbf.variance"]
+    linear_variances = hyp["linear.variances"]
+
+    k_rbf_part = _k_rbf(x, y, rbf_variance, rbf_lengthscale, diag_only)
+    k_linear_part = _k_lin(x, y, linear_variances, diag_only)
+
+    return k_rbf_part + k_linear_part
 
 
 def _k_lin_mat52(x, hyp, y=None, diag_only=False):
@@ -218,9 +234,12 @@ def _get_kernel_function(kern_type, hyp):
     if kern_type == "rbf":
         return lambda x, y=None, diag_only=False: _k_rbf(x, y=y, diag_only=diag_only,
                                                          **hyp)
-    elif kern_type == "lin_rbf":
-        return lambda x, y=None, diag_only=False: _k_lin_rbf(x, hyp, y=y,
-                                                             diag_only=diag_only)
+    elif kern_type == "prod_lin_rbf":
+        return lambda x, y=None, diag_only=False: _k_prod_lin_rbf(x, hyp, y=y,
+                                                                   diag_only=diag_only)
+    elif kern_type == "sum_lin_rbf":
+        return lambda x, y=None, diag_only=False: _k_sum_lin_rbf(x, hyp, y=y,
+                                                                  diag_only=diag_only)
     elif kern_type == "mat52":
         return lambda x, y=None, diag_only=False: _k_mat52(x, y=y,
                                                              diag_only=diag_only, **hyp)

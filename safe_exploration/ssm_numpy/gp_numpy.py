@@ -45,7 +45,7 @@ class NumpyGPModel(KernelGPModel):
         self.beta = None
         self.inv_K = None
         self.z = None
-        self._init_kernel_function(kern_types, hyp)
+        self.kern_types = self._init_kernel_function(kern_types, hyp)
         self.hyp = self._create_hyp_dict(self.kern_types)
         self.noise_var = np.zeros((self.n_s_out,))
         self.beta_safety_per_dim = None
@@ -125,7 +125,6 @@ class NumpyGPModel(KernelGPModel):
 
         return gp_dict
 
-
     def _init_kernel_function(self, kern_types=None, hyp=None):
         """ Initialize kernel functions based on name. Check if supported.
 
@@ -145,14 +144,12 @@ class NumpyGPModel(KernelGPModel):
             for i in range(self.n_s_out):
                 kern_types[i] = "rbf"
         
-        # Store kernel types
-        self.kern_types = kern_types
-        
-        # Validate kernel types
         for kern_type in kern_types:
-            if kern_type not in ["rbf", "mat52", "lin_rbf", "lin_mat52"]:
+            if kern_type not in ["rbf", "mat52", "prod_lin_rbf", "sum_lin_rbf", "lin_mat52"]:
                 raise ValueError(
                     "kernel type '{}' not supported".format(kern_type))
+        
+        return kern_types
 
     def _create_hyp_dict(self, kern_types):
         """ Create a hyperparameter dict for the kernels
@@ -178,7 +175,11 @@ class NumpyGPModel(KernelGPModel):
             elif kern_types[i] == "mat52":
                 hyp_i["lengthscale"] = np.ones(self.input_dim)
                 hyp_i["variance"] = 1.0
-            elif kern_types[i] == "lin_rbf":
+            elif kern_types[i] == "sum_lin_rbf":
+                hyp_i["rbf.lengthscale"] = np.ones(self.input_dim)
+                hyp_i["rbf.variance"] = 1.0
+                hyp_i["linear.variances"] = np.ones(self.input_dim)
+            elif kern_types[i] == "prod_lin_rbf":
                 hyp_i["prod.rbf.lengthscale"] = np.ones(self.input_dim)
                 hyp_i["prod.rbf.variance"] = 1.0
                 hyp_i["prod.linear.variances"] = np.ones(self.input_dim)
@@ -248,7 +249,7 @@ class NumpyGPModel(KernelGPModel):
         X1 : ndarray [N × D]
         X2 : ndarray [M × D]
         kern_type : str
-            One of 'rbf', 'mat52', 'lin_rbf', 'lin_mat52'
+            One of 'rbf', 'mat52', 'sum_lin_rbf', 'prod_lin_rbf', 'lin_mat52'
         hyp : dict
             Hyperparameters for the kernel
         
@@ -260,7 +261,13 @@ class NumpyGPModel(KernelGPModel):
             return self._rbf_kernel(X1, X2, hyp)
         elif kern_type == 'mat52':
             return self._matern52_kernel(X1, X2, hyp)
-        elif kern_type == 'lin_rbf':
+        elif kern_type == 'sum_lin_rbf':
+            hyp_rbf = {'lengthscale': hyp['rbf.lengthscale'], 
+                       'variance': hyp['rbf.variance']}
+            hyp_lin = {'variances': hyp['linear.variances']}
+            return (self._rbf_kernel(X1, X2, hyp_rbf) + 
+                    self._linear_kernel(X1, X2, hyp_lin))
+        elif kern_type == 'prod_lin_rbf':
             hyp_rbf = {'lengthscale': hyp['prod.rbf.lengthscale'], 
                        'variance': hyp['prod.rbf.variance']}
             hyp_lin1 = {'variances': hyp['prod.linear.variances']}
@@ -399,7 +406,14 @@ class NumpyGPModel(KernelGPModel):
                 [hyp_dict['variance']],
                 [self.noise_var[dim_idx]]
             ])
-        elif kern_type == 'lin_rbf':
+        elif kern_type == 'sum_lin_rbf':
+            hyp_array = np.concatenate([
+                hyp_dict['rbf.lengthscale'],
+                [hyp_dict['rbf.variance']],
+                hyp_dict['linear.variances'],
+                [self.noise_var[dim_idx]]
+            ])
+        elif kern_type == 'prod_lin_rbf':
             hyp_array = np.concatenate([
                 hyp_dict['prod.rbf.lengthscale'],
                 [hyp_dict['prod.rbf.variance']],
@@ -441,7 +455,15 @@ class NumpyGPModel(KernelGPModel):
             n_lengthscales = self.input_dim
             hyp_dict['lengthscale'] = hyp_array[:n_lengthscales]
             hyp_dict['variance'] = hyp_array[n_lengthscales]
-        elif kern_type == 'lin_rbf':
+        elif kern_type == 'sum_lin_rbf':
+            n = self.input_dim
+            idx = 0
+            hyp_dict['rbf.lengthscale'] = hyp_array[idx:idx+n]
+            idx += n
+            hyp_dict['rbf.variance'] = hyp_array[idx]
+            idx += 1
+            hyp_dict['linear.variances'] = hyp_array[idx:idx+n]
+        elif kern_type == 'prod_lin_rbf':
             n = self.input_dim
             idx = 0
             hyp_dict['prod.rbf.lengthscale'] = hyp_array[idx:idx+n]
@@ -633,18 +655,18 @@ class NumpyGPModel(KernelGPModel):
 
         return S
 
-    def get_bounds(self, delta=0.05, R_subgaussian=1.0):
+    def get_bounds(self, delta=0.05, rkhs_norm=1.0, R_subgaussian=1.0):
         """Return a helper object for computing Abbasi-Yadkori style bounds."""
 
-        return NumpyGPBounds(self, delta=delta, R_subgaussian=R_subgaussian)
+        return NumpyGPBounds(self, delta=delta, rkhs_norm=rkhs_norm, R_subgaussian=R_subgaussian)
 
-    def compute_bounds(self, delta=0.05, R_subgaussian=1.0):
+    def compute_bounds(self, delta=0.05, rkhs_norm=1.0, R_subgaussian=1.0):
         """Compute and store β-values derived from the current GP posterior."""
 
         if not self.gp_trained:
             raise ValueError("GP must be trained before integrating bounds")
 
-        bounds = self.get_bounds(delta=delta, R_subgaussian=R_subgaussian)
+        bounds = self.get_bounds(delta=delta, rkhs_norm=rkhs_norm, R_subgaussian=R_subgaussian)
         self.beta_safety_per_dim = np.array([bounds.beta(dim_idx) for dim_idx in range(self.n_s_out)])
 
     def information_gain(self, x=None):

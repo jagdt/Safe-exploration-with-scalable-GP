@@ -24,7 +24,7 @@ r_tol = 1e-4
 
 
 @pytest.fixture(params=[("InvPend", ["rbf", "rbf"]),
-                        ("InvPend", ["lin_rbf", "lin_rbf"]),
+                        ("InvPend", ["prod_lin_rbf", "prod_lin_rbf"]),
                         ("InvPend", ["lin_mat52", "lin_mat52"])])
 def before_gp_predict_test(request):
 

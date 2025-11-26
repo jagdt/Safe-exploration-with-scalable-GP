@@ -403,7 +403,7 @@ class SimpleGPModelOld():
         """
         if kern_types[i] == "rbf":
                     kern_i = RBF(input_dim, ARD = True)
-                elif kern_types[i] == "lin_rbf":
+                elif kern_types[i] == "prod_lin_rbf":
                     kern_i = Linear(1,active_dims = [1])*RBF(1,active_dims=[1]) + Linear(input_dim,ARD=True)
                 elif kern_types[i] == "lin_mat52":
                     kern_i = Linear(1,active_dims = [1])*Matern52(1,active_dims=[1]) + Linear(input_dim,ARD=True)
@@ -421,7 +421,7 @@ class SimpleGPModelOld():
                 hyp_i = hyp[i]
                 if kern_types[i] == "rbf":
                     kern_i = RBF(input_dim, ARD=True)
-                elif kern_types[i] == "lin_rbf":
+                elif kern_types[i] == "prod_lin_rbf":
                     kern_i = Linear(input_dim) * RBF(input_dim) + Linear(input_dim,
                                                                          ARD=True)
                 elif kern_types[i] == "lin_mat52":
@@ -472,7 +472,7 @@ class SimpleGPModelOld():
                 hyp_i["lengthscale"] = np.reshape(gps[i].kern.lengthscale, (-1,))
                 hyp_i["variance"] = gps[i].kern.variance
 
-            elif kern_types[i] == "lin_rbf":
+            elif kern_types[i] == "prod_lin_rbf":
 
                 hyp_i["prod.rbf.lengthscale"] = np.array(
                     [gps[i].kern.mul.rbf.lengthscale])

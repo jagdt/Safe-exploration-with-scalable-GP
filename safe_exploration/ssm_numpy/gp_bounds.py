@@ -116,11 +116,17 @@ class ScalableGPBounds(GPBounds):
         Returns:
             float: The upper bound of the projection error ||f - P(f)||.
         """
-        if self.gp.kern_types[dim_idx] != 'rbf':
-            raise NotImplementedError("Projection error bound only implemented for 'rbf' kernel.")
+        kern_type = self.gp.kern_types[dim_idx]
         
-        C = self.gp.hyp[dim_idx]["factor"]
-        decay_rates = self.gp.hyp[dim_idx]["exponential_decay_rates"]
+        if kern_type == 'rbf':
+            C = self.gp.hyp[dim_idx]["factor"]
+            decay_rates = self.gp.hyp[dim_idx]["exponential_decay_rates"]
+        elif kern_type == 'sum_lin_rbf':
+            C = self.gp.hyp[dim_idx]["rbf.factor"]
+            decay_rates = self.gp.hyp[dim_idx]["rbf.exponential_decay_rates"]
+        else:
+            raise NotImplementedError(f"Projection error bound only implemented for 'rbf' and 'sum_lin_rbf' kernels, got '{kern_type}'.")
+        
         M = self.gp.n_frequencies_per_dim[dim_idx] - 1
         
         full_sums = 1 + 0.5 * np.sqrt(np.pi / decay_rates)

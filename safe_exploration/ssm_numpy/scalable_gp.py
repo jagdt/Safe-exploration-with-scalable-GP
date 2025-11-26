@@ -71,7 +71,6 @@ class ScalableGPModel(GPModelBase):
         self.hyp_optimized = False
 
         # Spectral parameters
-        self.n_features = None
         self.omegas = [None] * n_s_out
         self.lambdas = [None] * n_s_out
         
@@ -163,8 +162,6 @@ class ScalableGPModel(GPModelBase):
         Creates frequency vectors ω ∈ ℝ^D for computing features cos(2πω⊤x) and sin(2πω⊤x).
         If n_frequencies is an int E, generates E^D frequency vectors (full grid).
         If n_frequencies is a list [E_1, ..., E_D], generates E_1 × ... × E_D frequency vectors.
-        
-        Total features: n_features = 2*(E_1 × ... × E_D) - 1
         """
         if isinstance(self.n_frequencies, int):
             n_frequencies_per_dim = [self.n_frequencies] * self.input_dim
@@ -195,9 +192,6 @@ class ScalableGPModel(GPModelBase):
                 omega_list.append(omega)
 
             self.omegas.append(np.array(omega_list))
-        
-        E_total = np.prod(n_frequencies_per_dim)
-        self.n_features = 2 * E_total - 1
   
     def _init_kernel_function(self, kern_types=None, hyp=None):
         """Initialize kernel functions based on name
@@ -215,9 +209,8 @@ class ScalableGPModel(GPModelBase):
         self.kern_types = kern_types
         
         for kern_type in kern_types:
-            if kern_type not in ["rbf", "polynomial_decay", "individual"]:
-                raise ValueError(
-                    "kernel type '{}' currently not supported for scalable GP".format(kern_type))
+            if kern_type not in ["rbf", "sum_lin_rbf", "polynomial_decay", "individual"]:
+                raise ValueError(f"Unsupported kernel type for ScalableGP: {kern_type}")
 
     
     def _create_hyp_dict(self, kern_types):
@@ -240,6 +233,10 @@ class ScalableGPModel(GPModelBase):
             if kern_types[i] == "rbf":
                 hyp_i["factor"] = 1.0
                 hyp_i["exponential_decay_rates"] = 1.0 * np.ones(self.input_dim)
+            elif kern_types[i] == "sum_lin_rbf":
+                hyp_i["rbf.factor"] = 1.0
+                hyp_i["rbf.exponential_decay_rates"] = 1.0 * np.ones(self.input_dim)
+                hyp_i["linear.variances"] = 1.0 * np.ones(self.input_dim)
             elif kern_types[i] == "polynomial_decay":
                 raise NotImplementedError("Polynomial decay not implemented yet")
             elif kern_types[i] == "individual":
@@ -277,6 +274,11 @@ class ScalableGPModel(GPModelBase):
             exponential_decay_rates = self.hyp[dim_idx]["exponential_decay_rates"]
             quadratic_forms = -0.5 * np.sum(exponential_decay_rates * omegas ** 2, axis=1)
             lambdas = factor * np.exp(quadratic_forms)
+        elif self.kern_types[dim_idx] == "sum_lin_rbf":
+            factor = self.hyp[dim_idx]["rbf.factor"]
+            exponential_decay_rates = self.hyp[dim_idx]["rbf.exponential_decay_rates"]
+            quadratic_forms = -0.5 * np.sum(exponential_decay_rates * omegas ** 2, axis=1)
+            lambdas = factor * np.exp(quadratic_forms)
         elif self.kern_types[dim_idx] == "polynomial_decay":
             raise NotImplementedError("Polynomial decay not implemented yet")
         elif self.kern_types[dim_idx] == "individual":
@@ -306,7 +308,7 @@ class ScalableGPModel(GPModelBase):
         omegas = self.omegas[dim_idx]
         E = omegas.shape[0]
         
-        Phi = np.zeros((N, self.n_features))
+        Phi = np.zeros((N, 2 * E - 1))
 
         Phi[:, 0] = lambdas[0]
 
@@ -317,6 +319,11 @@ class ScalableGPModel(GPModelBase):
             sin_block = (lambdas[1:, None] * np.sin(phases)).T
             Phi[:, 1::2] = cos_block
             Phi[:, 2::2] = sin_block
+        
+        if self.kern_types[dim_idx] == "sum_lin_rbf":
+            linear_variances = self.hyp[dim_idx]["linear.variances"]
+            linear_features = X * np.sqrt(linear_variances)
+            Phi = np.hstack([Phi, linear_features])
         
         return Phi
 
@@ -369,6 +376,12 @@ class ScalableGPModel(GPModelBase):
             initial_factor = self.hyp[dim_idx]["factor"]
             initial_decay_rates = self.hyp[dim_idx]["exponential_decay_rates"]
             initial_params = np.concatenate([[initial_factor], initial_decay_rates, [initial_noise_var]])
+        elif self.kern_types[dim_idx] == "sum_lin_rbf":
+            initial_factor = self.hyp[dim_idx]["rbf.factor"]
+            initial_decay_rates = self.hyp[dim_idx]["rbf.exponential_decay_rates"]
+            initial_linear_variances = self.hyp[dim_idx]["linear.variances"]
+            initial_params = np.concatenate([[initial_factor], initial_decay_rates, 
+                                           initial_linear_variances, [initial_noise_var]])
         elif self.kern_types[dim_idx] == "individual":
             initial_lambdas = self.hyp[dim_idx]["lambdas"]
             initial_params = np.concatenate([initial_lambdas, [initial_noise_var]])
@@ -390,6 +403,12 @@ class ScalableGPModel(GPModelBase):
             if self.kern_types[dim_idx] == "rbf":
                 self.hyp[dim_idx]["factor"] = params[0]
                 self.hyp[dim_idx]["exponential_decay_rates"] = params[1:-1]
+                self.noise_var[dim_idx] = params[-1]
+            elif self.kern_types[dim_idx] == "sum_lin_rbf":
+                n_decay = self.input_dim
+                self.hyp[dim_idx]["rbf.factor"] = params[0]
+                self.hyp[dim_idx]["rbf.exponential_decay_rates"] = params[1:1+n_decay]
+                self.hyp[dim_idx]["linear.variances"] = params[1+n_decay:-1]
                 self.noise_var[dim_idx] = params[-1]
             elif self.kern_types[dim_idx] == "individual":
                 self.hyp[dim_idx]["lambdas"] = params[:-1]
@@ -436,6 +455,15 @@ class ScalableGPModel(GPModelBase):
             self.hyp[dim_idx]["factor"] = factor
             self.hyp[dim_idx]["exponential_decay_rates"] = decay_rates
             lambdas = self._compute_lambdas(dim_idx)
+        elif self.kern_types[dim_idx] == "sum_lin_rbf":
+            factor = params[0]
+            n_decay = self.input_dim
+            decay_rates = params[1:1+n_decay]
+            linear_variances = params[1+n_decay:-1]
+            self.hyp[dim_idx]["rbf.factor"] = factor
+            self.hyp[dim_idx]["rbf.exponential_decay_rates"] = decay_rates
+            self.hyp[dim_idx]["linear.variances"] = linear_variances
+            lambdas = self._compute_lambdas(dim_idx)
         elif self.kern_types[dim_idx] == "individual":
             lambdas = params[:-1]
         else:
@@ -480,14 +508,15 @@ class ScalableGPModel(GPModelBase):
         dim_idx : int
             Output dimension index
         """
-        Phi_t = self._phi_features(X, self.lambdas[dim_idx], dim_idx)
+        Phi = self._phi_features(X, self.lambdas[dim_idx], dim_idx)
         
         # A = ΦᵀΦ + σ²I
-        PhiT_Phi = Phi_t.T @ Phi_t + self.noise_var[dim_idx] * np.eye(self.n_features)
+        n_features = Phi.shape[1]
+        PhiT_Phi = Phi.T @ Phi + self.noise_var[dim_idx] * np.eye(n_features)
         
         self.L_PhiT_Phi[dim_idx] = np.linalg.cholesky(PhiT_Phi)
         
-        self.PhiT_y[dim_idx] = Phi_t.T @ y
+        self.PhiT_y[dim_idx] = Phi.T @ y
         
         # Solve (ΦᵀΦ + σ²I)⁻¹ Φᵀy
         temp = np.linalg.solve(self.L_PhiT_Phi[dim_idx], self.PhiT_y[dim_idx])
@@ -632,24 +661,26 @@ class ScalableGPModel(GPModelBase):
         inf_gain_x_f = [None] * self.n_s_out
         for i in range(self.n_s_out):
             noise_var_i = self.noise_var[i]
-            Phi = self._phi_features(x, self.lambdas[i], i)
+            Phi = self._phi_features(x, self.lambdas[i], i)#
+            n_features = Phi.shape[1]
             PhiTPhi = Phi.T @ Phi
             inf_gain_x_f[i] = np.log(
-                np.linalg.det(np.eye(self.n_features) + (1 / noise_var_i) * PhiTPhi))
+                np.linalg.det(np.eye(n_features) + (1 / noise_var_i) * PhiTPhi))
 
         return inf_gain_x_f
 
-    def get_bounds(self, delta=0.05, R_subgaussian=1.0, projection_error=None):
+    def get_bounds(self, delta=0.05, rkhs_norm=1.0, R_subgaussian=1.0, projection_error=None):
         """Return a helper object for computing scalable GP confidence bounds."""
 
         return ScalableGPBounds(
             self,
             delta=delta,
+            rkhs_norm=rkhs_norm,
             R_subgaussian=R_subgaussian,
             projection_error=projection_error,
         )
     
-    def compute_bounds(self, delta=0.05, R_subgaussian=1.0, projection_error=None):
+    def compute_bounds(self, delta=0.05, rkhs_norm=1.0, R_subgaussian=1.0, projection_error=None):
         """Compute β-values and projection-error offsets from current data."""
 
         if not self.gp_trained:
@@ -657,6 +688,7 @@ class ScalableGPModel(GPModelBase):
 
         bounds = self.get_bounds(
             delta=delta,
+            rkhs_norm=rkhs_norm,
             R_subgaussian=R_subgaussian,
             projection_error=projection_error,
         )
@@ -748,7 +780,14 @@ class ScalableGPModel(GPModelBase):
             features.append(lambdas[e] * cos(inner_products[e]))
             features.append(lambdas[e] * sin(inner_products[e]))
         
-        return horzcat(*features)
+        Phi_rbf = horzcat(*features)
+        
+        if self.kern_types[dim_idx] == "sum_lin_rbf":
+            linear_variances = self.hyp[dim_idx]["linear.variances"]
+            linear_features = X * sqrt(horzcat(*linear_variances))
+            return horzcat(Phi_rbf, linear_features)
+        
+        return Phi_rbf
     
     @classmethod
     def from_dict(cls, gp_dict):

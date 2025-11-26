@@ -65,7 +65,7 @@ def base_config():
 
     # -- Scalable GP specific parameters
     # Number of frequencies to use per dimension.
-    n_frequencies = 8
+    n_frequencies = 7
     # Periods for each dimension.
     periods = [3.0*4, 1.5*4, 2.0*4]
     # Domain lengths for each dimension.

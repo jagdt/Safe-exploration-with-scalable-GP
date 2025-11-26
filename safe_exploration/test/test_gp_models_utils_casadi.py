@@ -13,7 +13,7 @@ import pytest
 from casadi import Function, SX
 
 try:
-    from safe_exploration.ssm_gpy.gp_models_utils_casadi import _unscaled_dist, _k_rbf, _k_lin, _k_lin_rbf, \
+    from safe_exploration.ssm_gpy.gp_models_utils_casadi import _unscaled_dist, _k_rbf, _k_lin, _k_prod_lin_rbf, \
     _k_mat52
 
     from GPy.kern import RBF, Linear, Matern52
@@ -121,7 +121,7 @@ def test_k_mat52(before_gp_utils_casadi_test_rbf):
     assert np.all(np.isclose(f_out_casadi, f_out_gpy))
 
 
-def test_k_lin_rbf(before_gp_utils_casadi_test_rbf):
+def test_k_prod_lin_rbf(before_gp_utils_casadi_test_rbf):
     """ Does _k_rbf_ show the same behaviours as the GPy implementation?"""
 
     x_inp, y_inp, n_dim = before_gp_utils_casadi_test_rbf
@@ -143,11 +143,11 @@ def test_k_lin_rbf(before_gp_utils_casadi_test_rbf):
     x = SX.sym("x", np.shape(x_inp))
 
     if y_inp is None:
-        f = Function("f", [x], [_k_lin_rbf(x, hyp)])
+        f = Function("f", [x], [_k__prod_lin_rbf(x, hyp)])
         f_out_casadi = f(x_inp)
     else:
         y = SX.sym("y", np.shape(y_inp))
-        f = Function("f", [x, y], [_k_lin_rbf(x, hyp, y)])
+        f = Function("f", [x, y], [_k_prod_lin_rbf(x, hyp, y)])
         f_out_casadi = f(x_inp, y_inp)
 
     f_out_gpy = kern_lin.K(x_inp, y_inp)
