@@ -37,8 +37,8 @@ class GPBounds:
 class NumpyGPBounds(GPBounds):
     """Confidence bounds for the exact NumPy GP implementation."""
 
-    def __init__(self, gp_model, delta=0.05, R_subgaussian=1.0):
-        super().__init__(delta, R_subgaussian)
+    def __init__(self, gp_model, delta=0.05, rkhs_norm=1.0, R_subgaussian=1.0):
+        super().__init__(delta, rkhs_norm, R_subgaussian)
         if not gp_model.gp_trained:
             raise ValueError("GP must be trained before computing bounds")
         self.gp = gp_model
@@ -68,9 +68,9 @@ class NumpyGPBounds(GPBounds):
 class ScalableGPBounds(GPBounds):
     """Bounds for the scalable GP using Fourier features."""
 
-    def __init__(self, gp_model, delta=0.05, R_subgaussian=1.0,
+    def __init__(self, gp_model, delta=0.05, rkhs_norm=1.0, R_subgaussian=1.0,
                  projection_error=None):
-        super().__init__(delta, R_subgaussian)
+        super().__init__(delta, rkhs_norm, R_subgaussian)
         if not gp_model.gp_trained:
             raise ValueError("GP must be trained before computing bounds")
         self.gp = gp_model

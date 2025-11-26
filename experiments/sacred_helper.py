@@ -65,7 +65,7 @@ def base_config():
 
     # -- Scalable GP specific parameters
     # Number of frequencies to use per dimension.
-    n_frequencies = 5
+    n_frequencies = 8
     # Periods for each dimension.
     periods = [3.0*4, 1.5*4, 2.0*4]
     # Domain lengths for each dimension.
@@ -78,6 +78,8 @@ def base_config():
     compute_bounds = True
     # Confidence level for the GP bounds
     delta = 0.05
+    # Assumed RKHS norm of the true function
+    rkhs_norm = 2.0
     # Subgaussian noise bound
     R_subgaussian = 1.0
     # Model mismatch offset

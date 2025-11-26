@@ -132,6 +132,7 @@ def create_solver(conf, env: Environment):
                                lin_trafo_gp_input=lin_trafo_gp_input, verbosity=conf.verbose,
                                compute_bounds=conf.compute_bounds,
                                delta=conf.delta,
+                               rkhs_norm=conf.rkhs_norm,
                                R_subgaussian=conf.R_subgaussian,
                                projection_error=conf.projection_error)
     elif conf.solver_type == "safempc_cem":

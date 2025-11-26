@@ -40,7 +40,7 @@ class SimpleSafeMPC(SafeMPC):
     def __init__(self, n_safe, ssm, opt_env, wx_cost, wu_cost, beta_safety=2.5,
                  rhc=True,
                  safe_policy=None, opt_perf_trajectory={}, lin_trafo_gp_input=None, opts_solver=None, verbosity=0,
-                 compute_bounds=False, delta=0.05, R_subgaussian=1.0, projection_error=None):
+                 compute_bounds=False, delta=0.05, rkhs_norm=1.0, R_subgaussian=1.0, projection_error=None):
         """ Initialize the SafeMPC object with dynamic model information
 
         Parameters
@@ -75,6 +75,8 @@ class SimpleSafeMPC(SafeMPC):
             Allows for a linear transformation of the gp input (e.g. removing an input)
         delta: float, optional
             Confidence level for GP bounds computation (default: 0.05)
+        rkhs_norm: float, optional
+            Assumed RKHS norm of the true function (default: 1.0)
         R_subgaussian: float, optional
             Subgaussian noise bound for GP bounds computation (default: 1.0)
         projection_error: float or array-like, optional
@@ -147,6 +149,7 @@ class SimpleSafeMPC(SafeMPC):
         self.safety_offset = None
         self.compute_bounds = compute_bounds
         self.delta = delta
+        self.rkhs_norm = rkhs_norm
         self.R_subgaussian = R_subgaussian
         self.projection_error = projection_error
         self.verbosity = verbosity
@@ -1135,12 +1138,14 @@ class SimpleSafeMPC(SafeMPC):
                 if 'projection_error' in sig.parameters:
                     compute_fn(
                         delta=self.delta,
+                        rkhs_norm=self.rkhs_norm,
                         R_subgaussian=self.R_subgaussian,
                         projection_error=self.projection_error
                     )
                 else:
                     compute_fn(
                         delta=self.delta,
+                        rkhs_norm=self.rkhs_norm,
                         R_subgaussian=self.R_subgaussian
                     )
             except ValueError:
