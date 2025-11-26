@@ -59,7 +59,7 @@ class DefaultConfigExploration(DefaultConfig):
     gp_dict_path = None
     gp_data_path = None  # None means no initial training data
     m = 25  # subset of data of size m for training
-    kern_types = ["rbf", "rbf"]  # kernel type
+    kern_types = ["sum_lin_rbf", "sum_lin_rbf"]
     train_gp = True  # train the gp initially?
     retrain_gp = True  # retrain the gp after every sample?
     gp_hyp = None
