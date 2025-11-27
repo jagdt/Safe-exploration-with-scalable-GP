@@ -47,7 +47,7 @@ class NumpyGPModel(KernelGPModel):
         self.z = None
         self.kern_types = self._init_kernel_function(kern_types, hyp)
         self.hyp = self._create_hyp_dict(self.kern_types)
-        self.noise_var = np.zeros((self.n_s_out,))
+        self.noise_var = 1e-7 * np.ones((self.n_s_out,))
         self.beta_safety_per_dim = None
 
         if X is None or y is None:  # initialize without training (no data available)
@@ -349,30 +349,55 @@ class NumpyGPModel(KernelGPModel):
         """        
         hyp0 = self._pack_hyperparameters(self.hyp[dim_idx], self.kern_types[dim_idx], dim_idx)
         
-        hyp0 = np.log(hyp0)
+        hyp0_log = np.log(hyp0)
         
-        result = minimize(self._neg_log_marginal_likelihood, hyp0, 
+        # Bounds correspond to [1e-10, 1e8] in original space
+        n_params = len(hyp0_log)
+        bounds = [(-23.0, 18.4)] * n_params
+        
+        result = minimize(self._neg_log_marginal_likelihood, hyp0_log, 
                         args=(X, y, dim_idx), method='L-BFGS-B',
+                        bounds=bounds,
                         options={'maxiter': max_iter, 'disp': False})
         
-        if result.success:
-            self.hyp[dim_idx] = self._unpack_hyperparameters(result.x[:-1], self.kern_types[dim_idx])
-            self.noise_var[dim_idx] = result.x[-1]
+        if result.success or result.status == 1:
+            optimized_params = np.exp(result.x)
+            self.hyp[dim_idx] = self._unpack_hyperparameters(optimized_params[:-1], self.kern_types[dim_idx])
+            self.noise_var[dim_idx] = optimized_params[-1]
             print(f"Optimized hyperparameters for dimension {dim_idx}: {self.hyp[dim_idx]}, noise variance: {self.noise_var[dim_idx]}")
         else:
-            warnings.warn(f"Hyperparameter optimization failed for dimension {dim_idx}: {result.message}")
+            warnings.warn(f"Hyperparameter optimization failed for dimension {dim_idx}: {result.message}. Using initial values.")
 
-    def _neg_log_marginal_likelihood(self, hyp_array, X, y, dim_idx):
-        """Negative log marginal likelihood"""
-        hyp_array = np.exp(hyp_array)
-        hyp_dict = self._unpack_hyperparameters(hyp_array, self.kern_types[dim_idx])
+    def _neg_log_marginal_likelihood(self, hyp_array_log, X, y, dim_idx):
+        """Negative log marginal likelihood
         
+        Parameters
+        ----------
+        hyp_array_log : ndarray
+            Hyperparameters in log space
+        X : ndarray
+            Training inputs
+        y : ndarray
+            Training targets
+        dim_idx : int
+            Output dimension index
+            
+        Returns
+        -------
+        nll : float
+            Negative log marginal likelihood (or penalty for invalid parameters)
+        """
+        hyp_array = np.exp(hyp_array_log)
+        
+        hyp_dict = self._unpack_hyperparameters(hyp_array[:-1], self.kern_types[dim_idx])
         K = self.compute_kernel(X, X, self.kern_types[dim_idx], hyp_dict)
         noise_var = hyp_array[-1]
         K += noise_var * np.eye(X.shape[0])
         
         try:
-            L = np.linalg.cholesky(K)
+            with warnings.catch_warnings():
+                warnings.filterwarnings('error')
+                L = np.linalg.cholesky(K)
             
             # Compute log marginal likelihood
             # log p(y|X,θ) = -0.5*y^T*K^{-1}*y - sum(log(diag(L))) - n/2*log(2π)
@@ -380,7 +405,8 @@ class NumpyGPModel(KernelGPModel):
             log_likelihood = -0.5 * y.T @ alpha - np.sum(np.log(np.diag(L))) - 0.5 * len(y) * np.log(2 * np.pi)
             
             return -log_likelihood
-        except np.linalg.LinAlgError:
+        
+        except (np.linalg.LinAlgError, ValueError, RuntimeWarning):
             return 1e10
 
     def _pack_hyperparameters(self, hyp_dict, kern_type, dim_idx):

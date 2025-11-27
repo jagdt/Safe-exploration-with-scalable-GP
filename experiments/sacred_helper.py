@@ -65,7 +65,7 @@ def base_config():
 
     # -- Scalable GP specific parameters
     # Number of frequencies to use per dimension.
-    n_frequencies = 7
+    n_frequencies = 5
     # Periods for each dimension.
     periods = [3.0*4, 1.5*4, 2.0*4]
     # Domain lengths for each dimension.
@@ -75,7 +75,7 @@ def base_config():
 
     # -- GP Bounds parameters
     # Whether to compute GP bounds. Otherwise uses constant ß.
-    compute_bounds = True
+    compute_bounds = False
     # Confidence level for the GP bounds
     delta = 0.05
     # Assumed RKHS norm of the true function
@@ -96,7 +96,7 @@ def base_config():
     # One of None, 'random_rollouts' or 'safe_samples'.
     init_mode = 'safe_samples'
     # How many initial samples to give to the ssm.
-    n_safe_samples = 1000
+    n_safe_samples = 200
     # Standard deviation of the initial samples.
     init_sample_std = 0.01
     # Whether to plot the locations of the initial samples given to the ssm.

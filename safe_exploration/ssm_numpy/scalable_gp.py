@@ -370,57 +370,35 @@ class ScalableGPModel(GPModelBase):
         max_iter : int, optional
             Maximum number of optimization iterations
         """
-        initial_noise_var = self.noise_var[dim_idx]
-        
-        if self.kern_types[dim_idx] == "rbf":
-            initial_factor = self.hyp[dim_idx]["factor"]
-            initial_decay_rates = self.hyp[dim_idx]["exponential_decay_rates"]
-            initial_params = np.concatenate([[initial_factor], initial_decay_rates, [initial_noise_var]])
-        elif self.kern_types[dim_idx] == "sum_lin_rbf":
-            initial_factor = self.hyp[dim_idx]["rbf.factor"]
-            initial_decay_rates = self.hyp[dim_idx]["rbf.exponential_decay_rates"]
-            initial_linear_variances = self.hyp[dim_idx]["linear.variances"]
-            initial_params = np.concatenate([[initial_factor], initial_decay_rates, 
-                                           initial_linear_variances, [initial_noise_var]])
-        elif self.kern_types[dim_idx] == "individual":
-            initial_lambdas = self.hyp[dim_idx]["lambdas"]
-            initial_params = np.concatenate([initial_lambdas, [initial_noise_var]])
-        else:
-            raise NotImplementedError(f"Optimization for {self.kern_types[dim_idx]} not implemented")
+        initial_params = self._pack_hyperparameters(self.hyp[dim_idx], self.kern_types[dim_idx], dim_idx)
         
         initial_params = np.log(initial_params)
+        
+        # Bounds correspond to [1e-10, 1e5] in original space
+        n_params = len(initial_params)
+        bounds = [(-23.0, 11.5)] * n_params
 
         result = minimize(
             self._neg_log_marginal_likelihood,
             initial_params,
             args=(X, y, dim_idx),
             method='L-BFGS-B',
+            bounds=bounds,
             options={'maxiter': max_iter, 'disp': False}
         )
         
-        if result.success:
-            params = np.exp(result.x)
-            if self.kern_types[dim_idx] == "rbf":
-                self.hyp[dim_idx]["factor"] = params[0]
-                self.hyp[dim_idx]["exponential_decay_rates"] = params[1:-1]
-                self.noise_var[dim_idx] = params[-1]
-            elif self.kern_types[dim_idx] == "sum_lin_rbf":
-                n_decay = self.input_dim
-                self.hyp[dim_idx]["rbf.factor"] = params[0]
-                self.hyp[dim_idx]["rbf.exponential_decay_rates"] = params[1:1+n_decay]
-                self.hyp[dim_idx]["linear.variances"] = params[1+n_decay:-1]
-                self.noise_var[dim_idx] = params[-1]
-            elif self.kern_types[dim_idx] == "individual":
-                self.hyp[dim_idx]["lambdas"] = params[:-1]
-                self.noise_var[dim_idx] = params[-1]
+        if result.success or result.status == 0:
+            optimized_params = np.exp(result.x)
+            self.hyp[dim_idx] = self._unpack_hyperparameters(optimized_params[:-1], self.kern_types[dim_idx])
+            self.noise_var[dim_idx] = optimized_params[-1]
             self.lambdas[dim_idx] = self._compute_lambdas(dim_idx)
             print(f"Optimized hyperparameters for dimension {dim_idx}: {self.hyp[dim_idx]}, noise_var: {self.noise_var[dim_idx]}")
         else:
             warnings.warn(
-                f"Hyperparameter optimization failed for dimension {dim_idx}: {result.message}"
+                f"Hyperparameter optimization failed for dimension {dim_idx}: {result.message}. "
+                f"Using initial hyperparameters."
             )
             self.lambdas[dim_idx] = self._compute_lambdas(dim_idx)
-            self.noise_var[dim_idx] = 0.04
     
     def _neg_log_marginal_likelihood(self, params, X, y, dim_idx):
         """Negative log marginal likelihood for scalable GP
@@ -448,35 +426,19 @@ class ScalableGPModel(GPModelBase):
         """
         params = np.exp(params)
         noise_var = params[-1]
+
+        hyp_dict = self._unpack_hyperparameters(params[:-1], self.kern_types[dim_idx])
+        old_hyp = self.hyp[dim_idx].copy()
+        self.hyp[dim_idx] = hyp_dict
+        lambdas = self._compute_lambdas(dim_idx)
+        self.hyp[dim_idx] = old_hyp
         
-        if self.kern_types[dim_idx] == "rbf":
-            factor = params[0]
-            decay_rates = params[1:-1]
-            self.hyp[dim_idx]["factor"] = factor
-            self.hyp[dim_idx]["exponential_decay_rates"] = decay_rates
-            lambdas = self._compute_lambdas(dim_idx)
-        elif self.kern_types[dim_idx] == "sum_lin_rbf":
-            factor = params[0]
-            n_decay = self.input_dim
-            decay_rates = params[1:1+n_decay]
-            linear_variances = params[1+n_decay:-1]
-            self.hyp[dim_idx]["rbf.factor"] = factor
-            self.hyp[dim_idx]["rbf.exponential_decay_rates"] = decay_rates
-            self.hyp[dim_idx]["linear.variances"] = linear_variances
-            lambdas = self._compute_lambdas(dim_idx)
-        elif self.kern_types[dim_idx] == "individual":
-            lambdas = params[:-1]
-        else:
-            raise NotImplementedError(f"Optimization for {self.kern_types[dim_idx]} not implemented")
-        
-        # Compute features
         Phi_train = self._phi_features(X, lambdas, dim_idx)
         E = Phi_train.shape[1]
         N = len(X)
         
         # A = ΦᵀΦ + σ²I
         A = Phi_train.T @ Phi_train + noise_var * np.eye(E)
-        
         try:
             L = np.linalg.cholesky(A)
             
@@ -493,7 +455,7 @@ class ScalableGPModel(GPModelBase):
             nll = 0.5 * (log_det + quadratic_term + N * np.log(2 * np.pi * noise_var))
             return float(nll)
         
-        except (np.linalg.LinAlgError, ValueError):
+        except (np.linalg.LinAlgError, ValueError, RuntimeWarning):
             return 1e10
     
     def _compute_posterior_params(self, X, y, dim_idx):
@@ -521,6 +483,81 @@ class ScalableGPModel(GPModelBase):
         # Solve (ΦᵀΦ + σ²I)⁻¹ Φᵀy
         temp = np.linalg.solve(self.L_PhiT_Phi[dim_idx], self.PhiT_y[dim_idx])
         self.posterior_mean_coeffs[dim_idx] = np.linalg.solve(self.L_PhiT_Phi[dim_idx].T, temp)
+    
+    def _pack_hyperparameters(self, hyp_dict, kern_type, dim_idx):
+        """Pack hyperparameter dict into 1D array for optimization
+        
+        Parameters
+        ----------
+        hyp_dict : dict
+            Hyperparameter dictionary
+        kern_type : str
+            Kernel type
+        dim_idx : int
+            Output dimension index
+            
+        Returns
+        -------
+        hyp_array : ndarray
+            1D array of hyperparameters (includes noise variance at end)
+        """
+        if kern_type == "rbf":
+            hyp_array = np.concatenate([
+                [hyp_dict["factor"]],
+                hyp_dict["exponential_decay_rates"],
+                [self.noise_var[dim_idx]]
+            ])
+        elif kern_type == "sum_lin_rbf":
+            hyp_array = np.concatenate([
+                [hyp_dict["rbf.factor"]],
+                hyp_dict["rbf.exponential_decay_rates"],
+                hyp_dict["linear.variances"],
+                [self.noise_var[dim_idx]]
+            ])
+        elif kern_type == "individual":
+            hyp_array = np.concatenate([
+                hyp_dict["lambdas"],
+                [self.noise_var[dim_idx]]
+            ])
+        else:
+            raise ValueError(f"Unsupported kernel type: {kern_type}")
+        
+        return hyp_array
+    
+    def _unpack_hyperparameters(self, hyp_array, kern_type):
+        """Unpack 1D array into hyperparameter dict
+        
+        Parameters
+        ----------
+        hyp_array : ndarray
+            1D array of hyperparameters (without noise variance)
+        kern_type : str
+            Kernel type
+            
+        Returns
+        -------
+        hyp_dict : dict
+            Hyperparameter dictionary
+        """
+        hyp_dict = {}
+        
+        if kern_type == "rbf":
+            hyp_dict["factor"] = hyp_array[0]
+            hyp_dict["exponential_decay_rates"] = hyp_array[1:]
+        elif kern_type == "sum_lin_rbf":
+            n = self.input_dim
+            idx = 0
+            hyp_dict["rbf.factor"] = hyp_array[idx]
+            idx += 1
+            hyp_dict["rbf.exponential_decay_rates"] = hyp_array[idx:idx+n]
+            idx += n
+            hyp_dict["linear.variances"] = hyp_array[idx:]
+        elif kern_type == "individual":
+            hyp_dict["lambdas"] = hyp_array
+        else:
+            raise ValueError(f"Unsupported kernel type: {kern_type}")
+        
+        return hyp_dict
     
     def predict(self, x_new, quantiles=None, compute_gradients=False):
         """Compute predictive mean and variance at test points
