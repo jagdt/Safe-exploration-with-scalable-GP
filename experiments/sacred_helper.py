@@ -61,7 +61,7 @@ def base_config():
     cem_ssm = 'exact_gp'
 
     # -- GP model
-    gp_type = 'scalable'  # one of 'gpy', 'numpy', 'scalable'
+    gp_type = 'numpy'  # one of 'gpy', 'numpy', 'scalable'
 
     # -- Scalable GP specific parameters
     # Number of frequencies to use per dimension.

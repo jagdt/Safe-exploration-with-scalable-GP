@@ -351,9 +351,7 @@ class NumpyGPModel(KernelGPModel):
         
         hyp0_log = np.log(hyp0)
         
-        # Bounds correspond to [1e-10, 1e8] in original space
-        n_params = len(hyp0_log)
-        bounds = [(-23.0, 18.4)] * n_params
+        bounds = self._get_parameter_bounds(self.kern_types[dim_idx])
         
         result = minimize(self._neg_log_marginal_likelihood, hyp0_log, 
                         args=(X, y, dim_idx), method='L-BFGS-B',
@@ -460,6 +458,53 @@ class NumpyGPModel(KernelGPModel):
         
         return hyp_array
     
+    def _get_parameter_bounds(self, kern_type):
+        """Get parameter-specific bounds to prevent degenerate solutions
+        
+        Parameters
+        ----------
+        kern_type : str
+            Kernel type
+        
+        Returns
+        -------
+        bounds : list of tuples
+            [(lower, upper), ...] in log-space for each parameter
+        """
+        bounds = []
+        
+        if kern_type == 'rbf' or kern_type == 'mat52':
+            # Lengthscales: [1e-3, 1e3]
+            bounds.extend([(-6.9, 6.9)] * self.input_dim)
+            # Variance: [1e-6, 1e2]
+            bounds.append((-13.8, 4.6))
+            # Noise: [1e-10, 1e0]
+            bounds.append((-23.0, 0.0))
+        
+        elif kern_type == 'sum_lin_rbf':
+            # RBF lengthscales: [1e-3, 1e3]
+            bounds.extend([(-6.9, 6.9)] * self.input_dim)
+            # RBF variance: [1e-6, 1e2]
+            bounds.append((-13.8, 4.6))
+            # Linear variances: [1e-6, 1e1]
+            bounds.extend([(-13.8, 2.3)] * self.input_dim)
+            # Noise: [1e-10, 1e0]
+            bounds.append((-23.0, 0.0))
+        
+        elif kern_type == 'prod_lin_rbf' or kern_type == 'lin_mat52':
+            # Lengthscales: [1e-3, 1e3]
+            bounds.extend([(-6.9, 6.9)] * self.input_dim)
+            # Variance: [1e-6, 1e2]
+            bounds.append((-13.8, 4.6))
+            # Product linear variances: [1e-2, 1e1]
+            bounds.extend([(-4.6, 2.3)] * self.input_dim)
+            # Additive linear variances: [1e-6, 1e1]
+            bounds.extend([(-13.8, 2.3)] * self.input_dim)
+            # Noise: [1e-10, 1e0]
+            bounds.append((-23.0, 0.0))
+        
+        return bounds
+
     def _unpack_hyperparameters(self, hyp_array, kern_type):
         """Unpack 1D array into hyperparameter dict
         

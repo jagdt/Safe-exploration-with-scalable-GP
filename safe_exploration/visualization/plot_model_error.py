@@ -120,13 +120,30 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30):
     
     # Create grids
     if safempc.n_s == 2:  # Inverted pendulum
-        # 1D slice: vary u, fix dtheta=0, theta=0
+        # 1D slices: vary each dimension individually
+        # 1D slice 1: vary u, fix dtheta=0, theta=0
         u_1d = np.linspace(action_min[0], action_max[0], n_points)
-        states_1d = np.column_stack([
+        states_1d_u = np.column_stack([
             np.zeros(n_points),  # dtheta = 0
             np.zeros(n_points)   # theta = 0
         ])
-        actions_1d = u_1d[:, np.newaxis]
+        actions_1d_u = u_1d[:, np.newaxis]
+        
+        # 1D slice 2: vary theta, fix dtheta=0, u=0
+        theta_1d = np.linspace(state_min[1], state_max[1], n_points)
+        states_1d_theta = np.column_stack([
+            np.zeros(n_points),  # dtheta = 0
+            theta_1d             # theta varies
+        ])
+        actions_1d_theta = np.zeros((n_points, 1))
+        
+        # 1D slice 3: vary dtheta, fix theta=0, u=0
+        dtheta_1d = np.linspace(state_min[0], state_max[0], n_points)
+        states_1d_dtheta = np.column_stack([
+            dtheta_1d,           # dtheta varies
+            np.zeros(n_points)   # theta = 0
+        ])
+        actions_1d_dtheta = np.zeros((n_points, 1))
         
         # 2D grid 1: vary theta and u, fix dtheta=0
         theta_2d = np.linspace(state_min[1], state_max[1], n_points)
@@ -181,7 +198,12 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30):
     
     # Compute true model error
     print("Computing true model error...")
-    true_error_1d = compute_true_model_error(safempc, env, states_1d, actions_1d)
+    if safempc.n_s == 2:
+        true_error_1d_u = compute_true_model_error(safempc, env, states_1d_u, actions_1d_u)
+        true_error_1d_theta = compute_true_model_error(safempc, env, states_1d_theta, actions_1d_theta)
+        true_error_1d_dtheta = compute_true_model_error(safempc, env, states_1d_dtheta, actions_1d_dtheta)
+    else:
+        true_error_1d_u = compute_true_model_error(safempc, env, states_1d, actions_1d)
     
     # For inverted pendulum, compute both 2D grids
     if safempc.n_s == 2:
@@ -195,8 +217,18 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30):
     
     if hasattr(safempc, 'lin_trafo_gp_input'):
         from numpy import dot as mtimes
-        states_1d_trafo = mtimes(states_1d, safempc.lin_trafo_gp_input.T)
-        test_inputs_1d = np.hstack([states_1d_trafo, actions_1d])
+        if safempc.n_s == 2:
+            states_1d_u_trafo = mtimes(states_1d_u, safempc.lin_trafo_gp_input.T)
+            test_inputs_1d_u = np.hstack([states_1d_u_trafo, actions_1d_u])
+            
+            states_1d_theta_trafo = mtimes(states_1d_theta, safempc.lin_trafo_gp_input.T)
+            test_inputs_1d_theta = np.hstack([states_1d_theta_trafo, actions_1d_theta])
+            
+            states_1d_dtheta_trafo = mtimes(states_1d_dtheta, safempc.lin_trafo_gp_input.T)
+            test_inputs_1d_dtheta = np.hstack([states_1d_dtheta_trafo, actions_1d_dtheta])
+        else:
+            states_1d_trafo = mtimes(states_1d, safempc.lin_trafo_gp_input.T)
+            test_inputs_1d_u = np.hstack([states_1d_trafo, actions_1d])
         
         if safempc.n_s == 2:
             states_2d_theta_u_trafo = mtimes(states_2d_theta_u, safempc.lin_trafo_gp_input.T)
@@ -207,14 +239,25 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30):
             states_2d_theta_u_trafo = mtimes(states_2d_theta_u, safempc.lin_trafo_gp_input.T)
             test_inputs_2d_theta_u = np.hstack([states_2d_theta_u_trafo, actions_2d_theta_u])
     else:
-        test_inputs_1d = np.hstack([states_1d, actions_1d])
+        if safempc.n_s == 2:
+            test_inputs_1d_u = np.hstack([states_1d_u, actions_1d_u])
+            test_inputs_1d_theta = np.hstack([states_1d_theta, actions_1d_theta])
+            test_inputs_1d_dtheta = np.hstack([states_1d_dtheta, actions_1d_dtheta])
+        else:
+            test_inputs_1d_u = np.hstack([states_1d, actions_1d])
+        
         if safempc.n_s == 2:
             test_inputs_2d_theta_u = np.hstack([states_2d_theta_u, actions_2d_theta_u])
             test_inputs_2d_dtheta_u = np.hstack([states_2d_dtheta_u, actions_2d_dtheta_u])
         else:
             test_inputs_2d_theta_u = np.hstack([states_2d_theta_u, actions_2d_theta_u])
     
-    gp_mean_1d, gp_std_1d = safempc.ssm.predict(test_inputs_1d)
+    if safempc.n_s == 2:
+        gp_mean_1d_u, gp_std_1d_u = safempc.ssm.predict(test_inputs_1d_u)
+        gp_mean_1d_theta, gp_std_1d_theta = safempc.ssm.predict(test_inputs_1d_theta)
+        gp_mean_1d_dtheta, gp_std_1d_dtheta = safempc.ssm.predict(test_inputs_1d_dtheta)
+    else:
+        gp_mean_1d_u, gp_std_1d_u = safempc.ssm.predict(test_inputs_1d_u)
     
     if safempc.n_s == 2:
         gp_mean_2d_theta_u, gp_std_2d_theta_u = safempc.ssm.predict(test_inputs_2d_theta_u)
@@ -243,14 +286,46 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30):
         x_train = x_train_gp
     
     # 1D plots for each output dimension
-    for dim in range(safempc.n_s):
-        plot_1d_comparison(
-            states_1d, actions_1d, true_error_1d, gp_mean_1d, gp_std_1d,
-            state_dim=dim, vary_dim=safempc.n_s if safempc.n_s == 2 else 2,
-            dim_names=dim_names, error_names=error_names,
-            save_path=os.path.join(save_dir, f'model_error_1d_dim{dim}.png'),
-            x_train=x_train, y_train=y_train
-        )
+    if safempc.n_s == 2:
+        # Plot 1D slice varying u
+        for dim in range(safempc.n_s):
+            plot_1d_comparison(
+                states_1d_u, actions_1d_u, true_error_1d_u, gp_mean_1d_u, gp_std_1d_u,
+                state_dim=dim, vary_dim=2,  # u is at index 2
+                dim_names=dim_names, error_names=error_names,
+                save_path=os.path.join(save_dir, f'model_error_1d_u_dim{dim}.png'),
+                x_train=x_train, y_train=y_train
+            )
+        
+        # Plot 1D slice varying theta
+        for dim in range(safempc.n_s):
+            plot_1d_comparison(
+                states_1d_theta, actions_1d_theta, true_error_1d_theta, gp_mean_1d_theta, gp_std_1d_theta,
+                state_dim=dim, vary_dim=1,  # theta is at index 1
+                dim_names=dim_names, error_names=error_names,
+                save_path=os.path.join(save_dir, f'model_error_1d_theta_dim{dim}.png'),
+                x_train=x_train, y_train=y_train
+            )
+        
+        # Plot 1D slice varying dtheta
+        for dim in range(safempc.n_s):
+            plot_1d_comparison(
+                states_1d_dtheta, actions_1d_dtheta, true_error_1d_dtheta, gp_mean_1d_dtheta, gp_std_1d_dtheta,
+                state_dim=dim, vary_dim=0,  # dtheta is at index 0
+                dim_names=dim_names, error_names=error_names,
+                save_path=os.path.join(save_dir, f'model_error_1d_dtheta_dim{dim}.png'),
+                x_train=x_train, y_train=y_train
+            )
+    else:
+        # For cart pole or other systems
+        for dim in range(safempc.n_s):
+            plot_1d_comparison(
+                states_1d, actions_1d, true_error_1d_u, gp_mean_1d_u, gp_std_1d_u,
+                state_dim=dim, vary_dim=2,
+                dim_names=dim_names, error_names=error_names,
+                save_path=os.path.join(save_dir, f'model_error_1d_dim{dim}.png'),
+                x_train=x_train, y_train=y_train
+            )
     
     # 2D plots for each output dimension
     if safempc.n_s == 2:
