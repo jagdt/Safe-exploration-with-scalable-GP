@@ -236,7 +236,7 @@ class ScalableGPModel(GPModelBase):
             elif kern_types[i] == "sum_lin_rbf":
                 hyp_i["rbf.factor"] = 0.01
                 hyp_i["rbf.exponential_decay_rates"] = 1.0 * np.ones(self.input_dim)
-                hyp_i["linear.variances"] = 0.001 * np.ones(self.input_dim)
+                hyp_i["linear.variances"] = 0.01 * np.ones(self.input_dim)
             elif kern_types[i] == "polynomial_decay":
                 raise NotImplementedError("Polynomial decay not implemented yet")
             elif kern_types[i] == "individual":
@@ -255,6 +255,8 @@ class ScalableGPModel(GPModelBase):
         - A is diagonal matrix with exponential_decay_rates
         - ω are the frequency vectors from self.omegas
         
+        For sum_lin_rbf kernel, returns [rbf_lambdas, linear_variances] concatenated.
+        
         Parameters
         ----------
         dim_idx : int
@@ -263,7 +265,7 @@ class ScalableGPModel(GPModelBase):
         Returns
         -------
         lambdas : ndarray
-            Spectral decay coefficients
+            Spectral decay coefficients (for sum_lin_rbf, includes linear variances at end)
         """
         omegas = self.omegas[dim_idx]
         E = omegas.shape[0]
@@ -278,7 +280,9 @@ class ScalableGPModel(GPModelBase):
             factor = self.hyp[dim_idx]["rbf.factor"]
             exponential_decay_rates = self.hyp[dim_idx]["rbf.exponential_decay_rates"]
             quadratic_forms = -0.5 * np.sum(exponential_decay_rates * omegas ** 2, axis=1)
-            lambdas = factor * np.exp(quadratic_forms)
+            rbf_lambdas = factor * np.exp(quadratic_forms)
+            linear_variances = self.hyp[dim_idx]["linear.variances"]
+            lambdas = np.concatenate([rbf_lambdas, linear_variances])
         elif self.kern_types[dim_idx] == "polynomial_decay":
             raise NotImplementedError("Polynomial decay not implemented yet")
         elif self.kern_types[dim_idx] == "individual":
@@ -292,16 +296,18 @@ class ScalableGPModel(GPModelBase):
         Creates features using multivariate Fourier basis where each frequency
         ω is a vector in ℝ^D and features are cos(2πωᵀx) and sin(2πωᵀx).
         
+        For sum_lin_rbf, lambdas contains [rbf_lambdas, linear_variances] concatenated.
+        
         Parameters
         ----------
         X : ndarray [N × D]
             Input data with D dimensions
-        lambdas : ndarray [E]
+        lambdas : ndarray [E] or [E + D] for sum_lin_rbf
             Spectral coefficients for each feature
         
         Returns
         -------
-        Phi : ndarray [N × 2E - 1]
+        Phi : ndarray [N × (2E - 1)] or [N × (2E - 1 + D)] for sum_lin_rbf
             Fourier feature matrix
         """
         N = X.shape[0]
@@ -315,13 +321,13 @@ class ScalableGPModel(GPModelBase):
         inner_products = 2 * np.pi * (omegas @ X.T)
         if E > 1:
             phases = inner_products[1:, :]
-            cos_block = (lambdas[1:, None] * np.cos(phases)).T
-            sin_block = (lambdas[1:, None] * np.sin(phases)).T
+            cos_block = (lambdas[1:E, None] * np.cos(phases)).T
+            sin_block = (lambdas[1:E, None] * np.sin(phases)).T
             Phi[:, 1::2] = cos_block
             Phi[:, 2::2] = sin_block
         
         if self.kern_types[dim_idx] == "sum_lin_rbf":
-            linear_variances = self.hyp[dim_idx]["linear.variances"]
+            linear_variances = lambdas[E:]
             linear_features = X * np.sqrt(linear_variances)
             Phi = np.hstack([Phi, linear_features])
         
@@ -931,16 +937,18 @@ class ScalableGPModel(GPModelBase):
     def _phi_features_casadi(self, X, lambdas, dim_idx):
         """Compute Fourier features symbolically using CasADi
         
+        For sum_lin_rbf, lambdas contains [rbf_lambdas, linear_variances] concatenated.
+        
         Parameters
         ----------
         X : casadi.SX or casadi.MX [1 × D]
             Input data (single point)
-        lambdas : ndarray [E]
+        lambdas : ndarray [E] or [E + D] for sum_lin_rbf
             Spectral coefficients for the current output dimension
         
         Returns
         -------
-        Phi : casadi expression [1 × (2E-1)]
+        Phi : casadi expression [1 × (2E-1)] or [1 × (2E-1+D)] for sum_lin_rbf
             Fourier feature vector
         """
         omegas = self.omegas[dim_idx]
@@ -956,7 +964,7 @@ class ScalableGPModel(GPModelBase):
         Phi_rbf = horzcat(*features)
         
         if self.kern_types[dim_idx] == "sum_lin_rbf":
-            linear_variances = self.hyp[dim_idx]["linear.variances"]
+            linear_variances = lambdas[E:]
             linear_features = X * sqrt(horzcat(*linear_variances))
             return horzcat(Phi_rbf, linear_features)
         
