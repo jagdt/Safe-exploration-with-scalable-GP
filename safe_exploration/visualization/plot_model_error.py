@@ -37,24 +37,18 @@ def compute_true_model_error(safempc, env, states, actions):
     N = states.shape[0]
     n_s = safempc.n_s
     
-    # Unnormalize for simulation
-    states_phys, actions_phys = env.unnormalize(state=states.copy(), action=actions.copy())
-    
     true_next = np.zeros((N, n_s))
     
     for i in range(N):
         # Simulate true dynamics
-        next_state_phys, _ = env.simulate_onestep(states_phys[i], actions_phys[i])
-        true_next[i] = next_state_phys
+        next_state_norm, _ = env.simulate_onestep(states[i], actions[i])
+        true_next[i] = next_state_norm
     
     # Compute prior prediction (already in normalized space)
     prior_next = safempc.eval_prior(states, actions)
     
-    # Normalize true next state
-    true_next_norm, _ = env.normalize(state=true_next.copy(), action=None)
-    
     # Model error = true - prior (in normalized space)
-    true_error = true_next_norm - prior_next
+    true_error = true_next - prior_next
     
     return true_error
 

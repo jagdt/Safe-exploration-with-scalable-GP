@@ -171,24 +171,24 @@ class NumpyGPModel(KernelGPModel):
             hyp_i = dict()
             if kern_types[i] == "rbf":
                 hyp_i["lengthscale"] = np.ones(self.input_dim)
-                hyp_i["variance"] = 1.0
+                hyp_i["variance"] = 0.1
             elif kern_types[i] == "mat52":
                 hyp_i["lengthscale"] = np.ones(self.input_dim)
-                hyp_i["variance"] = 1.0
+                hyp_i["variance"] = 0.1
             elif kern_types[i] == "sum_lin_rbf":
                 hyp_i["rbf.lengthscale"] = np.ones(self.input_dim)
-                hyp_i["rbf.variance"] = 1.0
-                hyp_i["linear.variances"] = np.ones(self.input_dim)
+                hyp_i["rbf.variance"] = 0.1
+                hyp_i["linear.variances"] = 0.01 * np.ones(self.input_dim)
             elif kern_types[i] == "prod_lin_rbf":
                 hyp_i["prod.rbf.lengthscale"] = np.ones(self.input_dim)
-                hyp_i["prod.rbf.variance"] = 1.0
-                hyp_i["prod.linear.variances"] = np.ones(self.input_dim)
-                hyp_i["linear.variances"] = np.ones(self.input_dim)
+                hyp_i["prod.rbf.variance"] = 0.1
+                hyp_i["prod.linear.variances"] = 0.01 * np.ones(self.input_dim)
+                hyp_i["linear.variances"] = 0.01 * np.ones(self.input_dim)
             elif kern_types[i] == "lin_mat52":
                 hyp_i["prod.mat52.lengthscale"] = np.ones(self.input_dim)
-                hyp_i["prod.mat52.variance"] = 1.0
-                hyp_i["prod.linear.variances"] = np.ones(self.input_dim)
-                hyp_i["linear.variances"] = np.ones(self.input_dim)
+                hyp_i["prod.mat52.variance"] = 0.1
+                hyp_i["prod.linear.variances"] = 0.01 * np.ones(self.input_dim)
+                hyp_i["linear.variances"] = 0.01 * np.ones(self.input_dim)
             else:
                 raise ValueError("kernel type not supported")
             hyp[i] = hyp_i
@@ -405,6 +405,7 @@ class NumpyGPModel(KernelGPModel):
             return -log_likelihood
         
         except (np.linalg.LinAlgError, ValueError, RuntimeWarning):
+            warnings.warn("Cholesky decomposition failed during NLL computation; returning large NLL value.")
             return 1e10
 
     def _pack_hyperparameters(self, hyp_dict, kern_type, dim_idx):

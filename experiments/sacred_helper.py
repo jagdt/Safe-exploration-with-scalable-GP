@@ -67,7 +67,7 @@ def base_config():
     # Number of frequencies to use per dimension.
     n_frequencies = 5
     # Periods for each dimension.
-    periods = [3.0*4, 1.5*4, 2.0*4]
+    periods = [3.0*2, 1.5*2, 2.0*2]
     # Domain lengths for each dimension.
     domain_lengths = [3.0, 1.5, 2.0] # [dθ, θ, u]
     # Lengthscale multiple for the scalable GP to compute periods.
@@ -96,7 +96,7 @@ def base_config():
     # One of None, 'random_rollouts' or 'safe_samples'.
     init_mode = 'safe_samples'
     # How many initial samples to give to the ssm.
-    n_safe_samples = 200
+    n_safe_samples = 50
     # Standard deviation of the initial samples.
     init_sample_std = 0.01
     # Whether to plot the locations of the initial samples given to the ssm.
