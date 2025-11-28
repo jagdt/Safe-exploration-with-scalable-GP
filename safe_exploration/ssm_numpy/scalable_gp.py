@@ -957,9 +957,20 @@ class ScalableGPModel(GPModelBase):
         inner_products = 2 * np.pi * mtimes(omegas, X.T)
 
         features = [lambdas[0]]
-        for e in range(1, E):
-            features.append(lambdas[e] * cos(inner_products[e]))
-            features.append(lambdas[e] * sin(inner_products[e]))
+        
+        if E > 1:
+            phases = inner_products[1:]
+            lambdas_rest = lambdas[1:E]
+            
+            cos_features = horzcat(*[lambdas_rest[i] * cos(phases[i]) for i in range(E-1)])
+            sin_features = horzcat(*[lambdas_rest[i] * sin(phases[i]) for i in range(E-1)])
+            
+            interleaved = []
+            for i in range(E-1):
+                interleaved.append(cos_features[i])
+                interleaved.append(sin_features[i])
+            
+            features.extend(interleaved)
         
         Phi_rbf = horzcat(*features)
         
