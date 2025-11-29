@@ -271,7 +271,6 @@ class ScalableGPBounds(GPBounds):
         """
         super().__init__(gp_model, delta, rkhs_norm, R_subgaussian)
         self.projection_errors = self._initialize_projection_errors(projection_error)
-        self.rkhs_norms = self.initialize_rkhs_norms(rkhs_norm)
 
     def _initialize_projection_errors(self, projection_error):
         """Initialize projection errors for all output dimensions.
@@ -363,7 +362,7 @@ class ScalableGPBounds(GPBounds):
         total_product = np.prod(full_sums)
         contributions_per_dimension = tails * (total_product / full_sums)
         total_tail_mass = np.sum(contributions_per_dimension)
-        projection_error = self.rkhs_norms[dim_idx] * np.sqrt(C * total_tail_mass)
+        projection_error = self.rkhs_norms[dim_idx] * np.sqrt(2 * C * total_tail_mass)
 
         print(f"Computed projection error for dim {dim_idx}: {projection_error}")
         
