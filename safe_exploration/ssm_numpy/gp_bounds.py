@@ -7,11 +7,13 @@ from abc import ABC, abstractmethod
 class GPBounds(ABC):
     """Abstract base class with noise computation for GP confidence bounds."""
 
-    def __init__(self, delta=0.05, rkhs_norm=1.0, R_subgaussian=1.0):
+    def __init__(self, gp_model, delta=0.05, rkhs_norm=1.0, R_subgaussian=1.0):
         """Initialize GPBounds base class.
         
         Parameters
         ----------
+        gp_model : object
+            Trained GP model instance (must have gp_trained attribute).
         delta : float
             Confidence parameter for bounds (e.g., 0.05 for 95% confidence).
         rkhs_norm : float or array-like
@@ -19,6 +21,9 @@ class GPBounds(ABC):
         R_subgaussian : float
             Subgaussian parameter for the noise process.
         """
+        if not getattr(gp_model, "gp_trained", False):
+            raise ValueError("GP must be trained before computing bounds")
+        self.gp = gp_model
         self.delta = delta
         self.R_subgaussian = R_subgaussian
         self.rkhs_norms = self._initialize_rkhs_norms(rkhs_norm)
@@ -164,10 +169,7 @@ class NumpyGPBounds(GPBounds):
         R_subgaussian : float
             Subgaussian parameter for the noise process.
         """
-        super().__init__(delta, rkhs_norm, R_subgaussian)
-        if not gp_model.gp_trained:
-            raise ValueError("GP must be trained before computing bounds")
-        self.gp = gp_model
+        super().__init__(gp_model, delta, rkhs_norm, R_subgaussian)
 
     def _gram_matrix(self, dim_idx):
         """Return the Gram (kernel) matrix for the specified output dimension.
@@ -202,7 +204,7 @@ class NumpyGPBounds(GPBounds):
         """
         gram = self._gram_matrix(dim_idx)
         noise_term = self._noise_term(gram, self.gp.noise_var[dim_idx])
-        return self.rkhs_norm + noise_term
+        return self.rkhs_norms[dim_idx] + noise_term
 
     def confidence_bounds(self, x_new, dim_idx):
         """Return predictive mean, standard deviation, and confidence intervals for one output dimension.
@@ -242,7 +244,9 @@ class NumpyGPBounds(GPBounds):
         """
         beta = self.gp.beta[:, dim_idx]
         K = self._gram_matrix(dim_idx)
-        return beta.T @ K @ beta
+        rkhs_norm = beta.T @ K @ beta
+        print(f"Computed RKHS norm for dim {dim_idx}: {rkhs_norm}")
+        return rkhs_norm
 
 
 class ScalableGPBounds(GPBounds):
@@ -265,10 +269,7 @@ class ScalableGPBounds(GPBounds):
         projection_error : float or array-like, optional
             Projection error(s) for each output dimension.
         """
-        super().__init__(delta, rkhs_norm, R_subgaussian)
-        if not gp_model.gp_trained:
-            raise ValueError("GP must be trained before computing bounds")
-        self.gp = gp_model
+        super().__init__(gp_model, delta, rkhs_norm, R_subgaussian)
         self.projection_errors = self._initialize_projection_errors(projection_error)
         self.rkhs_norms = self.initialize_rkhs_norms(rkhs_norm)
 
@@ -362,7 +363,7 @@ class ScalableGPBounds(GPBounds):
         total_product = np.prod(full_sums)
         contributions_per_dimension = tails * (total_product / full_sums)
         total_tail_mass = np.sum(contributions_per_dimension)
-        projection_error = self.rkhs_norm * np.sqrt(C * total_tail_mass)
+        projection_error = self.rkhs_norms[dim_idx] * np.sqrt(C * total_tail_mass)
 
         print(f"Computed projection error for dim {dim_idx}: {projection_error}")
         
@@ -418,7 +419,7 @@ class ScalableGPBounds(GPBounds):
         PhiTPhi = self._feature_gram(dim_idx)
         noise_term = self._noise_term(PhiTPhi, self.gp.noise_var[dim_idx])
         projection_error_term = self.projection_error_term(dim_idx)
-        return self.rkhs_norm + noise_term + projection_error_term
+        return self.rkhs_norms[dim_idx] + noise_term + projection_error_term
 
     def confidence_bounds(self, x_new, dim_idx):
         """Return scalable GP predictive mean, standard deviation, and confidence intervals for one output dimension.
@@ -458,5 +459,6 @@ class ScalableGPBounds(GPBounds):
             RKHS norm of the posterior mean for the specified output dimension.
         """
         w = self.gp.posterior_mean_coeffs[dim_idx]
-        norm = w.T @ w
-        return norm
+        rkhs_norm = w.T @ w
+        print(f"Computed RKHS norm for dim {dim_idx}: {rkhs_norm}")
+        return rkhs_norm

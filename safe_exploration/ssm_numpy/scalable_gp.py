@@ -874,6 +874,7 @@ class ScalableGPModel(GPModelBase):
 
         self.beta_safety_per_dim = np.array([bounds.beta(dim_idx) for dim_idx in range(self.n_s_out)])
         self.projection_error_per_dim = np.array([bounds.projection_errors[dim_idx] for dim_idx in range(self.n_s_out)])
+        print(f"Computed beta_safety_per_dim: {self.beta_safety_per_dim}")
     
     def predict_casadi_symbolic(self, x_new, compute_grads=False):
         """Return symbolic CasADi expressions for predictive mean/variance

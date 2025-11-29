@@ -740,6 +740,7 @@ class NumpyGPModel(KernelGPModel):
 
         bounds = self.get_bounds(delta=delta, rkhs_norm=rkhs_norm, R_subgaussian=R_subgaussian)
         self.beta_safety_per_dim = np.array([bounds.beta(dim_idx) for dim_idx in range(self.n_s_out)])
+        print(f"Computed β-values per dimension: {self.beta_safety_per_dim}")
 
     def information_gain(self, x=None):
         """ Mutual information between samples and system """

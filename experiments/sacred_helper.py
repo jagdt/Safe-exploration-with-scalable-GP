@@ -61,7 +61,7 @@ def base_config():
     cem_ssm = 'exact_gp'
 
     # -- GP model
-    gp_type = 'scalable'  # one of 'gpy', 'numpy', 'scalable'
+    gp_type = 'numpy'  # one of 'gpy', 'numpy', 'scalable'
 
     # -- Scalable GP specific parameters
     # Number of frequencies to use per dimension.
@@ -75,15 +75,15 @@ def base_config():
 
     # -- GP Bounds parameters
     # Whether to compute GP bounds. Otherwise uses constant ß.
-    compute_bounds = False
+    compute_bounds = True
     # Confidence level for the GP bounds
     delta = 0.05
     # Assumed RKHS norm of the true function
-    rkhs_norm = 2.0
+    rkhs_norm = None # None to compute automatically from posterior mean
     # Subgaussian noise bound
-    R_subgaussian = 1.0
+    R_subgaussian = 0.01
     # Model mismatch offset
-    projection_error = None
+    projection_error = None # None to compute automatically
 
     # -- Episodic
     # The number of repeats of the experiment, over which we will average the metrics.
