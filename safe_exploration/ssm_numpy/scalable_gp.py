@@ -380,7 +380,7 @@ class ScalableGPModel(GPModelBase):
         max_iter : int, optional
             Maximum number of optimization iterations
         """
-        if self.kern_types[dim_idx] == "sum_lin_rbf":
+        if self.kern_types[dim_idx] == "block_sum_lin_rbf":
             print(f"[Dim {dim_idx}] Stage 1: Optimizing linear component...")
             initial_params = self._pack_hyperparameters(self.hyp[dim_idx], "sum_lin_rbf_linear_only", dim_idx)
             initial_params = np.log(initial_params)

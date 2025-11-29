@@ -64,6 +64,12 @@ class NumpyGPBounds(GPBounds):
         upper = mu_dim + beta_val * sigma_dim
         return mu_dim, sigma_dim, lower, upper
 
+    def rkhs_norm_posterior_mean(self, dim_idx):
+        """Compute RKHS norm of the posterior mean for the full GP."""
+        beta = self.gp.beta[:, dim_idx]
+        K = self._gram_matrix(dim_idx)
+        return beta.T @ K @ beta
+
 
 class ScalableGPBounds(GPBounds):
     """Bounds for the scalable GP using Fourier features."""
@@ -184,3 +190,9 @@ class ScalableGPBounds(GPBounds):
         lower = mu_dim - beta_val * sigma_dim - proj
         upper = mu_dim + beta_val * sigma_dim + proj
         return mu_dim, sigma_dim, lower, upper
+
+    def rkhs_norm_posterior_mean(self, dim_idx):
+        """Compute RKHS norm of the posterior mean for the scalable GP."""
+        w = self.gp.posterior_mean_coeffs[dim_idx]
+        norm = w.T @ w
+        return norm
