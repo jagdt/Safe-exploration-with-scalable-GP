@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import numpy as np
-from scipy.optimize import minimize
+from scipy.optimize import minimize, differential_evolution
 import warnings
 from ..ssm_gp_base import KernelGPModel
 from .gp_bounds import NumpyGPBounds
@@ -25,7 +25,7 @@ class NumpyGPModel(KernelGPModel):
     """
 
     def __init__(self, n_s_out, n_s_in, n_u, X=None, y=None, kern_types=None,
-                 hyp=None, train=False):
+                 hyp=None, train=False, n_restarts=5, use_global_opt_first=True):
         """ Initialize GP Model (possibly without training set)
 
         Parameters
@@ -34,6 +34,8 @@ class NumpyGPModel(KernelGPModel):
             y (np.ndarray[float], optional): Training targets
             kern_types (list[str]): a list of pre-specified covariance function types
             hyp (list[dict], optional): hyperparameters for each kernel
+            n_restarts (int): Number of random restarts for multi-start optimization
+            use_global_opt_first (bool): Use differential evolution on first training
 
         """
         self.n_s_out = n_s_out
@@ -41,6 +43,11 @@ class NumpyGPModel(KernelGPModel):
         self.n_u = n_u
         self.input_dim = n_s_in + n_u
         self.gp_trained = False
+        
+        # Optimization settings
+        self.n_restarts = n_restarts
+        self.use_global_opt_first = use_global_opt_first
+        self.hyp_optimized = False
 
         self.beta = None
         self.inv_K = None
@@ -110,8 +117,11 @@ class NumpyGPModel(KernelGPModel):
         hyp = None
         if "hyp" in gp_dict:
             hyp = gp_dict["hyp"]
+        
+        n_restarts = gp_dict.get("n_restarts", 5)
+        use_global_opt_first = gp_dict.get("use_global_opt_first", True)
 
-        return cls(n_s_out, n_s_in, n_u, x, y, kern_types, hyp, train)
+        return cls(n_s_out, n_s_in, n_u, x, y, kern_types, hyp, train, n_restarts, use_global_opt_first)
 
     def to_dict(self):
         """ return a dict summarizing the object """
@@ -300,6 +310,7 @@ class NumpyGPModel(KernelGPModel):
         if opt_hyp:
             for i in range(self.n_s_out):
                 self._optimize_hyperparameters(X, y[:, i], i)
+            self.hyp_optimized = True
 
         n_beta = n_data
         beta = np.empty((n_beta, self.n_s_out))
@@ -333,8 +344,9 @@ class NumpyGPModel(KernelGPModel):
     def _optimize_hyperparameters(self, X, y, dim_idx, max_iter=1000):
         """Optimize hyperparameters for a single output dimension
         
-        Uses the marginal log-likelihood as the objective function and scipy's
-        L-BFGS-B optimizer to find optimal hyperparameters.
+        Uses multi-start L-BFGS-B optimization to escape local minima.
+        On first training pass, can optionally use differential evolution
+        for global optimization.
         
         Parameters
         ----------
@@ -346,25 +358,161 @@ class NumpyGPModel(KernelGPModel):
             Index of the output dimension being optimized
         max_iter : int, optional
             Maximum number of optimization iterations
-        """        
-        hyp0 = self._pack_hyperparameters(self.hyp[dim_idx], self.kern_types[dim_idx], dim_idx)
-        
-        hyp0_log = np.log(hyp0)
-        
+        """
         bounds = self._get_parameter_bounds(self.kern_types[dim_idx])
+        kern_type = self.kern_types[dim_idx]
         
-        result = minimize(self._neg_log_marginal_likelihood, hyp0_log, 
-                        args=(X, y, dim_idx), method='L-BFGS-B',
-                        bounds=bounds,
-                        options={'maxiter': max_iter, 'disp': False})
+        # Use global optimization on first training pass if enabled
+        if self.use_global_opt_first and not self.hyp_optimized:
+            print(f"[Dim {dim_idx}] Using differential evolution for global optimization...")
+            best_params, best_nll = self._global_optimize(X, y, dim_idx, bounds, kern_type, max_iter)
+        else:
+            # Multi-start L-BFGS-B optimization
+            best_params, best_nll = self._multi_start_optimize(X, y, dim_idx, bounds, kern_type, max_iter)
+        
+        if best_params is not None:
+            optimized_params = np.exp(best_params)
+            self.hyp[dim_idx] = self._unpack_hyperparameters(optimized_params[:-1], kern_type)
+            self.noise_var[dim_idx] = optimized_params[-1]
+            print(f"[Dim {dim_idx}] Optimized hyperparameters: {self.hyp[dim_idx]}, noise_var: {self.noise_var[dim_idx]:.2e}, NLL: {best_nll:.4f}")
+        else:
+            warnings.warn(f"Hyperparameter optimization failed for dimension {dim_idx}. Using initial values.")
+    
+    def _multi_start_optimize(self, X, y, dim_idx, bounds, kern_type, max_iter):
+        """Multi-start L-BFGS-B optimization from random starting points
+        
+        Runs optimization from multiple random starting points within the
+        parameter bounds, returning the solution with lowest NLL.
+        
+        Parameters
+        ----------
+        X : ndarray [N × D]
+            Training inputs
+        y : ndarray [N]
+            Training targets
+        dim_idx : int
+            Output dimension index
+        bounds : list of tuples
+            Parameter bounds in log-space
+        kern_type : str
+            Kernel type
+        max_iter : int
+            Maximum iterations per optimization run
+            
+        Returns
+        -------
+        best_params : ndarray or None
+            Best parameters found (log-space), or None if all failed
+        best_nll : float
+            Best negative log-likelihood found
+        """
+        best_params = None
+        best_nll = np.inf
+        
+        # First run from current hyperparameters
+        initial_params = self._pack_hyperparameters(self.hyp[dim_idx], kern_type, dim_idx)
+        initial_params_log = np.log(initial_params)
+        
+        results = []
+        
+        # Run from initial parameters
+        result = minimize(
+            self._neg_log_marginal_likelihood,
+            initial_params_log,
+            args=(X, y, dim_idx),
+            method='L-BFGS-B',
+            bounds=bounds,
+            options={'maxiter': max_iter, 'disp': False}
+        )
+        if result.success or result.status == 1:
+            results.append((result.x, result.fun))
+        
+        # Additional random restarts
+        bounds_array = np.array(bounds)
+        for i in range(self.n_restarts - 1):
+            # Sample random starting point uniformly in log-space bounds
+            random_params = np.random.uniform(bounds_array[:, 0], bounds_array[:, 1])
+            
+            result = minimize(
+                self._neg_log_marginal_likelihood,
+                random_params,
+                args=(X, y, dim_idx),
+                method='L-BFGS-B',
+                bounds=bounds,
+                options={'maxiter': max_iter, 'disp': False}
+            )
+            if result.success or result.status == 1:
+                results.append((result.x, result.fun))
+        
+        # Select best result
+        if results:
+            best_idx = np.argmin([r[1] for r in results])
+            best_params, best_nll = results[best_idx]
+            print(f"[Dim {dim_idx}] Multi-start: {len(results)}/{self.n_restarts} successful, best NLL: {best_nll:.4f}")
+        
+        return best_params, best_nll
+    
+    def _global_optimize(self, X, y, dim_idx, bounds, kern_type, max_iter):
+        """Global optimization using differential evolution
+        
+        Uses differential evolution to find a good global solution, then
+        refines with L-BFGS-B. This is more expensive but more robust for
+        the first training pass.
+        
+        Parameters
+        ----------
+        X : ndarray [N × D]
+            Training inputs
+        y : ndarray [N]
+            Training targets
+        dim_idx : int
+            Output dimension index
+        bounds : list of tuples
+            Parameter bounds in log-space
+        kern_type : str
+            Kernel type
+        max_iter : int
+            Maximum iterations for refinement
+            
+        Returns
+        -------
+        best_params : ndarray or None
+            Best parameters found (log-space), or None if failed
+        best_nll : float
+            Best negative log-likelihood found
+        """
+        # Run differential evolution
+        result_de = differential_evolution(
+            self._neg_log_marginal_likelihood,
+            bounds,
+            args=(X, y, dim_idx),
+            strategy='best1bin',
+            maxiter=200,
+            tol=1e-4,
+            seed=42 + dim_idx,
+            polish=False,  # We'll do our own polishing
+            workers=1,
+            disp=False
+        )
+        
+        print(f"[Dim {dim_idx}] Diff. evolution NLL: {result_de.fun:.4f}")
+        
+        # Refine with L-BFGS-B
+        result = minimize(
+            self._neg_log_marginal_likelihood,
+            result_de.x,
+            args=(X, y, dim_idx),
+            method='L-BFGS-B',
+            bounds=bounds,
+            options={'maxiter': max_iter, 'disp': False}
+        )
         
         if result.success or result.status == 1:
-            optimized_params = np.exp(result.x)
-            self.hyp[dim_idx] = self._unpack_hyperparameters(optimized_params[:-1], self.kern_types[dim_idx])
-            self.noise_var[dim_idx] = optimized_params[-1]
-            print(f"Optimized hyperparameters for dimension {dim_idx}: {self.hyp[dim_idx]}, noise variance: {self.noise_var[dim_idx]}")
+            print(f"[Dim {dim_idx}] Refined NLL: {result.fun:.4f}")
+            return result.x, result.fun
         else:
-            warnings.warn(f"Hyperparameter optimization failed for dimension {dim_idx}: {result.message}. Using initial values.")
+            # Fall back to DE result
+            return result_de.x, result_de.fun
 
     def _neg_log_marginal_likelihood(self, hyp_array_log, X, y, dim_idx):
         """Negative log marginal likelihood
