@@ -11,7 +11,7 @@ class Config(DefaultConfigExploration):
     """
     Options class for the exploration setting
     """
-    verbose = 0
+    verbose = 2
     static_exploration = False
 
     solver_type = "safempc"
