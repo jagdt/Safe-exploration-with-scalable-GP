@@ -35,6 +35,12 @@ class DefaultConfigExploration(DefaultConfig):
     beta_safety = 2.0
     n_safe = 1
 
+    # Safe-policy randomization
+    init_randomized_safe_policy = True
+    init_safe_policy_margin = 0.15
+    init_safe_policy_exploration = 0.85
+    init_safe_policy_min_width = 0.05
+
     lqr_wx_cost = np.diag([1., 2.])
     lqr_wu_cost = 25 * np.eye(1)
     init_ilqr = True
@@ -50,7 +56,7 @@ class DefaultConfigExploration(DefaultConfig):
     # can be different from the true model (!)
     lin_prior = True
     prior_model = dict()
-    prior_m = .1
+    prior_m = .149
     prior_b = 0.0
     prior_model["m"] = prior_m
     prior_model["b"] = prior_b
@@ -59,9 +65,9 @@ class DefaultConfigExploration(DefaultConfig):
     gp_dict_path = None
     gp_data_path = None  # None means no initial training data
     m = 25  # subset of data of size m for training
-    kern_types = ["sum_lin_rbf", "sum_lin_rbf"]
+    kern_types = ["rbf", "rbf"]
     train_gp = True  # train the gp initially?
-    retrain_gp = True  # retrain the gp after every sample?
+    retrain_gp = False  # retrain the gp after every sample?
     gp_hyp = None
     Z = None
     lin_trafo_gp_input = None
@@ -88,7 +94,7 @@ class DefaultConfigExploration(DefaultConfig):
     gp_hyp = None
     # exploration
     n_experiments = 1
-    n_iterations = 1 # set higher later again
+    n_iterations = 0 # set higher later again
     n_restarts_optimizer = 20
 
     # general options
