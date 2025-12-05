@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 from matplotlib import cm
 from matplotlib.colors import Normalize
 from mpl_toolkits.mplot3d import Axes3D
+import warnings
 import os
 
 
@@ -40,14 +41,11 @@ def compute_true_model_error(safempc, env, states, actions):
     true_next = np.zeros((N, n_s))
     
     for i in range(N):
-        # Simulate true dynamics
         next_state_norm, _ = env.simulate_onestep(states[i], actions[i])
         true_next[i] = next_state_norm
     
-    # Compute prior prediction (already in normalized space)
     prior_next = safempc.eval_prior(states, actions)
     
-    # Model error = true - prior (in normalized space)
     true_error = true_next - prior_next
     
     return true_error
@@ -74,26 +72,13 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30):
     print("Model Error Visualization")
     print("=" * 60)
     
-    # Get environment parameters
-    print(f"\nEnvironment: {env.name}")
-    print(f"  True mass: m = {env.m}")
-    if hasattr(safempc, 'a') and safempc.a is not None:
-        # Extract mass from prior if available
-        # For inverted pendulum: B[0,0] = 1/(m*l^2), so m = l^2/B[0,0]
-        prior_inertia = 1.0 / safempc.b[0, 0]
-        prior_mass = prior_inertia / (env.l ** 2)
-        print(f"  Prior mass: m = {prior_mass:.3f}")
-        print(f"  Mass error: {abs(env.m - prior_mass)/env.m * 100:.1f}%")
-    
     print(f"\nGP Model: {type(safempc.ssm).__name__}")
     print(f"  Training samples: {safempc.ssm.x_train.shape[0]}")
     print(f"  State dimensions: {safempc.n_s}")
     print(f"  Control dimensions: {safempc.n_u}")
     
-    # Generate test grid
     print(f"\nGenerating test grid ({n_points} points per dimension)...")
     
-    # Get reasonable ranges from training data
     x_train = safempc.ssm.x_train
     state_min = x_train[:, :safempc.n_s].min(axis=0)
     state_max = x_train[:, :safempc.n_s].max(axis=0)
@@ -103,7 +88,6 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30):
     print(f"  State range: {state_min} to {state_max}")
     print(f"  Action range: {action_min} to {action_max}")
 
-    # Expand range slightly
     state_range = state_max - state_min
     state_min -= 0.2 * state_range
     state_max += 0.2 * state_range
@@ -112,7 +96,6 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30):
     action_min -= 0.2 * action_range
     action_max += 0.2 * action_range
     
-    # Create grids
     if safempc.n_s == 2:  # Inverted pendulum
         # 1D slices: vary each dimension individually
         # 1D slice 1: vary u, fix dtheta=0, theta=0
@@ -161,113 +144,56 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30):
         dim_names = ['dθ', 'θ', 'u']
         error_names = ['Δ(dθ)', 'Δ(θ)']
         
-    elif safempc.n_s == 4:  # Cart pole
-        # 1D slice: vary cart theta, fix others at 0
-        theta_1d = np.linspace(state_min[2], state_max[2], n_points)
-        states_1d = np.column_stack([
-            np.zeros(n_points),  # x = 0
-            np.zeros(n_points),  # dx = 0
-            theta_1d,            # theta varies
-            np.zeros(n_points)   # dtheta = 0
-        ])
-        actions_1d = np.zeros((n_points, safempc.n_u))
-        
-        # 2D grid: vary theta and u
-        theta_2d = np.linspace(state_min[2], state_max[2], n_points)
-        u_2d = np.linspace(action_min[0], action_max[0], n_points)
-        theta_grid, u_grid = np.meshgrid(theta_2d, u_2d)
-        states_2d = np.column_stack([
-            np.zeros_like(theta_grid.ravel()),
-            np.zeros_like(theta_grid.ravel()),
-            theta_grid.ravel(),
-            np.zeros_like(theta_grid.ravel())
-        ])
-        actions_2d = u_grid.ravel()[:, np.newaxis]
-        
-        dim_names = ['x', 'ẋ', 'θ', 'θ̇', 'u']
-        error_names = ['Δ(x)', 'Δ(ẋ)', 'Δ(θ)', 'Δ(θ̇)']
     else:
-        print(f"Warning: Unsupported state dimension {safempc.n_s}")
-        return
-    
-    # Compute true model error
+        raise NotImplementedError("Model error plotting not implemented for n_s != 2")
+
     print("Computing true model error...")
-    if safempc.n_s == 2:
-        true_error_1d_u = compute_true_model_error(safempc, env, states_1d_u, actions_1d_u)
-        true_error_1d_theta = compute_true_model_error(safempc, env, states_1d_theta, actions_1d_theta)
-        true_error_1d_dtheta = compute_true_model_error(safempc, env, states_1d_dtheta, actions_1d_dtheta)
-    else:
-        true_error_1d_u = compute_true_model_error(safempc, env, states_1d, actions_1d)
-    
-    # For inverted pendulum, compute both 2D grids
-    if safempc.n_s == 2:
-        true_error_2d_theta_u = compute_true_model_error(safempc, env, states_2d_theta_u, actions_2d_theta_u)
-        true_error_2d_dtheta_u = compute_true_model_error(safempc, env, states_2d_dtheta_u, actions_2d_dtheta_u)
-    else:
-        true_error_2d_theta_u = compute_true_model_error(safempc, env, states_2d_theta_u, actions_2d_theta_u)
-    
-    # Get GP predictions
+    true_error_1d_u = compute_true_model_error(safempc, env, states_1d_u, actions_1d_u)
+    true_error_1d_theta = compute_true_model_error(safempc, env, states_1d_theta, actions_1d_theta)
+    true_error_1d_dtheta = compute_true_model_error(safempc, env, states_1d_dtheta, actions_1d_dtheta)
+
+    true_error_2d_theta_u = compute_true_model_error(safempc, env, states_2d_theta_u, actions_2d_theta_u)
+    true_error_2d_dtheta_u = compute_true_model_error(safempc, env, states_2d_dtheta_u, actions_2d_dtheta_u)
+
     print("Getting GP predictions...")
     
     if hasattr(safempc, 'lin_trafo_gp_input'):
         from numpy import dot as mtimes
-        if safempc.n_s == 2:
-            states_1d_u_trafo = mtimes(states_1d_u, safempc.lin_trafo_gp_input.T)
-            test_inputs_1d_u = np.hstack([states_1d_u_trafo, actions_1d_u])
-            
-            states_1d_theta_trafo = mtimes(states_1d_theta, safempc.lin_trafo_gp_input.T)
-            test_inputs_1d_theta = np.hstack([states_1d_theta_trafo, actions_1d_theta])
-            
-            states_1d_dtheta_trafo = mtimes(states_1d_dtheta, safempc.lin_trafo_gp_input.T)
-            test_inputs_1d_dtheta = np.hstack([states_1d_dtheta_trafo, actions_1d_dtheta])
-        else:
-            states_1d_trafo = mtimes(states_1d, safempc.lin_trafo_gp_input.T)
-            test_inputs_1d_u = np.hstack([states_1d_trafo, actions_1d])
+        states_1d_u_trafo = mtimes(states_1d_u, safempc.lin_trafo_gp_input.T)
+        test_inputs_1d_u = np.hstack([states_1d_u_trafo, actions_1d_u])
         
-        if safempc.n_s == 2:
-            states_2d_theta_u_trafo = mtimes(states_2d_theta_u, safempc.lin_trafo_gp_input.T)
-            states_2d_dtheta_u_trafo = mtimes(states_2d_dtheta_u, safempc.lin_trafo_gp_input.T)
-            test_inputs_2d_theta_u = np.hstack([states_2d_theta_u_trafo, actions_2d_theta_u])
-            test_inputs_2d_dtheta_u = np.hstack([states_2d_dtheta_u_trafo, actions_2d_dtheta_u])
-        else:
-            states_2d_theta_u_trafo = mtimes(states_2d_theta_u, safempc.lin_trafo_gp_input.T)
-            test_inputs_2d_theta_u = np.hstack([states_2d_theta_u_trafo, actions_2d_theta_u])
-    else:
-        if safempc.n_s == 2:
-            test_inputs_1d_u = np.hstack([states_1d_u, actions_1d_u])
-            test_inputs_1d_theta = np.hstack([states_1d_theta, actions_1d_theta])
-            test_inputs_1d_dtheta = np.hstack([states_1d_dtheta, actions_1d_dtheta])
-        else:
-            test_inputs_1d_u = np.hstack([states_1d, actions_1d])
+        states_1d_theta_trafo = mtimes(states_1d_theta, safempc.lin_trafo_gp_input.T)
+        test_inputs_1d_theta = np.hstack([states_1d_theta_trafo, actions_1d_theta])
         
-        if safempc.n_s == 2:
-            test_inputs_2d_theta_u = np.hstack([states_2d_theta_u, actions_2d_theta_u])
-            test_inputs_2d_dtheta_u = np.hstack([states_2d_dtheta_u, actions_2d_dtheta_u])
-        else:
-            test_inputs_2d_theta_u = np.hstack([states_2d_theta_u, actions_2d_theta_u])
-    
-    if safempc.n_s == 2:
-        gp_mean_1d_u, gp_std_1d_u = safempc.ssm.predict(test_inputs_1d_u)
-        gp_mean_1d_theta, gp_std_1d_theta = safempc.ssm.predict(test_inputs_1d_theta)
-        gp_mean_1d_dtheta, gp_std_1d_dtheta = safempc.ssm.predict(test_inputs_1d_dtheta)
+        states_1d_dtheta_trafo = mtimes(states_1d_dtheta, safempc.lin_trafo_gp_input.T)
+        test_inputs_1d_dtheta = np.hstack([states_1d_dtheta_trafo, actions_1d_dtheta])
+        
+        states_2d_theta_u_trafo = mtimes(states_2d_theta_u, safempc.lin_trafo_gp_input.T)
+        states_2d_dtheta_u_trafo = mtimes(states_2d_dtheta_u, safempc.lin_trafo_gp_input.T)
+        test_inputs_2d_theta_u = np.hstack([states_2d_theta_u_trafo, actions_2d_theta_u])
+        test_inputs_2d_dtheta_u = np.hstack([states_2d_dtheta_u_trafo, actions_2d_dtheta_u])
     else:
-        gp_mean_1d_u, gp_std_1d_u = safempc.ssm.predict(test_inputs_1d_u)
+        test_inputs_1d_u = np.hstack([states_1d_u, actions_1d_u])
+        test_inputs_1d_theta = np.hstack([states_1d_theta, actions_1d_theta])
+        test_inputs_1d_dtheta = np.hstack([states_1d_dtheta, actions_1d_dtheta])
     
-    if safempc.n_s == 2:
-        gp_mean_2d_theta_u, gp_std_2d_theta_u = safempc.ssm.predict(test_inputs_2d_theta_u)
-        gp_mean_2d_dtheta_u, gp_std_2d_dtheta_u = safempc.ssm.predict(test_inputs_2d_dtheta_u)
-    else:
-        gp_mean_2d_theta_u, gp_std_2d_theta_u = safempc.ssm.predict(test_inputs_2d_theta_u)
+        test_inputs_2d_theta_u = np.hstack([states_2d_theta_u, actions_2d_theta_u])
+        test_inputs_2d_dtheta_u = np.hstack([states_2d_dtheta_u, actions_2d_dtheta_u])
     
-    # Create plots
+    gp_mean_1d_u, gp_std_1d_u = safempc.ssm.predict(test_inputs_1d_u)
+    gp_mean_1d_theta, gp_std_1d_theta = safempc.ssm.predict(test_inputs_1d_theta)
+    gp_mean_1d_dtheta, gp_std_1d_dtheta = safempc.ssm.predict(test_inputs_1d_dtheta)
+
+    gp_mean_2d_theta_u, gp_std_2d_theta_u = safempc.ssm.predict(test_inputs_2d_theta_u)
+    gp_mean_2d_dtheta_u, gp_std_2d_dtheta_u = safempc.ssm.predict(test_inputs_2d_dtheta_u)
+    
     print("Generating plots...")
     
-    # Get training data
     x_train_gp = safempc.ssm.x_train
     y_train = safempc.ssm.y_train
+    n_s = safempc.n_s
     
     if hasattr(safempc, 'lin_trafo_gp_input'):
-        n_s = safempc.n_s
         n_u = safempc.n_u
         states_train_trafo = x_train_gp[:, :n_s]
         actions_train = x_train_gp[:, n_s:]
@@ -277,91 +203,78 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30):
         
         x_train = np.hstack([states_train_orig, actions_train])
     else:
+        states_train_orig = x_train_gp[:, :n_s]
+        actions_train = x_train_gp[:, n_s:]
         x_train = x_train_gp
     
-    # 1D plots for each output dimension
-    if safempc.n_s == 2:
-        # Plot 1D slice varying u
-        for dim in range(safempc.n_s):
-            plot_1d_comparison(
-                states_1d_u, actions_1d_u, true_error_1d_u, gp_mean_1d_u, gp_std_1d_u,
-                state_dim=dim, vary_dim=2,  # u is at index 2
-                dim_names=dim_names, error_names=error_names,
-                save_path=os.path.join(save_dir, f'model_error_1d_u_dim{dim}.png'),
-                x_train=x_train, y_train=y_train
-            )
-        
-        # Plot 1D slice varying theta
-        for dim in range(safempc.n_s):
-            plot_1d_comparison(
-                states_1d_theta, actions_1d_theta, true_error_1d_theta, gp_mean_1d_theta, gp_std_1d_theta,
-                state_dim=dim, vary_dim=1,  # theta is at index 1
-                dim_names=dim_names, error_names=error_names,
-                save_path=os.path.join(save_dir, f'model_error_1d_theta_dim{dim}.png'),
-                x_train=x_train, y_train=y_train
-            )
-        
-        # Plot 1D slice varying dtheta
-        for dim in range(safempc.n_s):
-            plot_1d_comparison(
-                states_1d_dtheta, actions_1d_dtheta, true_error_1d_dtheta, gp_mean_1d_dtheta, gp_std_1d_dtheta,
-                state_dim=dim, vary_dim=0,  # dtheta is at index 0
-                dim_names=dim_names, error_names=error_names,
-                save_path=os.path.join(save_dir, f'model_error_1d_dtheta_dim{dim}.png'),
-                x_train=x_train, y_train=y_train
-            )
-    else:
-        # For cart pole or other systems
-        for dim in range(safempc.n_s):
-            plot_1d_comparison(
-                states_1d, actions_1d, true_error_1d_u, gp_mean_1d_u, gp_std_1d_u,
-                state_dim=dim, vary_dim=2,
-                dim_names=dim_names, error_names=error_names,
-                save_path=os.path.join(save_dir, f'model_error_1d_dim{dim}.png'),
-                x_train=x_train, y_train=y_train
-            )
+    # Plot 1D slice varying u
+    for dim in range(safempc.n_s):
+        plot_1d_comparison(
+            states_1d_u, actions_1d_u, true_error_1d_u, gp_mean_1d_u, gp_std_1d_u,
+            state_dim=dim, vary_dim=2,  # u is at index 2
+            dim_names=dim_names, error_names=error_names,
+            save_path=os.path.join(save_dir, f'model_error_1d_u_dim{dim}.png'),
+            x_train=x_train, y_train=y_train
+        )
     
-    # 2D plots for each output dimension
-    if safempc.n_s == 2:
-        # Plot theta vs u
-        for dim in range(safempc.n_s):
-            plot_2d_comparison(
-                states_2d_theta_u, actions_2d_theta_u, true_error_2d_theta_u, 
-                gp_mean_2d_theta_u, gp_std_2d_theta_u,
-                state_dim=dim, 
-                vary_dims=(1, safempc.n_s),
-                n_points=n_points,
-                dim_names=dim_names, error_names=error_names,
-                save_path=os.path.join(save_dir, f'model_error_2d_theta_u_dim{dim}.png'),
-                x_train=x_train, y_train=y_train
-            )
-        
-        # Plot dtheta vs u
-        for dim in range(safempc.n_s):
-            plot_2d_comparison(
-                states_2d_dtheta_u, actions_2d_dtheta_u, true_error_2d_dtheta_u, 
-                gp_mean_2d_dtheta_u, gp_std_2d_dtheta_u,
-                state_dim=dim, 
-                vary_dims=(0, safempc.n_s),
-                n_points=n_points,
-                dim_names=dim_names, error_names=error_names,
-                save_path=os.path.join(save_dir, f'model_error_2d_dtheta_u_dim{dim}.png'),
-                x_train=x_train, y_train=y_train
-            )
-    else:
-        for dim in range(safempc.n_s):
-            plot_2d_comparison(
-                states_2d_theta_u, actions_2d_theta_u, true_error_2d_theta_u, 
-                gp_mean_2d_theta_u, gp_std_2d_theta_u,
-                state_dim=dim, 
-                vary_dims=(2, 4),
-                n_points=n_points,
-                dim_names=dim_names, error_names=error_names,
-                save_path=os.path.join(save_dir, f'model_error_2d_dim{dim}.png'),
-                x_train=x_train, y_train=y_train
-            )
+    # Plot 1D slice varying theta
+    for dim in range(safempc.n_s):
+        plot_1d_comparison(
+            states_1d_theta, actions_1d_theta, true_error_1d_theta, gp_mean_1d_theta, gp_std_1d_theta,
+            state_dim=dim, vary_dim=1,  # theta is at index 1
+            dim_names=dim_names, error_names=error_names,
+            save_path=os.path.join(save_dir, f'model_error_1d_theta_dim{dim}.png'),
+            x_train=x_train, y_train=y_train
+        )
     
-    # Compute and print statistics
+    # Plot 1D slice varying dtheta
+    for dim in range(safempc.n_s):
+        plot_1d_comparison(
+            states_1d_dtheta, actions_1d_dtheta, true_error_1d_dtheta, gp_mean_1d_dtheta, gp_std_1d_dtheta,
+            state_dim=dim, vary_dim=0,  # dtheta is at index 0
+            dim_names=dim_names, error_names=error_names,
+            save_path=os.path.join(save_dir, f'model_error_1d_dtheta_dim{dim}.png'),
+            x_train=x_train, y_train=y_train
+        )
+    
+    # Plot theta vs u
+    for dim in range(safempc.n_s):
+        plot_2d_comparison(
+            states_2d_theta_u, actions_2d_theta_u, true_error_2d_theta_u, 
+            gp_mean_2d_theta_u, gp_std_2d_theta_u,
+            state_dim=dim, 
+            vary_dims=(1, safempc.n_s),
+            n_points=n_points,
+            dim_names=dim_names, error_names=error_names,
+            save_path=os.path.join(save_dir, f'model_error_2d_theta_u_dim{dim}.png'),
+            x_train=x_train, y_train=y_train
+        )
+    
+    # Plot dtheta vs u
+    for dim in range(safempc.n_s):
+        plot_2d_comparison(
+            states_2d_dtheta_u, actions_2d_dtheta_u, true_error_2d_dtheta_u, 
+            gp_mean_2d_dtheta_u, gp_std_2d_dtheta_u,
+            state_dim=dim, 
+            vary_dims=(0, safempc.n_s),
+            n_points=n_points,
+            dim_names=dim_names, error_names=error_names,
+            save_path=os.path.join(save_dir, f'model_error_2d_dtheta_u_dim{dim}.png'),
+            x_train=x_train, y_train=y_train
+        )
+
+    # 3D scatter of training data highlighting residual mismatch
+    gp_mean_train, _ = safempc.ssm.predict(x_train_gp)
+    true_error_train = compute_true_model_error(safempc, env, states_train_orig, actions_train)
+    plot_training_error_scatter(
+        states_train_orig,
+        actions_train,
+        true_error_train,
+        gp_mean_train,
+        dim_names,
+        error_names
+    )
+    
     print_statistics(true_error_2d_theta_u, gp_mean_2d_theta_u, gp_std_2d_theta_u, error_names)
     
     print(f"\n{'='*60}")
@@ -523,3 +436,38 @@ def print_statistics(true_error, gp_mean, gp_std, error_names):
         print(f"  Mean σ:        {mean_std:.6f}")
         print(f"  68% Coverage:  {coverage_1sigma:.1f}% (within 1σ)")
         print(f"  95% Coverage:  {coverage_2sigma:.1f}% (within 2σ)")
+
+
+def plot_training_error_scatter(states, actions, true_error, gp_mean, dim_names, error_names):
+    """Render a 3D scatter of training inputs colored by model mismatch.
+
+    Each point corresponds to a training tuple (dθ, θ, u). Color encodes the
+    norm of `true_error - gp_mean`, so vivid hues highlight where the GP
+    deviates most from the ground-truth residuals.
+    """
+
+    if states.shape[1] != 2 or actions.shape[1] != 1:
+        warnings.warn("3D scatter currently implemented for 2D state / 1D action setups.")
+        return
+
+    dtheta = states[:, 0]
+    theta = states[:, 1]
+    u = actions[:, 0]
+
+    residual_mismatch = np.linalg.norm(true_error - gp_mean, axis=1)
+
+    fig = plt.figure(figsize=(9, 7))
+    ax = fig.add_subplot(111, projection='3d')
+    scatter = ax.scatter(dtheta, theta, u, c=residual_mismatch, cmap='viridis', s=35, depthshade=True)
+
+    ax.set_xlabel(dim_names[0])
+    ax.set_ylabel(dim_names[1])
+    ax.set_zlabel(dim_names[2])
+    ax.set_title('Training Samples: |True Error − GP|', fontweight='bold')
+
+    cbar = fig.colorbar(scatter, ax=ax, pad=0.1)
+    cbar.set_label('Residual mismatch (norm)', fontsize=10)
+
+    plt.tight_layout()
+    plt.show()
+    print("  Displayed: training error mismatch (3D scatter)")
