@@ -272,6 +272,7 @@ class Environment(metaclass=abc.ABCMeta):
             init_m = self.init_m
 
         samples = (repmat(init_std, n_samples, 1) * np.random.randn(n_samples, self.n_s) + repmat(init_m, n_samples, 1))
+        # samples = (repmat(init_std, n_samples, 1) * np.random.uniform(low=-1.0, high=1.0, size=(n_samples, self.n_s)) + repmat(init_m, n_samples, 1))
 
         if normalize:
             samples = samples * self.inv_norm[0]
@@ -412,8 +413,8 @@ class InvertedPendulum(Environment):
     TODO: Need to define a safety/fail criterion
     """
 
-    def __init__(self, name="InvertedPendulum", l=.5, m=.15, g=9.82, b=0., dt=.05, init_m=0., init_std=.01,
-                 plant_noise=np.array([0.01, 0.01]) ** 2, u_min=np.array([-1.]), u_max=np.array([1.]),
+    def __init__(self, name="InvertedPendulum", l=.5, m=.15, g=9.82, b=0.2, dt=.05, init_m=0., init_std=.01,
+                 plant_noise=np.array([0.0001, 0.0001]) ** 2, u_min=np.array([-1.]), u_max=np.array([1.]),
                  target=np.array([0.0, 0.0]), verbosity=1, norm_x=None, norm_u=None, simple_constraints=True,
                  enable_objectives=False):
         """
@@ -460,13 +461,12 @@ class InvertedPendulum(Environment):
         self._current_achieved_objective_states = []
         self._achieved_objectives = []
 
-        warnings.warn("Normalization turned off for now. Need to look into it")
         max_deg = 30
         if norm_x is None:
-            norm_x = np.array([1., 1.])  # norm_x = np.array([np.sqrt(g/l), np.deg2rad(max_deg)])
+            norm_x = np.array([np.sqrt(g/l), np.deg2rad(max_deg)])
 
         if norm_u is None:
-            norm_u = np.array([1.])  # norm_u = np.array([g*m*l*np.sin(np.deg2rad(max_deg))])
+            norm_u = np.array([g*m*l*np.sin(np.deg2rad(max_deg))])
 
         self.norm = [norm_x, norm_u]
         self.inv_norm = [arr ** -1 for arr in self.norm]
@@ -535,7 +535,7 @@ class InvertedPendulum(Environment):
 
         inertia = self.m * self.l ** 2
         dz = np.zeros((2, 1))
-        dz[0] = self.g / self.l * np.sin(state[1]) + action / inertia - self.b / inertia * state[0]
+        dz[0] = self.g / self.l * np.sin(state[1]) + action / inertia - self.b / inertia * state[0] * abs(state[0])
         dz[1] = state[0]
 
         return dz
@@ -736,8 +736,8 @@ class InvertedPendulum(Environment):
 
             # ax.add_patch(mpatch.Polygon(x_polygon,fill = False))
         if new_fig:
-            ax.set_xlim(-2., 2.)
-            ax.set_ylim(-1., 1.)
+            ax.set_xlim(-1.0, 1.0)
+            ax.set_ylim(-2.5, 2.5)
             ax.set_xlabel('dθ (angular velocity)')
             ax.set_ylabel('θ (angle)')
             ax.legend()
@@ -783,38 +783,32 @@ class InvertedPendulum(Environment):
     def _init_safety_constraints(self, simple_constraints: bool):
         """ Get state and safety constraints
 
-        We define the state constraints as:
-            x_0 - 3*x_1 <= 1
-            x_0 - 3*x_1 >= -1
-            x_1 <= max_rad
-            x_1 >= -max_rad
+        Parameters        
+        ----------
+        simple_constraints: bool
+            If TRUE: Use simple box constraints for safety region
+            If FALSE: Use diamond shaped constraints for safety region
         """
-
-        max_dx = 2.0
-        max_deg = 20
-        max_dtheta = 1.2
-        max_dtheta_theta_0 = 0.8
-
+        inertia = self.m * self.l**2
+        alpha_u = self.u_max[0] / inertia
+        
+        max_deg = 45
         max_rad = np.deg2rad(max_deg)
+        
+        # safety_margin = 0.5
+        # max_dtheta = safety_margin * np.sqrt(alpha_u * max_rad)
+        max_dtheta = 3.0
 
-        # -max_dtheta <dtheta <= max_dtheta
-        h_0_mat = np.asarray([[1., 0.], [-1., 0.]])
-        h_0_vec = np.array([max_dtheta, max_dtheta])[:, None]
-
-        #  (1/.4)*dtheta + (2/.26)*theta <= 1
-        # 2*max_dtheta + c*max_rad <= 1
-        # => c = (1+2*max_dtheta) / max_rad
-        # for max_deg = 30, max_dtheta = 1.5 => c \approx 7.62
         if simple_constraints:
-            corners_polygon = np.array([[-max_dtheta_theta_0, max_rad],  #
-                                        [max_dtheta_theta_0, max_rad],  #
-                                        [max_dtheta_theta_0, -max_rad],  #
-                                        [-max_dtheta_theta_0, -max_rad]])
+            corners_polygon = np.array([[-max_dtheta, max_rad],
+                                        [max_dtheta, max_rad],
+                                        [max_dtheta, -max_rad],
+                                        [-max_dtheta, -max_rad]])
         else:
-            corners_polygon = np.array([[-max_dtheta, max_rad],  #
-                                        [max_dtheta_theta_0, 0.0],  #
-                                        [max_dtheta, -max_rad],  #
-                                        [-max_dtheta_theta_0, 0.0]])
+            corners_polygon = np.array([[0, max_rad],
+                                        [max_dtheta, 0.0],
+                                        [0, -max_rad],
+                                        [-max_dtheta, 0.0]])  
 
         ch = ConvexHull(corners_polygon)
 

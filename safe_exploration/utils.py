@@ -59,6 +59,97 @@ def sample_inside_polytope(x, a, b):
     return np.all(c <= 0, axis=0).squeeze()
 
 
+def _polytope_safe_action_interval(state, a_lin, b_lin, h_mat_safe, h_safe,
+                                   u_lower, u_upper):
+    """Return the admissible 1D action interval that keeps Ax+Bu inside the polytope."""
+
+    lower = float(u_lower)
+    upper = float(u_upper)
+    ax = np.dot(a_lin, state)
+
+    for idx in range(h_mat_safe.shape[0]):
+        h_row = h_mat_safe[idx]
+        rhs = float(h_safe[idx] - np.dot(h_row, ax))
+        influence = float(np.dot(h_row, b_lin).squeeze())
+
+        if abs(influence) < 1e-10:
+            if rhs < 0:
+                return None
+            continue
+
+        bound = rhs / influence
+        if influence > 0:
+            upper = min(upper, bound)
+        else:
+            lower = max(lower, bound)
+
+        if lower > upper:
+            return None
+
+    return lower, upper
+
+
+def build_polytope_randomized_policy(base_policy, *, a_lin, b_lin,
+                                     h_mat_safe, h_safe, u_min, u_max,
+                                     margin=0.1, exploration=0.8,
+                                     min_width=0.05, seed=None):
+    """Create a 1D action policy that dithers within the safe polytope."""
+
+    if b_lin.shape[1] != 1:
+        warnings.warn(
+            "Polytope randomized safe policy currently supports single-input systems. "
+            "Falling back to the base policy."
+        )
+        return base_policy
+
+    rng = np.random.default_rng(seed)
+    u_lower = float(np.asarray(u_min).squeeze())
+    u_upper = float(np.asarray(u_max).squeeze())
+    exploration = float(np.clip(exploration, 0.0, 1.0))
+    margin = float(np.clip(margin, 0.0, 0.49))
+    min_width = max(float(min_width), 0.0)
+
+    def _policy(state):
+        state_vec = np.asarray(state).reshape(-1)
+        base_action = np.asarray(base_policy(state))
+        base_flat = base_action.reshape(-1)
+
+        interval = _polytope_safe_action_interval(
+            state_vec, a_lin, b_lin, h_mat_safe, h_safe, u_lower, u_upper
+        )
+
+        if interval is None or base_flat.size != 1:
+            return base_action
+
+        lower, upper = interval
+        span = upper - lower
+        if span <= 0:
+            return base_action
+
+        if span < min_width:
+            extra = 0.5 * (min_width - span)
+            lower = max(u_lower, lower - extra)
+            upper = min(u_upper, upper + extra)
+            span = upper - lower
+            if span <= 0:
+                return base_action
+
+        shrink = margin * span
+        if shrink > 0.0:
+            lower_candidate = lower + 0.5 * shrink
+            upper_candidate = upper - 0.5 * shrink
+            if lower_candidate < upper_candidate:
+                lower, upper = lower_candidate, upper_candidate
+
+        uniform_sample = rng.uniform(lower, upper)
+        base_scalar = float(np.clip(base_flat[0], lower, upper))
+        action_scalar = exploration * uniform_sample + (1.0 - exploration) * base_scalar
+
+        return np.array([action_scalar], dtype=base_action.dtype)
+
+    return _policy
+
+
 def feedback_ctrl(x, k_ff, k_fb=None, p=None):
     """The feedback control structure"""
 
@@ -496,6 +587,24 @@ def generate_initial_samples(env, conf, relative_dynamics, solver, safe_policy):
 
     elif conf.init_mode == "safe_samples":
 
+        if getattr(conf, "init_randomized_safe_policy", False):
+            h_mat_safe, h_safe, _, _ = env.get_safety_constraints(normalize=True)
+            a_true, b_true = env.linearize_discretize()
+            randomized_safe_policy = build_polytope_randomized_policy(
+                safe_policy,
+                a_lin=a_true,
+                b_lin=b_true,
+                h_mat_safe=h_mat_safe,
+                h_safe=h_safe,
+                u_min=env.u_min_norm,
+                u_max=env.u_max_norm,
+                margin=getattr(conf, "init_safe_policy_margin", 0.15),
+                exploration=getattr(conf, "init_safe_policy_exploration", 0.9),
+                min_width=getattr(conf, "init_safe_policy_min_width", 0.05),
+            )
+        else:
+            randomized_safe_policy = safe_policy
+
         n_samples = conf.n_safe_samples
         n_max = conf.c_max_probing_init * n_samples
         n_max_next_state = conf.c_max_probing_next_state * n_samples
@@ -520,7 +629,7 @@ def generate_initial_samples(env, conf, relative_dynamics, solver, safe_policy):
         n_success = 0
         while cont:
             state = states_probing_inside[i, :]
-            action = safe_policy(state.T)
+            action = randomized_safe_policy(state.T)
             next_state, next_observation = env.simulate_onestep(state.squeeze(), action)
 
             if sample_inside_polytope(next_state[None, :], h_mat_safe, h_safe):
