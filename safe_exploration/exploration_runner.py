@@ -67,7 +67,7 @@ def run_exploration(conf, visualize=False):
         safempc, safe_policy = create_solver(conf, env)
         X, y = generate_initial_samples(env, conf, conf.relative_dynamics, safempc,
                                         safe_policy)
-        safempc.update_model(X, y, opt_hyp=conf.train_gp, reinitialize_solver=True)
+        safempc.update_model(X, y, opt_hyp=conf.train_gp, reinitialize_solver=False)
 
         if static_exploration:
             exploration_module = StaticSafeMPCExploration(safempc, env, conf.n_restarts_optimizer,
