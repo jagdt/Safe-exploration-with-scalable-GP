@@ -414,7 +414,7 @@ class InvertedPendulum(Environment):
     """
 
     def __init__(self, name="InvertedPendulum", l=.5, m=.15, g=9.82, b=0.2, dt=.05, init_m=0., init_std=.01,
-                 plant_noise=np.array([0.01, 0.01]) ** 2, u_min=np.array([-1.]), u_max=np.array([1.]),
+                 plant_noise=np.array([0.0001, 0.0001]) ** 2, u_min=np.array([-1.]), u_max=np.array([1.]),
                  target=np.array([0.0, 0.0]), verbosity=1, norm_x=None, norm_u=None, simple_constraints=True,
                  enable_objectives=False):
         """
