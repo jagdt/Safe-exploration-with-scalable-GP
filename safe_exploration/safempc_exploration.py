@@ -126,7 +126,7 @@ class StaticSafeMPCExploration(ExplorationModule):
                                                              self.beta_safety, self.a,
                                                              self.b,
                                                              self.lin_trafo_gp_input,
-                                                             projection_error=self.safety_offset)
+                                                             safety_offset=self.safety_offset)
 
         # generate open_loop trajectory function [vertcat(x_0,u_0)],[f_x])
         self.f_multistep_eval = cas.Function("safe_multistep",
