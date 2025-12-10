@@ -207,34 +207,74 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30):
         actions_train = x_train_gp[:, n_s:]
         x_train = x_train_gp
     
+    
+    beta = 2.0
+    if hasattr(safempc.ssm, 'beta_safety'):
+        beta = safempc.ssm.beta_safety
+    elif hasattr(safempc, 'beta_safety'):
+        beta = safempc.beta_safety
+        
+    proj_error = 0.0
+    if hasattr(safempc.ssm, 'projection_error'):
+        proj_error = safempc.ssm.projection_error
+    elif hasattr(safempc, 'projection_error'):
+        proj_error = safempc.projection_error
+    
+    if proj_error is None:
+        proj_error = 0.0
+        
+    def get_param_for_dim(param, dim, n_s):
+        if np.size(param) == 1:
+            return float(param)
+        else:
+            param = np.asarray(param).flatten()
+            if param.size == n_s:
+                return param[dim]
+            warnings.warn(f"Parameter size {param.size} does not match n_s {n_s}, using first element")
+            return param[0]
+            
+    print(f"Using beta={beta}, projection_error={proj_error}")
+
     # Plot 1D slice varying u
     for dim in range(safempc.n_s):
+        beta_dim = get_param_for_dim(beta, dim, safempc.n_s)
+        proj_dim = get_param_for_dim(proj_error, dim, safempc.n_s)
+        
         plot_1d_comparison(
             states_1d_u, actions_1d_u, true_error_1d_u, gp_mean_1d_u, gp_std_1d_u,
             state_dim=dim, vary_dim=2,  # u is at index 2
             dim_names=dim_names, error_names=error_names,
             save_path=os.path.join(save_dir, f'model_error_1d_u_dim{dim}.png'),
-            x_train=x_train, y_train=y_train
+            x_train=x_train, y_train=y_train,
+            beta=beta_dim, proj_error=proj_dim
         )
     
     # Plot 1D slice varying theta
     for dim in range(safempc.n_s):
+        beta_dim = get_param_for_dim(beta, dim, safempc.n_s)
+        proj_dim = get_param_for_dim(proj_error, dim, safempc.n_s)
+        
         plot_1d_comparison(
             states_1d_theta, actions_1d_theta, true_error_1d_theta, gp_mean_1d_theta, gp_std_1d_theta,
             state_dim=dim, vary_dim=1,  # theta is at index 1
             dim_names=dim_names, error_names=error_names,
             save_path=os.path.join(save_dir, f'model_error_1d_theta_dim{dim}.png'),
-            x_train=x_train, y_train=y_train
+            x_train=x_train, y_train=y_train,
+            beta=beta_dim, proj_error=proj_dim
         )
     
     # Plot 1D slice varying dtheta
     for dim in range(safempc.n_s):
+        beta_dim = get_param_for_dim(beta, dim, safempc.n_s)
+        proj_dim = get_param_for_dim(proj_error, dim, safempc.n_s)
+        
         plot_1d_comparison(
             states_1d_dtheta, actions_1d_dtheta, true_error_1d_dtheta, gp_mean_1d_dtheta, gp_std_1d_dtheta,
             state_dim=dim, vary_dim=0,  # dtheta is at index 0
             dim_names=dim_names, error_names=error_names,
             save_path=os.path.join(save_dir, f'model_error_1d_dtheta_dim{dim}.png'),
-            x_train=x_train, y_train=y_train
+            x_train=x_train, y_train=y_train,
+            beta=beta_dim, proj_error=proj_dim
         )
     
     # Plot theta vs u
@@ -283,7 +323,8 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30):
 
 
 def plot_1d_comparison(states, actions, true_error, gp_mean, gp_std,
-                       state_dim, vary_dim, dim_names, error_names, save_path, x_train=None, y_train=None):
+                       state_dim, vary_dim, dim_names, error_names, save_path, x_train=None, y_train=None,
+                       beta=2.0, proj_error=0.0):
     """Plot 1D comparison of true vs predicted model error"""
     
     fig, ax = plt.subplots(1, 1, figsize=(10, 6))
@@ -307,7 +348,16 @@ def plot_1d_comparison(states, actions, true_error, gp_mean, gp_std,
     ax.fill_between(x_sorted,
                     gp_sorted - 2*gp_std_sorted,
                     gp_sorted + 2*gp_std_sorted,
-                    color='red', alpha=0.2, label='GP ±2σ')
+                    color='red', alpha=0.1, label='GP ±2σ')
+    
+    # Plot Confidence Bound (Safety Bound)
+    bound = beta * gp_std_sorted + proj_error
+    ax.plot(x_sorted, gp_sorted + bound, 'k--', linewidth=1.5, label='Safety Bound', alpha=0.7)
+    ax.plot(x_sorted, gp_sorted - bound, 'k--', linewidth=1.5, alpha=0.7)
+    ax.fill_between(x_sorted,
+                    gp_sorted - bound,
+                    gp_sorted + bound,
+                    color='gray', alpha=0.2, label='Confidence Region')
     
     # Plot training points if provided
     if x_train is not None and y_train is not None:

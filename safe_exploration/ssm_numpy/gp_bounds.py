@@ -25,8 +25,31 @@ class GPBounds(ABC):
             raise ValueError("GP must be trained before computing bounds")
         self.gp = gp_model
         self.delta = delta
-        self.R_subgaussian = R_subgaussian
+        self.gp = gp_model
+        self.delta = delta
+        self.R_subgaussian = self._initialize_R_subgaussian(R_subgaussian)
         self.rkhs_norms = self._initialize_rkhs_norms(rkhs_norm)
+
+    def _initialize_R_subgaussian(self, R_subgaussian):
+        """Initialize R_subgaussian for all output dimensions.
+
+        Parameters
+        ----------
+        R_subgaussian : float or array-like
+            User-provided subgaussian parameter(s).
+
+        Returns
+        -------
+        ndarray
+            Array of R_subgaussian values for each output dimension.
+        """
+        arr = np.asarray(R_subgaussian, dtype=float)
+        if arr.ndim == 0:
+            return np.full(self.gp.n_s_out, float(arr))
+        elif arr.ndim == 1 and arr.size == self.gp.n_s_out:
+            return arr
+        else:
+            raise ValueError("R_subgaussian must be scalar or length n_s_out")
 
     def _initialize_rkhs_norms(self, rkhs_norm):
         """Initialize RKHS norms for all output dimensions.
@@ -67,7 +90,7 @@ class GPBounds(ABC):
             else:
                 raise ValueError("rkhs_norm must be scalar or length n_s_out")
 
-    def _noise_term(self, gram_matrix, lambda_noise):
+    def _noise_term(self, gram_matrix, lambda_noise, dim_idx):
         """Compute the Abbasi-Yadkori noise contribution for confidence bounds.
         The formula is R / sqrt(lambda) * sqrt(2 * ln(det(I + K/lambda) / delta)).
 
@@ -77,6 +100,8 @@ class GPBounds(ABC):
             Gram matrix (kernel matrix or feature Gram matrix).
         lambda_noise : float
             Regularization/noise parameter.
+        dim_idx : int
+            Dimension index to retrieve the correct R_subgaussian.
         
         Returns
         -------
@@ -99,7 +124,7 @@ class GPBounds(ABC):
                 log_det = np.log(1e-12)
 
         log_term = max(0.0, log_det - np.log(self.delta))
-        return (self.R_subgaussian / np.sqrt(lambda_noise) * np.sqrt(2.0 * log_term))
+        return (self.R_subgaussian[dim_idx] / np.sqrt(lambda_noise) * np.sqrt(2.0 * log_term))
 
     @abstractmethod
     def beta(self, dim_idx):
@@ -203,7 +228,7 @@ class NumpyGPBounds(GPBounds):
             Confidence bound parameter βₜ.
         """
         gram = self._gram_matrix(dim_idx)
-        noise_term = self._noise_term(gram, self.gp.noise_var[dim_idx])
+        noise_term = self._noise_term(gram, self.gp.noise_var[dim_idx], dim_idx)
         return self.rkhs_norms[dim_idx] + noise_term
 
     def confidence_bounds(self, x_new, dim_idx):
@@ -416,7 +441,7 @@ class ScalableGPBounds(GPBounds):
             Scalable confidence bound parameter βₜ.
         """
         PhiTPhi = self._feature_gram(dim_idx)
-        noise_term = self._noise_term(PhiTPhi, self.gp.noise_var[dim_idx])
+        noise_term = self._noise_term(PhiTPhi, self.gp.noise_var[dim_idx], dim_idx)
         projection_error_term = self.projection_error_term(dim_idx)
         return self.rkhs_norms[dim_idx] + noise_term + projection_error_term
 
