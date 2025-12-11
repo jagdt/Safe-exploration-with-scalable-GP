@@ -25,6 +25,8 @@ class DefaultConfigExploration(DefaultConfig):
     env_options["init_std"] = init_std
     solver_type = "safempc"
 
+    init_mode = "safe_samples"
+    n_safe_samples = 25
     c_max_probing_init = 3
     c_max_probing_next_state = 2
 
@@ -94,11 +96,12 @@ class DefaultConfigExploration(DefaultConfig):
     gp_hyp = None
     # exploration
     n_experiments = 1
-    n_iterations = 100 # set higher later again
+    n_iterations = 50 # set higher later again
     n_restarts_optimizer = 20
 
     # general options
     verify_safety = False
+    visualize = True
     save_results = True
     save_vis = False
     save_dir = None  # the directory such that the overall save location is save_path_base/save_dir/
