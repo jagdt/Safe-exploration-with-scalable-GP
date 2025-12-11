@@ -185,8 +185,9 @@ def run_exploration(conf, visualize=False):
             sigm_sum[i] = np.sum(pred_conf)
 
             # update model and information gain
+            retrain = (i % conf.retrain_gp_interval == 0)
             exploration_module.update_model(z_i, x_next_obs.reshape((1, env.n_s)),
-                                            train=conf.retrain_gp, replace_old=False)
+                                            train=retrain, replace_old=False)
             inf_gain[i, :] = exploration_module.get_information_gain()
 
             x_i = x_next
@@ -211,7 +212,7 @@ def run_exploration(conf, visualize=False):
             save_results(save_path, l_sigm_sum, l_sigm, l_inf_gain, l_z_all, l_x_next_obs_all, l_x_next_pred,
                          x_next_prior, exploration_module.safempc.ssm, safety_all, x_train_init)
 
-        plot_model_error_comparison(exploration_module.safempc, exploration_module.env, save_dir=save_path, n_points=50)
+        plot_model_error_comparison(exploration_module.safempc, exploration_module.env, save_dir=save_path, n_points=50, plot_bounds=True)
 
 def save_results(save_path, sigm_sum, sigm, inf_gain, z_all, x_next_obs_all,
                  x_next_pred, x_next_prior, gp, x_train_0, safety_all=None):

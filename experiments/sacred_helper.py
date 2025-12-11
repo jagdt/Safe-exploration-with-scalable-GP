@@ -60,31 +60,6 @@ def base_config():
     # Type of state space model to use, one of exact_gp, mc_dropout, mc_dropout_gal.
     cem_ssm = 'exact_gp'
 
-    # -- GP model
-    gp_type = 'numpy'  # one of 'gpy', 'numpy', 'scalable'
-
-    # -- Scalable GP specific parameters
-    # Number of frequencies to use per dimension.
-    n_frequencies = 7
-    # Periods for each dimension.
-    periods = [3.0*4, 1.5*4, 2.0*4]
-    # Domain lengths for each dimension.
-    domain_lengths = [3.0, 1.5, 2.0] # [dθ, θ, u]
-    # Lengthscale multiple for the scalable GP to compute periods.
-    lengthscale_multiple = 3.0
-
-    # -- GP Bounds parameters
-    # Whether to compute GP bounds. Otherwise uses constant ß.
-    compute_bounds = True
-    # Confidence level for the GP bounds
-    delta = 0.05
-    # Assumed RKHS norm of the true function
-    rkhs_norm = None # None to compute automatically from posterior mean
-    # Subgaussian noise bound
-    R_subgaussian = 0.01
-    # Model mismatch offset
-    projection_error = None # None to compute automatically
-
     # -- Episodic
     # The number of repeats of the experiment, over which we will average the metrics.
     n_scenarios = 6

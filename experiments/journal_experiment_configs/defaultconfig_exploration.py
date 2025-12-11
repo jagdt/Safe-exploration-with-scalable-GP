@@ -65,9 +65,9 @@ class DefaultConfigExploration(DefaultConfig):
     gp_dict_path = None
     gp_data_path = None  # None means no initial training data
     m = 25  # subset of data of size m for training
-    kern_types = ["rbf", "rbf"]
+    kern_types = ["sum_lin_rbf", "sum_lin_rbf"]
     train_gp = True  # train the gp initially?
-    retrain_gp = False  # retrain the gp after every sample?
+    retrain_gp_interval = 10 # retrain the gp every n-th iteration, None to disable
     gp_hyp = None
     Z = None
     lin_trafo_gp_input = None
@@ -94,7 +94,7 @@ class DefaultConfigExploration(DefaultConfig):
     gp_hyp = None
     # exploration
     n_experiments = 1
-    n_iterations = 0 # set higher later again
+    n_iterations = 100 # set higher later again
     n_restarts_optimizer = 20
 
     # general options

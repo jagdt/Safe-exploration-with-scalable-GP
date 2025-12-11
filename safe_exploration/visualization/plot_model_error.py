@@ -51,7 +51,7 @@ def compute_true_model_error(safempc, env, states, actions):
     return true_error
 
 
-def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30):
+def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_bounds=False):
     """Create comprehensive model error comparison plots
     
     Parameters
