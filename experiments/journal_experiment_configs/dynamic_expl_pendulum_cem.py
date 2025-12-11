@@ -11,10 +11,10 @@ class Config(DefaultConfigExploration):
     """
     Options class for the exploration setting
     """
-    verbose = 2
+    verbose = 0
     static_exploration = False
 
-    solver_type = "safempc"
+    solver_type = "safempc_cem"
 
     # safempc
     beta_safety = 2.0
