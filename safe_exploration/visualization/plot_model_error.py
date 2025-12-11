@@ -246,7 +246,8 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_b
             dim_names=dim_names, error_names=error_names,
             save_path=os.path.join(save_dir, f'model_error_1d_u_dim{dim}.png'),
             x_train=x_train, y_train=y_train,
-            beta=beta_dim, proj_error=proj_dim
+            beta=beta_dim, proj_error=proj_dim,
+            plot_bounds=plot_bounds
         )
     
     # Plot 1D slice varying theta
@@ -260,7 +261,8 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_b
             dim_names=dim_names, error_names=error_names,
             save_path=os.path.join(save_dir, f'model_error_1d_theta_dim{dim}.png'),
             x_train=x_train, y_train=y_train,
-            beta=beta_dim, proj_error=proj_dim
+            beta=beta_dim, proj_error=proj_dim,
+            plot_bounds=plot_bounds
         )
     
     # Plot 1D slice varying dtheta
@@ -274,7 +276,8 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_b
             dim_names=dim_names, error_names=error_names,
             save_path=os.path.join(save_dir, f'model_error_1d_dtheta_dim{dim}.png'),
             x_train=x_train, y_train=y_train,
-            beta=beta_dim, proj_error=proj_dim
+            beta=beta_dim, proj_error=proj_dim,
+            plot_bounds=plot_bounds
         )
     
     # Plot theta vs u
@@ -324,7 +327,7 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_b
 
 def plot_1d_comparison(states, actions, true_error, gp_mean, gp_std,
                        state_dim, vary_dim, dim_names, error_names, save_path, x_train=None, y_train=None,
-                       beta=2.0, proj_error=0.0):
+                       beta=2.0, proj_error=0.0, plot_bounds=False):
     """Plot 1D comparison of true vs predicted model error"""
     
     fig, ax = plt.subplots(1, 1, figsize=(10, 6))
@@ -351,8 +354,7 @@ def plot_1d_comparison(states, actions, true_error, gp_mean, gp_std,
                     color='red', alpha=0.1, label='GP ±2σ')
     
     # Plot Confidence Bound (Safety Bound)
-    plot_bound = True
-    if plot_bound:
+    if plot_bounds:
         bound = beta * gp_std_sorted + proj_error
         ax.plot(x_sorted, gp_sorted + bound, 'k--', linewidth=1.5, label='Safety Bound', alpha=0.7)
         ax.plot(x_sorted, gp_sorted - bound, 'k--', linewidth=1.5, alpha=0.7)
