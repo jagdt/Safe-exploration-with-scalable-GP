@@ -132,18 +132,11 @@ def onestep_reachability(p_center, ssm, k_ff, l_mu, l_sigma,
         ub_mean, ub_sigma = compute_remainder_overapproximations(q_shape, k_fb, l_mu,
                                                                  l_sigma)
         # computing the box approximate to the lagrange remainder
-        Q_lagrange_mu = ellipsoid_from_rectangle(ub_mean)
-        p_lagrange_mu = MX.zeros((n_s, 1))
+        gp_bound = c_safety * sqrt(sigm_0) + safety_offset
+        Q_lagrange = ellipsoid_from_rectangle(ub_mean + ub_sigma + gp_bound)
+        p_lagrange = MX.zeros((n_s, 1))
 
-        b_sigma_eps = c_safety * (sqrt(sigm_0) + ub_sigma) + safety_offset
-        Q_lagrange_sigm = ellipsoid_from_rectangle(b_sigma_eps)
-        p_lagrange_sigm = MX.zeros((n_s, 1))
-
-        p_sum_lagrange, Q_sum_lagrange = sum_two_ellipsoids(p_lagrange_sigm,
-                                                            Q_lagrange_sigm,
-                                                            p_lagrange_mu,
-                                                            Q_lagrange_mu)
-        p_1, q_1 = sum_two_ellipsoids(p_sum_lagrange, Q_sum_lagrange, p_0, Q_0)
+        p_1, q_1 = sum_two_ellipsoids(p_lagrange, Q_lagrange, p_0, Q_0)
 
         return p_1, q_1, sigm_0
 
