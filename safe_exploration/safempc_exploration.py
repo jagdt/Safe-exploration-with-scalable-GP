@@ -118,7 +118,7 @@ class StaticSafeMPCExploration(ExplorationModule):
 
         p_0 = MX.sym("initial state", (self.n_s, 1))
 
-        k_fb_safe_ctrl = MX.sym("Feedback term", (self.n_u, self.n_s))
+        k_fb_safe_ctrl = MX.sym("Feedback term", (self.T - 1, self.n_u * self.n_s))
         p_all, q_all, gp_sigma_pred_safe_all = cas_multistep(p_0, u_0,
                                                              k_fb_safe_ctrl, k_ff_all,
                                                              self.gp.get_forward_model_casadi(True), self.l_mu,
@@ -202,7 +202,7 @@ class StaticSafeMPCExploration(ExplorationModule):
                 p_i = p_all[i, :].T
                 q_i = q_all[i, :].reshape((self.n_s, self.n_s))
                 k_ff_i = k_ff_all[i, :].reshape((self.n_u, 1))
-                k_fb_i = k_fb_ctrl
+                k_fb_i = cas_reshape(k_fb_ctrl[i, :], (self.n_u, self.n_s))
 
                 g_u_i, lbg_u_i, ubg_u_i = self._generate_control_constraint(k_ff_i, q_i,
                                                                             k_fb_i)
@@ -301,11 +301,12 @@ class StaticSafeMPCExploration(ExplorationModule):
                 for j in range(self.T - 1):
                     k_ff_0[j, :] = self.env.random_action()
 
-                params_0 = cas_reshape(k_fb_lqr, (-1, 1))
+                k_fb_0 = np.tile(k_fb_lqr.reshape(1, -1), (self.T - 1, 1))
+                params_0 = cas_reshape(k_fb_0, (-1, 1))
                 vars_0 = np.vstack((x_0, u_0, cas_reshape(k_ff_0, (-1, 1))))
             else:
                 u_0 = self.env.random_action()[:, None]
-                params_0 = []
+                params_0 = np.zeros((0, 1))
                 vars_0 = np.vstack((x_0, u_0))
 
             sol = self.solver(x0=vars_0, p=params_0, lbg=self.lbg, ubg=self.ubg)
