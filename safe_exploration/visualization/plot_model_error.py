@@ -351,11 +351,13 @@ def plot_1d_comparison(states, actions, true_error, gp_mean, gp_std,
                     color='red', alpha=0.1, label='GP ±2σ')
     
     # Plot Confidence Bound (Safety Bound)
-    bound = beta * gp_std_sorted + proj_error
-    ax.plot(x_sorted, gp_sorted + bound, 'k--', linewidth=1.5, label='Safety Bound', alpha=0.7)
-    ax.plot(x_sorted, gp_sorted - bound, 'k--', linewidth=1.5, alpha=0.7)
-    ax.fill_between(x_sorted,
-                    gp_sorted - bound,
+    plot_bound = True
+    if plot_bound:
+        bound = beta * gp_std_sorted + proj_error
+        ax.plot(x_sorted, gp_sorted + bound, 'k--', linewidth=1.5, label='Safety Bound', alpha=0.7)
+        ax.plot(x_sorted, gp_sorted - bound, 'k--', linewidth=1.5, alpha=0.7)
+        ax.fill_between(x_sorted,
+                        gp_sorted - bound,
                     gp_sorted + bound,
                     color='gray', alpha=0.2, label='Confidence Region')
     
