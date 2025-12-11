@@ -475,11 +475,13 @@ class InvertedPendulum(Environment):
 
     @property
     def l_mu(self) -> ndarray:
-        return np.array([0.05, .02])
+        # return np.array([0.05, .02])
+        return np.array([0.0, 0.0])
 
     @property
     def l_sigm(self) -> ndarray:
-        return np.array([0.05, .02])
+        # return np.array([0.05, .02])
+        return np.array([0.1, .02])
 
     def _reset(self):
         self.odesolver.set_initial_value(self.current_state, 0.0)
@@ -718,8 +720,8 @@ class InvertedPendulum(Environment):
         new_fig = False
         if ax is None:
             new_fig = True
-            fig = plt.figure()
-            ax = fig.add_subplot(111, aspect='equal')
+            fig = plt.figure(figsize=(12, 8))
+            ax = fig.add_subplot(111)
 
         if not (plot_safe_bounds or plot_obs):
             warnings.warn("plot_safety_bounds doesn't plot anything")
