@@ -1155,7 +1155,6 @@ class SimpleSafeMPC(SafeMPC):
                 )
 
         beta_attr = getattr(self.ssm, "beta_safety_per_dim", None)
-
         if beta_attr is not None:
             self.beta_safety = np.asarray(beta_attr, dtype=float).reshape(-1)
 

@@ -67,7 +67,7 @@ class DefaultConfigExploration(DefaultConfig):
     m = 25  # subset of data of size m for training
     kern_types = ["sum_lin_rbf", "sum_lin_rbf"]
     train_gp = True  # train the gp initially?
-    retrain_gp_interval = 10 # retrain the gp every n-th iteration, None to disable
+    retrain_gp_interval = 100 # retrain the gp every n-th iteration, None to disable
     gp_hyp = None
     Z = None
     lin_trafo_gp_input = None

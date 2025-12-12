@@ -18,7 +18,7 @@ class Config(DefaultConfigExploration):
 
     # safempc
     beta_safety = 2.0
-    n_safe = 1
+    n_safe = 2
     n_perf = 0
     r = 1
 
@@ -38,6 +38,8 @@ class Config(DefaultConfigExploration):
     # -- GP Bounds parameters
     # Whether to compute GP bounds. Otherwise uses constant ß.
     compute_bounds = True
+    # Whether to plot the GP bounds when plotting the model error and GP fit.
+    plot_bounds = False
     # Confidence level for the GP bounds
     delta = 0.05
     # Assumed RKHS norm of the true function
