@@ -23,6 +23,7 @@ class DefaultConfigExploration(DefaultConfig):
     env_options = dict()
     init_std = np.array([.05, .05])
     env_options["init_std"] = init_std
+    env_options["plant_noise"] = np.array([0.001, 0.0001]) ** 2
     solver_type = "safempc"
 
     c_max_probing_init = 3
