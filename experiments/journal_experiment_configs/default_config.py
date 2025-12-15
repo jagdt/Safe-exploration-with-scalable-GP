@@ -31,6 +31,7 @@ class DefaultConfig(object):
 
         conf_name = splitext(basename(file_path))[0]
 
+        self.save_path = None
         if self.save_results:
             if self.save_dir is None:
                 time_string = datetime.datetime.now().strftime("%d-%m-%y-%H-%M-%S")
