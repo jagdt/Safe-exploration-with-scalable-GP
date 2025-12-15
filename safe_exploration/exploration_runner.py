@@ -211,8 +211,8 @@ def run_exploration(conf, visualize=False):
                 )
             save_results(save_path, l_sigm_sum, l_sigm, l_inf_gain, l_z_all, l_x_next_obs_all, l_x_next_pred,
                          x_next_prior, exploration_module.safempc.ssm, safety_all, x_train_init)
-
-        plot_model_error_comparison(exploration_module.safempc, exploration_module.env, save_dir=save_path, n_points=50, plot_bounds=conf.plot_bounds)
+        if visualize:
+            plot_model_error_comparison(exploration_module.safempc, exploration_module.env, save_dir=save_path, n_points=50, plot_bounds=conf.plot_bounds)
 
 def save_results(save_path, sigm_sum, sigm, inf_gain, z_all, x_next_obs_all,
                  x_next_pred, x_next_prior, gp, x_train_0, safety_all=None):
