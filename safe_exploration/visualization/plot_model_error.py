@@ -66,6 +66,8 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_b
     
     if save_dir is None:
         save_dir = './model_error_plots'
+    else:
+        save_dir = os.path.join(save_dir, 'model_error_plots')
     os.makedirs(save_dir, exist_ok=True)
     
     print("=" * 60)
