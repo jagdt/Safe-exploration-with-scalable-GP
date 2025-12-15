@@ -880,6 +880,47 @@ class NumpyGPModel(KernelGPModel):
 
         return NumpyGPBounds(self, delta=delta, rkhs_norm=rkhs_norm, R_subgaussian=R_subgaussian)
 
+    def estimate_true_rkhs_norm(self, X=None, y=None):
+        """Estimate the RKHS norm of the true function in the current kernel RKHS.
+        
+        Parameters
+        ----------
+        X : ndarray, optional
+            Pre-collected state-action samples [N x (n_s + n_u)]
+        y : ndarray, optional
+            True next states corresponding to X [N x n_s]
+            
+        Returns
+        -------
+        rkhs_norms : ndarray [n_s_out]
+            Estimated RKHS norm for each output dimension.
+        """
+        if not self.gp_trained:
+            raise ValueError("GP must be trained before estimating RKHS norm.")
+        if X is None or y is None:
+            raise ValueError("X and y must be provided for RKHS norm estimation.")
+
+        norms = np.zeros(self.n_s_out)
+        
+        for i in range(self.n_s_out):
+            K = self.compute_kernel(X, X, self.kern_types[i], self.hyp[i])
+
+            # Regularization
+            lambda_reg = 1e-6
+            K_lambda = K + lambda_reg * np.eye(K.shape[0])
+            
+            y_i = y[:, i]
+            
+            try:
+                L = np.linalg.cholesky(K_lambda)
+                alpha = np.linalg.solve(L.T, np.linalg.solve(L, y_i))
+
+                norms[i] = np.sqrt(alpha.T @ K @ alpha)
+            except np.linalg.LinAlgError:
+                warnings.warn(f"Failed to estimate RKHS norm for dim {i} (Cholesky failed)")
+                norms[i] = np.nan
+        return norms
+
     def compute_bounds(self, delta=0.05, rkhs_norm=1.0, R_subgaussian=1.0):
         """Compute and store β-values derived from the current GP posterior."""
 

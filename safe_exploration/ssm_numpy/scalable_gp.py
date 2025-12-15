@@ -1192,3 +1192,47 @@ class ScalableGPModel(GPModelBase):
         gp_dict["noise_var"] = self.noise_var
         
         return gp_dict
+
+    def estimate_true_rkhs_norm(self, X=None, y=None):
+        """Estimate the RKHS norm of the true function in the current feature space RKHS.
+        
+        Parameters
+        ----------
+        X : ndarray, optional
+            Pre-collected state-action samples [N x (n_s + n_u)]
+        y : ndarray, optional
+            True next states corresponding to X [N x n_s]
+            
+        Returns
+        -------
+        rkhs_norms : ndarray [n_s_out]
+            Estimated RKHS norm for each output dimension.
+        """
+        if not self.gp_trained:
+            raise ValueError("GP must be trained before estimating RKHS norm.")
+        if X is None or y is None:
+            raise ValueError("X and y must be provided for RKHS norm estimation.")
+
+        norms = np.zeros(self.n_s_out)
+        
+        for i in range(self.n_s_out):
+            Phi = self._get_features(X, i)
+            
+            A = Phi.T @ Phi
+            b = Phi.T @ y[:, i]
+
+            # Regularization
+            lambda_reg = 1e-10
+            A_lambda = A + lambda_reg * np.eye(A.shape[0])
+            
+            try:
+                L = np.linalg.cholesky(A_lambda)
+                w = np.linalg.solve(L.T, np.linalg.solve(L, b))
+                
+                norms[i] = np.sqrt(np.sum(w**2))
+                
+            except np.linalg.LinAlgError:
+                warnings.warn(f"Failed to estimate RKHS norm for dim {i} (Cholesky failed)")
+                norms[i] = np.nan
+        
+        return norms
