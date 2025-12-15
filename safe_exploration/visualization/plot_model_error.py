@@ -59,16 +59,16 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_b
     safempc : SimpleSafeMPC
         The MPC controller with trained GP
     save_dir : str, optional
-        Directory to save plots
+        Directory to save plots. If None, plots are not saved.
     n_points : int
         Number of points per dimension for grid
+    plot_bounds : bool
+        Whether to plot confidence bounds
     """
     
-    if save_dir is None:
-        save_dir = './model_error_plots'
-    else:
+    if save_dir is not None:
         save_dir = os.path.join(save_dir, 'model_error_plots')
-    os.makedirs(save_dir, exist_ok=True)
+        os.makedirs(save_dir, exist_ok=True)
     
     print("=" * 60)
     print("Model Error Visualization")
@@ -237,16 +237,20 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_b
             
     print(f"Using beta={beta}, projection_error={proj_error}")
 
+    save_path = None
+
     # Plot 1D slice varying u
     for dim in range(safempc.n_s):
         beta_dim = get_param_for_dim(beta, dim, safempc.n_s)
         proj_dim = get_param_for_dim(proj_error, dim, safempc.n_s)
         
+        if save_dir is not None:
+            save_path = os.path.join(save_dir, f'model_error_1d_u_dim{dim}.png')
         plot_1d_comparison(
             states_1d_u, actions_1d_u, true_error_1d_u, gp_mean_1d_u, gp_std_1d_u,
             state_dim=dim, vary_dim=2,  # u is at index 2
             dim_names=dim_names, error_names=error_names,
-            save_path=os.path.join(save_dir, f'model_error_1d_u_dim{dim}.png'),
+            save_path=save_path,
             x_train=x_train, y_train=y_train,
             beta=beta_dim, proj_error=proj_dim,
             plot_bounds=plot_bounds
@@ -257,11 +261,13 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_b
         beta_dim = get_param_for_dim(beta, dim, safempc.n_s)
         proj_dim = get_param_for_dim(proj_error, dim, safempc.n_s)
         
+        if save_dir is not None:
+            save_path = os.path.join(save_dir, f'model_error_1d_theta_dim{dim}.png')
         plot_1d_comparison(
             states_1d_theta, actions_1d_theta, true_error_1d_theta, gp_mean_1d_theta, gp_std_1d_theta,
             state_dim=dim, vary_dim=1,  # theta is at index 1
             dim_names=dim_names, error_names=error_names,
-            save_path=os.path.join(save_dir, f'model_error_1d_theta_dim{dim}.png'),
+            save_path=save_path,
             x_train=x_train, y_train=y_train,
             beta=beta_dim, proj_error=proj_dim,
             plot_bounds=plot_bounds
@@ -272,11 +278,13 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_b
         beta_dim = get_param_for_dim(beta, dim, safempc.n_s)
         proj_dim = get_param_for_dim(proj_error, dim, safempc.n_s)
         
+        if save_dir is not None:
+            save_path = os.path.join(save_dir, f'model_error_1d_dtheta_dim{dim}.png')
         plot_1d_comparison(
             states_1d_dtheta, actions_1d_dtheta, true_error_1d_dtheta, gp_mean_1d_dtheta, gp_std_1d_dtheta,
             state_dim=dim, vary_dim=0,  # dtheta is at index 0
             dim_names=dim_names, error_names=error_names,
-            save_path=os.path.join(save_dir, f'model_error_1d_dtheta_dim{dim}.png'),
+            save_path=save_path,
             x_train=x_train, y_train=y_train,
             beta=beta_dim, proj_error=proj_dim,
             plot_bounds=plot_bounds
@@ -284,6 +292,8 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_b
     
     # Plot theta vs u
     for dim in range(safempc.n_s):
+        if save_dir is not None:
+            save_path = os.path.join(save_dir, f'model_error_2d_theta_u_dim{dim}.png')
         plot_2d_comparison(
             states_2d_theta_u, actions_2d_theta_u, true_error_2d_theta_u, 
             gp_mean_2d_theta_u, gp_std_2d_theta_u,
@@ -291,12 +301,14 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_b
             vary_dims=(1, safempc.n_s),
             n_points=n_points,
             dim_names=dim_names, error_names=error_names,
-            save_path=os.path.join(save_dir, f'model_error_2d_theta_u_dim{dim}.png'),
+            save_path=save_path,
             x_train=x_train, y_train=y_train
         )
     
     # Plot dtheta vs u
     for dim in range(safempc.n_s):
+        if save_dir is not None:
+            save_path = os.path.join(save_dir, f'model_error_2d_dtheta_u_dim{dim}.png')
         plot_2d_comparison(
             states_2d_dtheta_u, actions_2d_dtheta_u, true_error_2d_dtheta_u, 
             gp_mean_2d_dtheta_u, gp_std_2d_dtheta_u,
@@ -304,7 +316,7 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_b
             vary_dims=(0, safempc.n_s),
             n_points=n_points,
             dim_names=dim_names, error_names=error_names,
-            save_path=os.path.join(save_dir, f'model_error_2d_dtheta_u_dim{dim}.png'),
+            save_path=save_path,
             x_train=x_train, y_train=y_train
         )
 
