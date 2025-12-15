@@ -269,7 +269,7 @@ class NumpyGPBounds(GPBounds):
         """
         beta = self.gp.beta[:, dim_idx]
         K = self._gram_matrix(dim_idx)
-        rkhs_norm = beta.T @ K @ beta
+        rkhs_norm = np.sqrt(beta.T @ K @ beta)
         print(f"Computed RKHS norm for dim {dim_idx}: {rkhs_norm}")
         return rkhs_norm
 
@@ -483,6 +483,6 @@ class ScalableGPBounds(GPBounds):
             RKHS norm of the posterior mean for the specified output dimension.
         """
         w = self.gp.posterior_mean_coeffs[dim_idx]
-        rkhs_norm = w.T @ w
+        rkhs_norm = np.sqrt(w.T @ w)
         print(f"Computed RKHS norm for dim {dim_idx}: {rkhs_norm}")
         return rkhs_norm
