@@ -43,7 +43,7 @@ class Config(DefaultConfigExploration):
     # Confidence level for the GP bounds
     delta = 0.05
     # Assumed RKHS norm of the true function
-    rkhs_norm = None # None to compute automatically from posterior mean
+    rkhs_norm = 15.0
     # Subgaussian noise bound
     R_subgaussian = [0.001, 0.0001] # Match the noise of the environment
     # Model mismatch offset
