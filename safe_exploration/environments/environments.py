@@ -738,8 +738,10 @@ class InvertedPendulum(Environment):
 
             # ax.add_patch(mpatch.Polygon(x_polygon,fill = False))
         if new_fig:
-            ax.set_xlim(-self.max_dtheta*1.1, self.max_dtheta*1.1)
-            ax.set_ylim(-self.max_rad*1.1, self.max_rad*1.1)
+            dtheta_norm = self.max_dtheta * self.inv_norm[0][0]
+            theta_norm = self.max_rad * self.inv_norm[0][1]
+            ax.set_xlim(-dtheta_norm*1.1, dtheta_norm*1.1)
+            ax.set_ylim(-theta_norm*1.1, theta_norm*1.1)
             ax.set_xlabel('dθ (angular velocity)')
             ax.set_ylabel('θ (angle)')
             ax.legend()
