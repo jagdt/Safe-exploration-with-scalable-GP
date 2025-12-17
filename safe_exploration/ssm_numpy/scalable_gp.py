@@ -25,7 +25,7 @@ class ScalableGPModel(GPModelBase):
     
     def __init__(self, n_s_out, n_s_in, n_u, X=None, y=None, kern_types=None,
                  hyp=None, train=False, n_frequencies=25, periods=10.0, domain_lengths=None, lengthscale_multiple=None,
-                 n_restarts=1, use_global_opt_first=True):
+                 n_restarts=2, use_global_opt_first=True):
         """Initialize Scalable GP Model
         
         Parameters
@@ -148,11 +148,14 @@ class ScalableGPModel(GPModelBase):
         
         for dim_idx in range(self.n_s_out):
             print("Old periods for dim", dim_idx, ":", self.periods[dim_idx])
-            if self.kern_types[dim_idx] != "rbf":
+            if self.kern_types[dim_idx] == "rbf":
+                decay_rates = self.hyp[dim_idx]["exponential_decay_rates"]
+            elif self.kern_types[dim_idx] == "sum_lin_rbf":
+                decay_rates = self.hyp[dim_idx]["rbf.exponential_decay_rates"]
+            else:
                 raise NotImplementedError(
-                    "Adjusting periods based on lengthscales only implemented for 'rbf' kernel."
+                    "Adjusting periods based on lengthscales only implemented for 'rbf' and 'sum_lin_rbf' kernels."
                 )
-            decay_rates = self.hyp[dim_idx]["exponential_decay_rates"]
             lengthscales = np.sqrt(decay_rates * self.periods[dim_idx]**2 / (2 * np.pi**2))
             T_target = lengthscale_multiple * lengthscales + domain_lengths
             T_damped = (1 - dampening_alpha) * self.periods[dim_idx] + dampening_alpha * T_target
@@ -357,7 +360,7 @@ class ScalableGPModel(GPModelBase):
         
         if opt_hyp:
             if self.hyp_optimized and self.domain_lengths is not None and self.lengthscale_multiple is not None:
-                # self._set_periods_based_on_domain_and_lengthscales()
+                self._set_periods_based_on_domain_and_lengthscales()
                 pass
             for i in range(self.n_s_out):
                 self._optimize_hyperparameters(X, y[:, i], i)
