@@ -95,7 +95,7 @@ def onestep_reachability(p_center, ssm, k_ff, l_mu, l_sigma,
 
         x_bar = mtimes(t_z_gp, p_center)
 
-        mu_new, pred_var, _ = ssm(x_bar.T, u_p.T)
+        mu_new, pred_var = ssm(x_bar.T, u_p.T)
 
         p_lin = mtimes(a, p_center) + mtimes(b, u_p)
         p_1 = p_lin + mu_new
@@ -114,16 +114,10 @@ def onestep_reachability(p_center, ssm, k_ff, l_mu, l_sigma,
 
         # compute the zero and first order matrices
 
-        mu_0, sigm_0, jac_mu = ssm(x_bar.T, u_bar.T)
-
-        n_x_in = np.shape(t_z_gp)[0]
-
-        a_mu = jac_mu[:, :n_x_in]
-        a_mu = mtimes(a_mu, t_z_gp)
-        b_mu = jac_mu[:, n_x_in:]
+        mu_0, sigm_0 = ssm(x_bar.T, u_bar.T)
 
         # reach set of the affine terms
-        H = a + a_mu + mtimes(b_mu + b, k_fb)
+        H = a + mtimes(b, k_fb)
 
         p_0 = mu_0 + mtimes(a, p_center) + mtimes(b, u_bar)
 

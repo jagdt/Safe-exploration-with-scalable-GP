@@ -85,7 +85,7 @@ class SimpleSafeMPC(SafeMPC):
         """
         self.rhc = rhc
         self.ssm = ssm
-        self.ssm_forward = ssm.get_forward_model_casadi(True)
+        self.ssm_forward = ssm.get_forward_model_casadi(False)
         self.n_safe = n_safe
         self.n_fail = self.n_safe  # initialize s.t. there is no backup strategy
         self.n_s = self.ssm.num_states
@@ -1106,7 +1106,7 @@ class SimpleSafeMPC(SafeMPC):
         x = np.hstack((x_trafo, x_u))
 
         self.ssm.update_model(x, y - y_prior, opt_hyp, replace_old)
-        self.ssm_forward = self.ssm.get_forward_model_casadi(True)
+        self.ssm_forward = self.ssm.get_forward_model_casadi(False)
 
         if reinitialize_solver:
             self.init_solver(self.cost_func)

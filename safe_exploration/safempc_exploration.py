@@ -121,7 +121,7 @@ class StaticSafeMPCExploration(ExplorationModule):
         k_fb_safe_ctrl = MX.sym("Feedback term", (self.T - 1, self.n_u * self.n_s))
         p_all, q_all, gp_sigma_pred_safe_all = cas_multistep(p_0, u_0,
                                                              k_fb_safe_ctrl, k_ff_all,
-                                                             self.gp.get_forward_model_casadi(True), self.l_mu,
+                                                             self.gp.get_forward_model_casadi(False), self.l_mu,
                                                              self.l_sigma,
                                                              self.beta_safety, self.a,
                                                              self.b,
@@ -151,12 +151,12 @@ class StaticSafeMPCExploration(ExplorationModule):
         prob = {'f': cost, 'x': opt_vars, 'p': opt_params, 'g': g}
 
         opt = {'error_on_fail': False,
-               'ipopt': {'hessian_approximation': 'exact', "max_iter": 120,
-                         "expect_infeasible_problem": "no", \
-                         'acceptable_tol': 1e-4, "acceptable_constr_viol_tol": 1e-5,
-                         "bound_frac": 0.5, "start_with_resto": "no",
-                         "required_infeasibility_reduction": 0.85,
-                         "acceptable_iter": 8}}  # ipopt
+                'ipopt': {'hessian_approximation': 'limited-memory', "max_iter": 120,
+                        "expect_infeasible_problem": "no",
+                        'acceptable_tol': 1e-4, "acceptable_constr_viol_tol": 1e-5,
+                        "bound_frac": 0.5, "start_with_resto": "no",
+                        "required_infeasibility_reduction": 0.85,
+                        "acceptable_iter": 8}}
         # opt = {'qpsol':'qpoases','max_iter':120,'hessian_approximation':'exact'}#,"c1":5e-4} #sqpmethod #,'hessian_approximation':'limited-memory'
         # opt = {'max_iter':120,'qpsol':'qpoases'}
 
