@@ -324,7 +324,7 @@ class ScalableGPBounds(GPBounds):
         """
         if projection_error is None:
             return np.array([
-                self.compute_projection_error(dim_idx) 
+                self.compute_theoretical_projection_error(dim_idx) 
                 for dim_idx in range(self.gp.n_s_out)
             ])
         else:
@@ -390,6 +390,27 @@ class ScalableGPBounds(GPBounds):
         projection_error = self.rkhs_norms[dim_idx] * np.sqrt(2 * C * total_tail_mass)
 
         print(f"Computed projection error for dim {dim_idx}: {projection_error}")
+        
+        return projection_error
+
+    def compute_theoretical_projection_error(self, dim_idx):
+        """Compute theoretical projection error term for scalable GP for one output dimension.
+        
+        Parameters
+        ----------
+        dim_idx : int
+            Output dimension index.
+        
+        Returns
+        -------
+        float
+            Theoretical projection error term for the specified output dimension.
+        """
+        lambdas = self.gp._compute_lambdas(dim_idx)
+        lambda_sum = np.sum(lambdas)
+        projection_error = self.rkhs_norms[dim_idx] * np.sqrt(2 * lambda_sum)
+
+        print(f"Computed theoretical projection error for dim {dim_idx}: {projection_error}")
         
         return projection_error
 
