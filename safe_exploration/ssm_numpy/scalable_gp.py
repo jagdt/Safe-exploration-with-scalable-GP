@@ -182,24 +182,40 @@ class ScalableGPModel(GPModelBase):
                 )
         self.n_frequencies_per_dim = n_frequencies_per_dim
 
-        self.omegas = []
+        self.omegas = [None] * self.n_s_out
         for dim_idx in range(self.n_s_out):
-            period_vector = self.periods[dim_idx]
-            freq_grids = []
-            for i, E_d in enumerate(n_frequencies_per_dim):
-                period_val = period_vector[i]
-                if period_val <= 0:
-                    raise ValueError("period values must be positive")
-                freq_grids.append(np.arange(0, E_d) / period_val)
+            self.omegas[dim_idx] = self._create_frequency_grid(n_frequencies_per_dim, self.periods[dim_idx])
 
-            mesh = np.meshgrid(*freq_grids, indexing='ij')
+    def _create_frequency_grid(self, n_frequencies_per_dim, period_vector):
+        """Create grid of frequency vectors ω for spectral approximation
+        
+        Parameters
+        ----------
+        n_frequencies_per_dim : list[int]
+            Number of frequencies per input dimension
+        period_vector : ndarray [input_dim]
+            Periods for each input dimension
+        
+        Returns
+        -------
+        omegas : ndarray [E × input_dim]
+            Frequency vectors for Fourier features
+        """
+        freq_grids = []
+        for i, E_d in enumerate(n_frequencies_per_dim):
+            period_val = period_vector[i]
+            if period_val <= 0:
+                raise ValueError("period values must be positive")
+            freq_grids.append(np.arange(0, E_d) / period_val)
 
-            omega_list = []
-            for idx in np.ndindex(*[len(g) for g in freq_grids]):
-                omega = np.array([mesh[d][idx] for d in range(self.input_dim)])
-                omega_list.append(omega)
+        mesh = np.meshgrid(*freq_grids, indexing='ij')
 
-            self.omegas.append(np.array(omega_list))
+        omega_list = []
+        for idx in np.ndindex(*[len(g) for g in freq_grids]):
+            omega = np.array([mesh[d][idx] for d in range(self.input_dim)])
+            omega_list.append(omega)
+
+        return np.array(omega_list)
   
     def _init_kernel_function(self, kern_types=None, hyp=None):
         """Initialize kernel functions based on name
@@ -243,7 +259,7 @@ class ScalableGPModel(GPModelBase):
                 hyp_i["exponential_decay_rates"] = 1.0 * np.ones(self.input_dim)
             elif kern_types[i] == "sum_lin_rbf":
                 hyp_i["rbf.factor"] = 0.01
-                hyp_i["rbf.exponential_decay_rates"] = 1.0 * np.ones(self.input_dim)
+                hyp_i["rbf.exponential_decay_rates"] = 10.0 * np.ones(self.input_dim)
                 hyp_i["linear.variances"] = 0.01 * np.ones(self.input_dim)
             elif kern_types[i] == "polynomial_decay":
                 raise NotImplementedError("Polynomial decay not implemented yet")
@@ -255,7 +271,7 @@ class ScalableGPModel(GPModelBase):
         
         return hyp
     
-    def _compute_lambdas(self, dim_idx):
+    def _compute_lambdas(self, dim_idx, Q=None):
         """Compute spectral decay coefficients (lambdas)
         
         For RBF kernel, computes λ = C * exp(-0.5 * ω^T A ω) where:
@@ -269,13 +285,19 @@ class ScalableGPModel(GPModelBase):
         ----------
         dim_idx : int
             Output dimension index
+        Q : int, optional
+            If provided, computes lambdas using first Q frequencies for theoretical projection error.
         
         Returns
         -------
         lambdas : ndarray
             Spectral decay coefficients (for sum_lin_rbf, includes linear variances at end)
         """
-        omegas = self.omegas[dim_idx]
+        if Q is not None:
+            n_frequencies_per_dim = [Q] * self.input_dim
+            omegas = self._create_frequency_grid(n_frequencies_per_dim, self.periods[dim_idx])
+        else:
+            omegas = self.omegas[dim_idx]
         E = omegas.shape[0]
         lambdas = np.zeros(E)
         
@@ -360,13 +382,14 @@ class ScalableGPModel(GPModelBase):
         
         if opt_hyp:
             if self.hyp_optimized and self.domain_lengths is not None and self.lengthscale_multiple is not None:
-                self._set_periods_based_on_domain_and_lengthscales()
+                # self._set_periods_based_on_domain_and_lengthscales()
                 pass
             for i in range(self.n_s_out):
                 self._optimize_hyperparameters(X, y[:, i], i)
             self.hyp_optimized = True
         
         for i in range(self.n_s_out):
+            self.lambdas[i] = self._compute_lambdas(i)
             self._compute_posterior_params(X, y[:, i], i)
         self.gp_trained = True
     
@@ -932,7 +955,7 @@ class ScalableGPModel(GPModelBase):
             x_new = np.vstack((self.x_train, x))
             y_new = np.vstack((self.y_train, y))
         
-        self.train(x_new, y_new, opt_hyp=opt_hyp)
+        self.train(x_new, y_new, opt_hyp=False)
     
     def sample_from_gp(self, inp, size=10):
         """Sample from GP predictive distribution
