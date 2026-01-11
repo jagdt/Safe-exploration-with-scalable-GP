@@ -211,12 +211,69 @@ def compute_metrics(y_true, y_pred, y_std):
     }
 
 
+def compute_bound_metrics(y_true, y_pred, y_std, beta, projection_error=0.0):
+    """Compute metrics for GP confidence bounds.
+    
+    Parameters
+    ----------
+    y_true : ndarray [N × 1]
+        True values
+    y_pred : ndarray [N × 1]
+        Predicted mean
+    y_std : ndarray [N × 1]
+        Predicted standard deviation
+    beta : float or ndarray [1]
+        Confidence bound scaling factor
+    projection_error : float or ndarray [1]
+        Projection error offset (for scalable GP)
+        
+    Returns
+    -------
+    metrics : dict
+        Dictionary of bound metrics
+    """
+    y_true = y_true.ravel()
+    y_pred = y_pred.ravel()
+    y_std = y_std.ravel()
+    
+    if isinstance(beta, np.ndarray):
+        beta = beta[0]
+    if isinstance(projection_error, np.ndarray):
+        projection_error = projection_error[0]
+    
+    # Compute upper and lower confidence bounds
+    # UCB/LCB = μ ± √β * σ + ε_proj
+    conf_width = np.sqrt(beta) * y_std + projection_error
+    upper_bound = y_pred + conf_width
+    lower_bound = y_pred - conf_width
+    
+    # Coverage: fraction of test points within bounds
+    coverage = np.mean((y_true >= lower_bound) & (y_true <= upper_bound))
+    
+    # Average bound width
+    avg_width = np.mean(2 * conf_width)
+    
+    # Max violation (how far outside bounds)
+    violations_upper = np.maximum(0, y_true - upper_bound)
+    violations_lower = np.maximum(0, lower_bound - y_true)
+    max_violation = np.max(violations_upper + violations_lower)
+    
+    return {
+        'beta': beta,
+        'projection_error': projection_error,
+        'coverage': coverage,
+        'avg_width': avg_width,
+        'max_violation': max_violation,
+    }
+
+
 # =============================================================================
 # GP Fitting
 # =============================================================================
 
 def fit_and_evaluate(gp_class, X_train, y_train, X_test, y_test_true, 
-                     kern_type='rbf', opt_hyp=True, **gp_kwargs):
+                     kern_type='rbf', opt_hyp=True, compute_bounds=False,
+                     delta=0.05, rkhs_norm=1.0, R_subgaussian=1.0, **gp_kwargs):
     """Fit a GP and evaluate on test data.
     
     Parameters
@@ -231,6 +288,14 @@ def fit_and_evaluate(gp_class, X_train, y_train, X_test, y_test_true,
         Kernel type
     opt_hyp : bool
         Whether to optimize hyperparameters
+    compute_bounds : bool
+        Whether to compute and evaluate confidence bounds
+    delta : float
+        Confidence parameter for bounds
+    rkhs_norm : float
+        RKHS norm bound
+    R_subgaussian : float
+        Sub-Gaussian noise parameter
     **gp_kwargs : dict
         Additional arguments for GP constructor
         
@@ -259,6 +324,18 @@ def fit_and_evaluate(gp_class, X_train, y_train, X_test, y_test_true,
     gp.train(X_train, y_train, opt_hyp=opt_hyp)
     train_time = time() - t_start
     
+    # Compute bounds if requested
+    if compute_bounds:
+        if gp_class.__name__ == 'ScalableGPModel':
+            gp.compute_bounds(delta=delta, rkhs_norm=rkhs_norm, 
+                             R_subgaussian=R_subgaussian, projection_error=None)
+            projection_error = gp.projection_error_per_dim[0] if gp.projection_error_per_dim is not None else 0.0
+        else:
+            gp.compute_bounds(delta=delta, rkhs_norm=rkhs_norm, 
+                             R_subgaussian=R_subgaussian)
+            projection_error = 0.0
+        beta = gp.beta_safety_per_dim[0]
+    
     # Predict
     t_start = time()
     y_pred, y_std = gp.predict(X_test)
@@ -268,6 +345,11 @@ def fit_and_evaluate(gp_class, X_train, y_train, X_test, y_test_true,
     metrics = compute_metrics(y_test_true, y_pred, y_std)
     metrics['train_time'] = train_time
     metrics['predict_time'] = predict_time
+    
+    # Add bound metrics if computed
+    if compute_bounds:
+        bound_metrics = compute_bound_metrics(y_test_true, y_pred, y_std, beta, projection_error)
+        metrics.update(bound_metrics)
     
     return metrics, y_pred, y_std, gp
 
@@ -327,9 +409,18 @@ def plot_2d_comparison(X_train, y_train, X_test, y_test_true,
     X2 = X_test[:, 1].reshape(n_per_dim, n_per_dim)
     Y_true = y_test_true.reshape(n_per_dim, n_per_dim)
     
+    # Compute shared color limits for predictions and uncertainties
+    all_preds = [res['y_pred'].reshape(n_per_dim, n_per_dim) for res in results.values()]
+    all_stds = [res['y_std'].reshape(n_per_dim, n_per_dim) for res in results.values()]
+    
+    pred_vmin = min(Y_true.min(), min(p.min() for p in all_preds))
+    pred_vmax = max(Y_true.max(), max(p.max() for p in all_preds))
+    std_vmin = min(s.min() for s in all_stds)
+    std_vmax = max(s.max() for s in all_stds)
+    
     # True function
     ax = axes[0, 0]
-    c = ax.contourf(X1, X2, Y_true, levels=20, cmap='viridis')
+    c = ax.contourf(X1, X2, Y_true, levels=20, cmap='viridis', vmin=pred_vmin, vmax=pred_vmax)
     ax.scatter(X_train[:, 0], X_train[:, 1], c='red', s=20, marker='x')
     ax.set_title('True Function')
     ax.set_xlabel('x₁')
@@ -342,7 +433,7 @@ def plot_2d_comparison(X_train, y_train, X_test, y_test_true,
         
         # Prediction
         ax = axes[0, col]
-        c = ax.contourf(X1, X2, y_pred, levels=20, cmap='viridis')
+        c = ax.contourf(X1, X2, y_pred, levels=20, cmap='viridis', vmin=pred_vmin, vmax=pred_vmax)
         ax.scatter(X_train[:, 0], X_train[:, 1], c='red', s=20, marker='x')
         ax.set_title(f'{model_name} Prediction\n'
                     f'RMSE={res["metrics"]["rmse"]:.4f}')
@@ -352,7 +443,7 @@ def plot_2d_comparison(X_train, y_train, X_test, y_test_true,
         
         # Uncertainty
         ax = axes[1, col]
-        c = ax.contourf(X1, X2, y_std, levels=20, cmap='Reds')
+        c = ax.contourf(X1, X2, y_std, levels=20, cmap='Reds', vmin=std_vmin, vmax=std_vmax)
         ax.scatter(X_train[:, 0], X_train[:, 1], c='blue', s=20, marker='x')
         ax.set_title(f'{model_name} Uncertainty (σ)')
         ax.set_xlabel('x₁')
@@ -363,12 +454,18 @@ def plot_2d_comparison(X_train, y_train, X_test, y_test_true,
     ax = axes[1, 0]
     ax.axis('off')  # Empty plot in bottom-left corner
     
+    # Calculate common error limit
+    max_err = 0
+    for res in results.values():
+        err = np.max(np.abs(res['y_pred'] - y_test_true))
+        max_err = max(max_err, err)
+    
     # Add error row
     fig2, axes2 = plt.subplots(1, 2, figsize=(10, 4))
     for col, (model_name, res) in enumerate(results.items()):
         ax = axes2[col]
         error = np.abs(res['y_pred'] - y_test_true).reshape(n_per_dim, n_per_dim)
-        c = ax.contourf(X1, X2, error, levels=20, cmap='Reds')
+        c = ax.contourf(X1, X2, error, levels=20, cmap='Reds', vmin=0, vmax=max_err)
         ax.scatter(X_train[:, 0], X_train[:, 1], c='blue', s=20, marker='x')
         ax.set_title(f'{model_name} |Error|')
         ax.set_xlabel('x₁')
@@ -389,24 +486,31 @@ def plot_2d_comparison(X_train, y_train, X_test, y_test_true,
     plt.show()
 
 
-def print_results_table(all_results):
+def print_results_table(all_results, show_bounds=False):
     """Print results as a formatted table."""
-    print("\n" + "=" * 100)
+    print("\n" + "=" * 120)
     print("RESULTS SUMMARY")
-    print("=" * 100)
+    print("=" * 120)
     
-    header = f"{'Function':<20} {'Model':<15} {'RMSE':<10} {'R²':<10} {'MAE':<10} {'NLPD':<10} {'2σ Calib':<10} {'Train(s)':<10}"
+    if show_bounds:
+        header = f"{'Function':<20} {'Model':<15} {'RMSE':<10} {'R²':<10} {'β':<10} {'Proj.Err':<12} {'Coverage':<10} {'BndWidth':<10} {'Train(s)':<10}"
+    else:
+        header = f"{'Function':<20} {'Model':<15} {'RMSE':<10} {'R²':<10} {'MAE':<10} {'NLPD':<10} {'2σ Calib':<10} {'Train(s)':<10}"
     print(header)
-    print("-" * 100)
+    print("-" * 120)
     
     for (dim, func_name), results in all_results.items():
         func_label = f"{dim}D-{func_name}"
         for model_name, res in results.items():
             m = res['metrics']
-            row = f"{func_label:<20} {model_name:<15} {m['rmse']:<10.4f} {m['r2']:<10.4f} {m['mae']:<10.4f} {m['nlpd']:<10.4f} {m['within_2sigma']:<10.2%} {m['train_time']:<10.3f}"
+            if show_bounds and 'beta' in m:
+                proj_err = m.get('projection_error', 0.0)
+                row = f"{func_label:<20} {model_name:<15} {m['rmse']:<10.4f} {m['r2']:<10.4f} {m['beta']:<10.2f} {proj_err:<12.6f} {m['coverage']:<10.1%} {m['avg_width']:<10.4f} {m['train_time']:<10.3f}"
+            else:
+                row = f"{func_label:<20} {model_name:<15} {m['rmse']:<10.4f} {m['r2']:<10.4f} {m['mae']:<10.4f} {m['nlpd']:<10.4f} {m['within_2sigma']:<10.2%} {m['train_time']:<10.3f}"
             print(row)
             func_label = ""  # Only print once per function
-        print("-" * 100)
+        print("-" * 120)
 
 
 # =============================================================================
@@ -415,7 +519,9 @@ def print_results_table(all_results):
 
 def run_tests(functions=None, dims=None, n_train=50, n_test=200, 
               noise_std=0.01, kern_type='rbf', opt_hyp=True,
-              n_frequencies=15, period=3.0, visualize=True, save_dir=None):
+              n_frequencies=15, period=3.0, compute_bounds=False,
+              delta=0.05, rkhs_norm=1.0, R_subgaussian=1.0,
+              visualize=True, save_dir=None):
     """Run GP fitting tests.
     
     Parameters
@@ -438,6 +544,14 @@ def run_tests(functions=None, dims=None, n_train=50, n_test=200,
         Number of frequencies for ScalableGP
     period : float
         Period for ScalableGP
+    compute_bounds : bool
+        Whether to compute and evaluate confidence bounds
+    delta : float
+        Confidence parameter for bounds
+    rkhs_norm : float
+        RKHS norm bound
+    R_subgaussian : float
+        Sub-Gaussian noise parameter
     visualize : bool
         Whether to create plots
     save_dir : str, optional
@@ -484,7 +598,9 @@ def run_tests(functions=None, dims=None, n_train=50, n_test=200,
             try:
                 metrics, y_pred, y_std, gp = fit_and_evaluate(
                     NumpyGPModel, X_train, y_train, X_test, y_test_true,
-                    kern_type=kern_type, opt_hyp=opt_hyp
+                    kern_type=kern_type, opt_hyp=opt_hyp,
+                    compute_bounds=compute_bounds, delta=delta,
+                    rkhs_norm=rkhs_norm, R_subgaussian=R_subgaussian
                 )
                 results['NumpyGP'] = {
                     'metrics': metrics,
@@ -493,6 +609,9 @@ def run_tests(functions=None, dims=None, n_train=50, n_test=200,
                 }
                 print(f"  RMSE: {metrics['rmse']:.4f}")
                 print(f"  R²: {metrics['r2']:.4f}")
+                if compute_bounds and 'beta' in metrics:
+                    print(f"  β: {metrics['beta']:.4f}")
+                    print(f"  Coverage: {metrics['coverage']:.1%}")
                 print(f"  Train time: {metrics['train_time']:.3f}s")
                 if hasattr(gp, 'hyp'):
                     print(f"  Hyperparameters: {gp.hyp[0]}")
@@ -507,7 +626,9 @@ def run_tests(functions=None, dims=None, n_train=50, n_test=200,
                 metrics, y_pred, y_std, gp = fit_and_evaluate(
                     ScalableGPModel, X_train, y_train, X_test, y_test_true,
                     kern_type=kern_type, opt_hyp=opt_hyp,
-                    n_frequencies=n_frequencies, periods=period
+                    n_frequencies=n_frequencies, periods=period,
+                    compute_bounds=compute_bounds, delta=delta,
+                    rkhs_norm=rkhs_norm, R_subgaussian=R_subgaussian
                 )
                 results['ScalableGP'] = {
                     'metrics': metrics,
@@ -516,6 +637,10 @@ def run_tests(functions=None, dims=None, n_train=50, n_test=200,
                 }
                 print(f"  RMSE: {metrics['rmse']:.4f}")
                 print(f"  R²: {metrics['r2']:.4f}")
+                if compute_bounds and 'beta' in metrics:
+                    print(f"  β: {metrics['beta']:.4f}")
+                    print(f"  Projection error: {metrics['projection_error']:.6f}")
+                    print(f"  Coverage: {metrics['coverage']:.1%}")
                 print(f"  Train time: {metrics['train_time']:.3f}s")
                 if hasattr(gp, 'hyp'):
                     print(f"  Hyperparameters: {gp.hyp[0]}")
@@ -541,7 +666,7 @@ def run_tests(functions=None, dims=None, n_train=50, n_test=200,
                                       results, f'{dim}D {func_name}', save_path)
     
     # Print summary table
-    print_results_table(all_results)
+    print_results_table(all_results, show_bounds=compute_bounds)
     
     return all_results
 
@@ -570,6 +695,14 @@ if __name__ == '__main__':
                        help='Number of frequencies for ScalableGP')
     parser.add_argument('--period', type=float, default=10.0,
                        help='Period for ScalableGP')
+    parser.add_argument('--bounds', action='store_true',
+                       help='Compute and compare confidence bounds')
+    parser.add_argument('--delta', type=float, default=0.05,
+                       help='Confidence parameter (1-delta confidence)')
+    parser.add_argument('--rkhs-norm', type=float, default=1.0,
+                       help='RKHS norm bound')
+    parser.add_argument('--R', type=float, default=1.0,
+                       help='Sub-Gaussian noise parameter')
     parser.add_argument('--no-viz', action='store_true',
                        help='Disable visualization')
     parser.add_argument('--save-dir', type=str, default=None,
@@ -590,6 +723,10 @@ if __name__ == '__main__':
         opt_hyp=not args.no_opt,
         n_frequencies=args.n_freq,
         period=args.period,
+        compute_bounds=args.bounds,
+        delta=args.delta,
+        rkhs_norm=args.rkhs_norm,
+        R_subgaussian=args.R,
         visualize=not args.no_viz,
         save_dir=args.save_dir,
     )
