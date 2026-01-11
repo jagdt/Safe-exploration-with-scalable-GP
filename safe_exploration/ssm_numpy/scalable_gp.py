@@ -955,7 +955,7 @@ class ScalableGPModel(GPModelBase):
             x_new = np.vstack((self.x_train, x))
             y_new = np.vstack((self.y_train, y))
         
-        self.train(x_new, y_new, opt_hyp=False)
+        self.train(x_new, y_new, opt_hyp=opt_hyp)
     
     def sample_from_gp(self, inp, size=10):
         """Sample from GP predictive distribution
