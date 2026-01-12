@@ -20,12 +20,13 @@ class ScalableGPModel(GPModelBase):
         n_s (int): number of state dimensions of the dynamic system
         n_u (int): number of action/control dimensions of the dynamic system
         hyp (list[dict]): List of hyperparameter dictionaries
-        n_frequencies (int): Number of trigonometric frequencies to use
+        n_frequencies (int): Number of trigonometric frequencies to use per dimension
+        truncation_radius (float): Radius for ellipsoidal frequency truncation
     """
     
     def __init__(self, n_s_out, n_s_in, n_u, X=None, y=None, kern_types=None,
                  hyp=None, train=False, n_frequencies=25, periods=10.0, domain_lengths=None, lengthscale_multiple=None,
-                 n_restarts=2, use_global_opt_first=True):
+                 n_restarts=2, use_global_opt_first=True, truncation_radius=None):
         """Initialize Scalable GP Model
         
         Parameters
@@ -46,15 +47,18 @@ class ScalableGPModel(GPModelBase):
             Hyperparameters for each kernel
         train : bool, optional
             Whether to train immediately
-        n_frequencies : int or list[int], optional
-            Number of Fourier frequencies per dimension. If int, same number used for all dimensions.
-            If list, must have length equal to input_dim (n_s_in + n_u). (default: 25)
+        n_frequencies : int, optional
+            Maximum number of frequencies per dimension. The ellipsoid is sized such that
+            each dimension gets maximum this many frequencies. (default: 25)
         period : float, sequence, or array, optional
             Period for periodization of Fourier features (default: 10.0).
             Accepted formats:
                 - scalar: same period for all outputs and inputs
                 - sequence of length input_dim: shared per-input periods across outputs
                 - array of shape (n_s_out, input_dim): per-output, per-input periods
+        truncation_radius : float, optional
+            Radius r for ellipsoidal frequency truncation. Frequencies satisfy q^T A_tilde q <= r^2.
+            If None, computed from n_frequencies to approximately match the count. (default: None)
         """
 
         self.n_s_out = n_s_out
@@ -65,7 +69,7 @@ class ScalableGPModel(GPModelBase):
         
         # Scalable GP specific attributes
         self.n_frequencies = n_frequencies
-        self.n_frequencies_per_dim = None
+        self.truncation_radius = truncation_radius
         self.periods = self._init_periods(periods)
         self.domain_lengths = domain_lengths
         self.lengthscale_multiple = lengthscale_multiple
@@ -165,57 +169,139 @@ class ScalableGPModel(GPModelBase):
         self._init_frequencies()
     
     def _init_frequencies(self):
-        """Initialize trigonometric frequencies for spectral approximation
+        """Initialize trigonometric frequencies for spectral approximation using ellipsoidal half-lattice
         
-        Creates frequency vectors ω ∈ ℝ^D for computing features cos(2πω⊤x) and sin(2πω⊤x).
-        If n_frequencies is an int E, generates E^D frequency vectors (full grid).
-        If n_frequencies is a list [E_1, ..., E_D], generates E_1 × ... × E_D frequency vectors.
+        Generates frequency vectors ω ∈ ℝ^D from a half-lattice satisfying:
+        - q^T A_tilde q <= r^2 (ellipsoidal truncation)
+        - One representative from each pair {±q}
         """
-        if isinstance(self.n_frequencies, int):
-            n_frequencies_per_dim = [self.n_frequencies] * self.input_dim
-        else:
-            n_frequencies_per_dim = list(self.n_frequencies)
-            if len(n_frequencies_per_dim) != self.input_dim:
-                raise ValueError(
-                    f"n_frequencies length ({len(n_frequencies_per_dim)}) must match "
-                    f"input_dim ({self.input_dim})"
-                )
-        self.n_frequencies_per_dim = n_frequencies_per_dim
-
         self.omegas = [None] * self.n_s_out
         for dim_idx in range(self.n_s_out):
-            self.omegas[dim_idx] = self._create_frequency_grid(n_frequencies_per_dim, self.periods[dim_idx])
+            self.omegas[dim_idx] = self._create_ellipsoidal_frequencies(
+                self.periods[dim_idx], 
+                decay_rates=None,
+                truncation_radius=self.truncation_radius
+            )
 
-    def _create_frequency_grid(self, n_frequencies_per_dim, period_vector):
-        """Create grid of frequency vectors ω for spectral approximation
+    def _create_ellipsoidal_frequencies(self, period_vector, decay_rates, truncation_radius=None):
+        """Create ellipsoidal half-lattice of frequency vectors ω for spectral approximation
+        
+        Generates frequencies from integer lattice Z^d that satisfy:
+        1. Ellipsoidal constraint: q^T A_tilde q <= r^2
+        2. Half-lattice: only one representative from each pair {±q}
+        
+        Two modes:
+        - decay_rates=None (initial): Isotropic allocation (same max_q per dimension)
+        - decay_rates provided (after learning): Anisotropic ellipsoid based on lengthscales
         
         Parameters
         ----------
-        n_frequencies_per_dim : list[int]
-            Number of frequencies per input dimension
         period_vector : ndarray [input_dim]
             Periods for each input dimension
+        decay_rates : ndarray [input_dim] or None
+            Exponential decay rates a_i for each dimension.
+            If None, uses isotropic allocation (equal frequencies per dimension).
+        truncation_radius : float, optional
+            Radius r for ellipsoidal truncation. If None, computed from n_frequencies.
         
         Returns
         -------
         omegas : ndarray [E × input_dim]
-            Frequency vectors for Fourier features
+            Frequency vectors for Fourier features from half-lattice
         """
-        freq_grids = []
-        for i, E_d in enumerate(n_frequencies_per_dim):
-            period_val = period_vector[i]
-            if period_val <= 0:
-                raise ValueError("period values must be positive")
-            freq_grids.append(np.arange(0, E_d) / period_val)
+        if decay_rates is None:
+            max_q = np.full(self.input_dim, self.n_frequencies, dtype=int)
+            
+            A_tilde_diag = np.ones(self.input_dim)
+            
+            if truncation_radius is None:
+                truncation_radius = self.n_frequencies
+        
+        else:
+            A_tilde_diag = decay_rates / (period_vector ** 2)
+            
+            if truncation_radius is None:
+                truncation_radius = self.n_frequencies * np.sqrt(np.min(A_tilde_diag))
+            
+            max_q = np.ceil(truncation_radius / np.sqrt(A_tilde_diag)).astype(int)
+        
+        ranges = [np.arange(-max_q[i], max_q[i] + 1) for i in range(self.input_dim)]
+        grids = np.meshgrid(*ranges, indexing='ij')
+        
+        q_candidates = np.stack([g.ravel() for g in grids], axis=1)
+        
+        quad_forms = np.sum(q_candidates * (A_tilde_diag * q_candidates), axis=1)
+        mask_ellipsoid = quad_forms <= truncation_radius ** 2
+        q_filtered = q_candidates[mask_ellipsoid]
+        
+        non_zero_mask = q_filtered != 0
 
-        mesh = np.meshgrid(*freq_grids, indexing='ij')
+        first_nonzero_idx = np.argmax(non_zero_mask, axis=1)
+        
+        all_zero_rows = ~np.any(non_zero_mask, axis=1)
+        
+        row_indices = np.arange(len(q_filtered))
+        first_nonzero_vals = q_filtered[row_indices, first_nonzero_idx]
+        
+        flip_mask = (first_nonzero_vals < 0) & ~all_zero_rows
+        q_normalized = q_filtered.copy()
+        q_normalized[flip_mask] = -q_normalized[flip_mask]
+        
+        q_unique = np.unique(q_normalized, axis=0)
+        
+        omegas = q_unique / period_vector
+        
+        print(f"Created {omegas.shape[0]} frequencies.")
 
-        omega_list = []
-        for idx in np.ndindex(*[len(g) for g in freq_grids]):
-            omega = np.array([mesh[d][idx] for d in range(self.input_dim)])
-            omega_list.append(omega)
-
-        return np.array(omega_list)
+        if len(omegas) == 0:
+            omegas = np.zeros((1, self.input_dim))
+        
+        return omegas
+    
+    def _normalize_to_half_lattice(self, q):
+        """Normalize integer vector to half-lattice representative
+        
+        For each pair {±q}, returns the representative with first non-zero
+        component positive. Returns origin unchanged.
+        
+        Parameters
+        ----------
+        q : ndarray [input_dim]
+            Integer vector
+        
+        Returns
+        -------
+        normalized_q : ndarray [input_dim]
+            Half-lattice representative
+        """
+        for i in range(len(q)):
+            if q[i] != 0:
+                if q[i] < 0:
+                    return -q
+                else:
+                    return q.copy()
+        return q.copy()
+    
+    def _update_frequencies_for_dim(self, dim_idx):
+        """Update frequencies for a specific dimension after hyperparameters change
+        
+        Parameters
+        ----------
+        dim_idx : int
+            Output dimension index
+        """
+        if self.kern_types[dim_idx] == "rbf":
+            decay_rates = self.hyp[dim_idx]["exponential_decay_rates"]
+        elif self.kern_types[dim_idx] == "sum_lin_rbf":
+            decay_rates = self.hyp[dim_idx]["rbf.exponential_decay_rates"]
+        else:
+            return
+        
+        self.omegas[dim_idx] = self._create_ellipsoidal_frequencies(
+            self.periods[dim_idx],
+            decay_rates=None,
+            truncation_radius=self.truncation_radius
+        )
   
     def _init_kernel_function(self, kern_types=None, hyp=None):
         """Initialize kernel functions based on name
@@ -271,7 +357,7 @@ class ScalableGPModel(GPModelBase):
         
         return hyp
     
-    def _compute_lambdas(self, dim_idx, Q=None):
+    def _compute_lambdas(self, dim_idx, Q=None, r=None):
         """Compute spectral decay coefficients (lambdas)
         
         For RBF kernel, computes λ = C * exp(-0.5 * ω^T A ω) where:
@@ -286,18 +372,38 @@ class ScalableGPModel(GPModelBase):
         dim_idx : int
             Output dimension index
         Q : int, optional
-            If provided, computes lambdas using first Q frequencies for theoretical projection error.
+            If provided, used to compute truncation radius for theoretical projection error.
+        r : float, optional
+            If provided, uses this truncation radius instead of computing from Q.
         
         Returns
         -------
         lambdas : ndarray
             Spectral decay coefficients (for sum_lin_rbf, includes linear variances at end)
         """
-        if Q is not None:
-            n_frequencies_per_dim = [Q] * self.input_dim
-            omegas = self._create_frequency_grid(n_frequencies_per_dim, self.periods[dim_idx])
+        if Q is not None or r is not None:
+            if self.kern_types[dim_idx] in ["rbf", "sum_lin_rbf"]:
+                if self.kern_types[dim_idx] == "rbf":
+                    decay_rates = self.hyp[dim_idx]["exponential_decay_rates"]
+                else:
+                    decay_rates = self.hyp[dim_idx]["rbf.exponential_decay_rates"]
+                
+                if r is not None:
+                    truncation_radius = r
+                else:
+                    A_tilde_diag = decay_rates / (self.periods[dim_idx] ** 2)
+                    truncation_radius = Q * np.sqrt(np.min(A_tilde_diag))
+                
+                omegas = self._create_ellipsoidal_frequencies(
+                    self.periods[dim_idx], 
+                    decay_rates=None,
+                    truncation_radius=truncation_radius
+                )
+            else:
+                raise NotImplementedError("Q-based lambda computation only for rbf/sum_lin_rbf")
         else:
             omegas = self.omegas[dim_idx]
+        
         E = omegas.shape[0]
         lambdas = np.zeros(E)
         
@@ -454,6 +560,7 @@ class ScalableGPModel(GPModelBase):
                 partial_hyp = self._unpack_hyperparameters(optimized_params[:-1], "sum_lin_rbf_rbf_only")
                 self.hyp[dim_idx].update(partial_hyp)
                 self.noise_var[dim_idx] = optimized_params[-1]
+                self._update_frequencies_for_dim(dim_idx)
                 self.lambdas[dim_idx] = self._compute_lambdas(dim_idx)
                 print(f"[Dim {dim_idx}] Final hyperparameters: {self.hyp[dim_idx]}, noise_var: {self.noise_var[dim_idx]:.2e}, NLL: {best_nll:.4f}")
             else:
@@ -473,6 +580,7 @@ class ScalableGPModel(GPModelBase):
                 optimized_params = np.exp(best_params)
                 self.hyp[dim_idx] = self._unpack_hyperparameters(optimized_params[:-1], kern_type)
                 self.noise_var[dim_idx] = optimized_params[-1]
+                self._update_frequencies_for_dim(dim_idx)
                 self.lambdas[dim_idx] = self._compute_lambdas(dim_idx)
                 print(f"[Dim {dim_idx}] Optimized hyperparameters: {self.hyp[dim_idx]}, noise_var: {self.noise_var[dim_idx]:.2e}, NLL: {best_nll:.4f}")
             else:

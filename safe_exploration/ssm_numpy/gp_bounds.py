@@ -366,32 +366,9 @@ class ScalableGPBounds(GPBounds):
         float
             Upper bound of the projection error for the specified output dimension.
         """
-        kern_type = self.gp.kern_types[dim_idx]
-        
-        if kern_type == 'rbf':
-            C = self.gp.hyp[dim_idx]["factor"]
-            decay_rates = self.gp.hyp[dim_idx]["exponential_decay_rates"]
-        elif kern_type == 'sum_lin_rbf':
-            C = self.gp.hyp[dim_idx]["rbf.factor"]
-            decay_rates = self.gp.hyp[dim_idx]["rbf.exponential_decay_rates"]
-        else:
-            raise NotImplementedError(f"Projection error bound only implemented for 'rbf' and 'sum_lin_rbf' kernels, got '{kern_type}'.")
-        
-        M = self.gp.n_frequencies_per_dim[dim_idx] - 1
-        
-        full_sums = 1 + 0.5 * np.sqrt(np.pi / decay_rates)
-        tails = np.exp(-decay_rates * (M**2)) / (decay_rates * M)
-        
-        # Calculating Sum_{k} [ Tail_k * Product_{j!=k} (Full_j) ]
-        # Using Product_{j!=k} = (Total_Product / Full_k)
-        total_product = np.prod(full_sums)
-        contributions_per_dimension = tails * (total_product / full_sums)
-        total_tail_mass = np.sum(contributions_per_dimension)
-        projection_error = self.rkhs_norms[dim_idx] * np.sqrt(2 * C * total_tail_mass)
-
-        print(f"Computed projection error for dim {dim_idx}: {projection_error}")
-        
-        return projection_error
+        # For ellipsoidal frequencies, use theoretical projection error
+        # (old rectangular grid analytical bound no longer applicable)
+        return self.compute_theoretical_projection_error(dim_idx)
 
     def compute_theoretical_projection_error(self, dim_idx):
         """Compute theoretical projection error term for scalable GP for one output dimension.
@@ -406,7 +383,7 @@ class ScalableGPBounds(GPBounds):
         float
             Theoretical projection error term for the specified output dimension.
         """
-        all_lambdas = self.gp._compute_lambdas(dim_idx, Q=100)
+        all_lambdas = self.gp._compute_lambdas(dim_idx, Q=10000)
         # used_lambdas = self.gp._compute_lambdas(dim_idx, Q=15)
         used_lambdas = self.gp.lambdas[dim_idx]
         lambda_sum = np.sum(all_lambdas) - np.sum(used_lambdas)
