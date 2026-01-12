@@ -12,7 +12,7 @@ class Config(DefaultConfigExploration):
     Options class for the exploration setting
     """
     verbose = 2
-    static_exploration = True
+    static_exploration = False
 
     solver_type = "safempc"
 
@@ -23,15 +23,15 @@ class Config(DefaultConfigExploration):
     r = 1
 
     # -- GP model
-    gp_type = 'numpy'  # one of 'gpy', 'numpy', 'scalable'
+    gp_type = 'scalable'  # one of 'gpy', 'numpy', 'scalable'
 
     # -- Scalable GP specific parameters
     # Number of frequencies to use per dimension.
     n_frequencies = 5
     # Periods for each dimension.
-    periods = [0.2*2, 1.5*2, 6.0*2]
+    periods = [3.0*2, 18.0*2, 3.0*2]
     # Domain lengths for each dimension.
-    domain_lengths = [0.2, 1.5, 6.0] # [dθ, θ, u]
+    domain_lengths = [3.0, 18.0, 3.0] # [dθ, θ, u]
     # Lengthscale multiple for the scalable GP to compute periods.
     lengthscale_multiple = 3.0
 
