@@ -217,10 +217,10 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_b
         beta = safempc.beta_safety
         
     proj_error = 0.0
-    if hasattr(safempc.ssm, 'projection_error'):
-        proj_error = safempc.ssm.projection_error
-    elif hasattr(safempc, 'projection_error'):
-        proj_error = safempc.projection_error
+    if hasattr(safempc.ssm, 'projection_error_per_dim'):
+        proj_error = safempc.ssm.projection_error_per_dim
+    elif hasattr(safempc, 'projection_error_per_dim'):
+        proj_error = safempc.projection_error_per_dim
     
     if proj_error is None:
         proj_error = 0.0
