@@ -415,7 +415,8 @@ class ScalableGPModel(GPModelBase):
         max_iter : int, optional
             Maximum number of optimization iterations
         """
-        if self.kern_types[dim_idx] == "block_sum_lin_rbf":
+        if self.kern_types[dim_idx] == "sum_lin_rbf":
+            # Stage 1: Optimize linear component first
             print(f"[Dim {dim_idx}] Stage 1: Optimizing linear component...")
             initial_params = self._pack_hyperparameters(self.hyp[dim_idx], "sum_lin_rbf_linear_only", dim_idx)
             initial_params = np.log(initial_params)
@@ -425,7 +426,7 @@ class ScalableGPModel(GPModelBase):
                 self._neg_log_marginal_likelihood,
                 initial_params,
                 args=(X, y, dim_idx, "sum_lin_rbf_linear_only"),
-                method='trust-constr',
+                method='L-BFGS-B',
                 bounds=bounds,
                 options={'maxiter': max_iter, 'disp': False}
             )
@@ -435,35 +436,29 @@ class ScalableGPModel(GPModelBase):
                 partial_hyp = self._unpack_hyperparameters(optimized_params[:-1], "sum_lin_rbf_linear_only")
                 self.hyp[dim_idx].update(partial_hyp)
                 self.noise_var[dim_idx] = optimized_params[-1]
-                print(f"[Dim {dim_idx}] Linear optimization succeeded: {partial_hyp}, noise={optimized_params[-1]}")
+                print(f"[Dim {dim_idx}] Stage 1 succeeded, NLL: {result.fun:.4f}")
             else:
                 warnings.warn(f"[Dim {dim_idx}] Linear optimization failed: {result.message}. Using initial values.")
             
+            # Stage 2: Optimize RBF component with global opt and restarts
             print(f"[Dim {dim_idx}] Stage 2: Optimizing RBF component...")
-            initial_params = self._pack_hyperparameters(self.hyp[dim_idx], "sum_lin_rbf_rbf_only", dim_idx)
-            initial_params = np.log(initial_params)
             bounds = self._get_parameter_bounds("sum_lin_rbf_rbf_only")
             
-            result = minimize(
-                self._neg_log_marginal_likelihood,
-                initial_params,
-                args=(X, y, dim_idx, "sum_lin_rbf_rbf_only"),
-                method='trust-constr',
-                bounds=bounds,
-                options={'maxiter': max_iter, 'disp': False}
-            )
+            if self.use_global_opt_first and not self.hyp_optimized:
+                best_params, best_nll = self._global_optimize(X, y, dim_idx, bounds, "sum_lin_rbf_rbf_only", max_iter)
+            else:
+                best_params, best_nll = self._multi_start_optimize(X, y, dim_idx, bounds, "sum_lin_rbf_rbf_only", max_iter)
             
-            if result.success or result.status == 1:
-                optimized_params = np.exp(result.x)
+            if best_params is not None:
+                optimized_params = np.exp(best_params)
                 partial_hyp = self._unpack_hyperparameters(optimized_params[:-1], "sum_lin_rbf_rbf_only")
                 self.hyp[dim_idx].update(partial_hyp)
                 self.noise_var[dim_idx] = optimized_params[-1]
-                print(f"[Dim {dim_idx}] RBF optimization succeeded: {partial_hyp}, noise={optimized_params[-1]}")
+                self.lambdas[dim_idx] = self._compute_lambdas(dim_idx)
+                print(f"[Dim {dim_idx}] Final hyperparameters: {self.hyp[dim_idx]}, noise_var: {self.noise_var[dim_idx]:.2e}, NLL: {best_nll:.4f}")
             else:
-                warnings.warn(f"[Dim {dim_idx}] RBF optimization failed: {result.message}. Using initial values.")
-            
-            self.lambdas[dim_idx] = self._compute_lambdas(dim_idx)
-            print(f"[Dim {dim_idx}] Final hyperparameters: {self.hyp[dim_idx]}, noise_var: {self.noise_var[dim_idx]}")
+                warnings.warn(f"[Dim {dim_idx}] RBF optimization failed. Using initial values.")
+                self.lambdas[dim_idx] = self._compute_lambdas(dim_idx)
         else:
             bounds = self._get_parameter_bounds(self.kern_types[dim_idx])
             kern_type = self.kern_types[dim_idx]
