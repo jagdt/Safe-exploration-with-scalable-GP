@@ -29,9 +29,9 @@ class Config(DefaultConfigExploration):
     # Number of frequencies to use per dimension.
     n_frequencies = 5
     # Periods for each dimension.
-    periods = [3.0*2, 18.0*2, 3.0*2]
+    periods = [3.0*2, 3.0*2, 3.0*2]
     # Domain lengths for each dimension.
-    domain_lengths = [3.0, 18.0, 3.0] # [dθ, θ, u]
+    domain_lengths = [3.0, 3.0, 3.0] # [dθ, θ, u]
     # Lengthscale multiple for the scalable GP to compute periods.
     lengthscale_multiple = 3.0
 
