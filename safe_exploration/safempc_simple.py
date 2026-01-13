@@ -153,6 +153,11 @@ class SimpleSafeMPC(SafeMPC):
         self.R_subgaussian = R_subgaussian
         self.projection_error = projection_error
         self.verbosity = verbosity
+        
+        # Extract domain bounds from GP model for periodic GPs
+        self.domain_bounds = self._get_domain_bounds_from_gp()
+        if self.domain_bounds is not None and self.verbosity > 0:
+            print(f"[SimpleSafeMPC] Domain bounds extracted from GP: {self.domain_bounds.T}")
 
         # SET ALL ATTRIBUTES FOR THE ENVIRONMENT
 
@@ -199,6 +204,39 @@ class SimpleSafeMPC(SafeMPC):
     @property
     def performance_trajectory_length(self) -> int:
         return self.n_perf
+
+    def _get_domain_bounds_from_gp(self):
+        """Extract domain bounds from the GP model
+        
+        For scalable GPs with periods, the domain is defined by the domain_lengths.
+        Otherwise, returns None to indicate no domain constraints.
+        
+        Returns
+        -------
+        domain_bounds: ndarray [input_dim × 2] or None
+            Lower and upper bounds for each input dimension [state, action]
+            Format: [[lower_0, upper_0], [lower_1, upper_1], ...]
+            None if no domain bounds are available
+        """
+        if hasattr(self.ssm, 'domain_lengths') and self.ssm.domain_lengths is not None:
+            domain_lengths = np.asarray(self.ssm.domain_lengths)
+            domain_bounds = np.zeros((len(domain_lengths), 2))
+            domain_bounds[:, 0] = -domain_lengths / 2
+            domain_bounds[:, 1] = domain_lengths / 2
+            return domain_bounds
+        elif hasattr(self.ssm, 'periods'):
+            # Use periods as a fallback (domain ~ [-period/2, period/2])
+            periods = np.asarray(self.ssm.periods)
+            # For multi-output GPs, periods might be (n_s_out, input_dim)
+            if periods.ndim == 2:
+                # Use the first output's periods as reference
+                periods = periods[0, :]
+            domain_bounds = np.zeros((len(periods), 2))
+            domain_bounds[:, 0] = -periods / 2
+            domain_bounds[:, 1] = periods / 2
+            return domain_bounds
+        
+        return None
 
     def init_solver(self, cost_func=None):
         """ Initialize a casadi solver object corresponding to the SafeMPC optimization problem
@@ -375,6 +413,21 @@ class SimpleSafeMPC(SafeMPC):
         g_name = []
 
         H = np.shape(p_all)[0]
+        
+        # Domain constraints for scalable GP
+        if self.domain_bounds is not None:
+            for i in range(H):
+                p_i = p_all[i, :].T
+                for j in range(self.n_s):
+                    g = vertcat(g, p_i[j])
+                    lbg += [self.domain_bounds[j, 0]]
+                    ubg += [cas.inf]
+                    g_name += [f"domain_lower_state_{j}_step_{i}"]
+                    g = vertcat(g, p_i[j])
+                    lbg += [-cas.inf]
+                    ubg += [self.domain_bounds[j, 1]]
+                    g_name += [f"domain_upper_state_{j}_step_{i}"]
+        
         # control constraints
         if self.has_ctrl_bounds:
             g_u_0, lbg_u_0, ubg_u_0 = self._generate_control_constraint(u_0)
@@ -395,6 +448,37 @@ class SimpleSafeMPC(SafeMPC):
                 lbg += lbg_u_i
                 ubg += ubg_u_i
                 g_name += ["ellipsoid_ctrl_constraint_{}".format(i)] * len(lbg_u_i)
+        
+        # Domain constraints on control inputs if available
+        if self.domain_bounds is not None and len(self.domain_bounds) >= self.n_s + self.n_u:
+            for j in range(self.n_u):
+                ctrl_idx = self.n_s + j
+                g = vertcat(g, u_0[j])
+                lbg += [self.domain_bounds[ctrl_idx, 0]]
+                ubg += [cas.inf]
+                g_name += [f"domain_lower_control_{j}_step_0"]
+                g = vertcat(g, u_0[j])
+                lbg += [-cas.inf]
+                ubg += [self.domain_bounds[ctrl_idx, 1]]
+                g_name += [f"domain_upper_control_{j}_step_0"]
+            
+            # Add box constraints on feed-forward controls
+            for i in range(H - 1):
+                k_ff_i = k_ff_all[i, :].reshape((self.n_u, 1))
+                for j in range(self.n_u):
+                    ctrl_idx = self.n_s + j
+                    g = vertcat(g, k_ff_i[j])
+                    lbg += [self.domain_bounds[ctrl_idx, 0]]
+                    ubg += [cas.inf]
+                    g_name += [f"domain_lower_control_{j}_step_{i+1}"]
+                    g = vertcat(g, k_ff_i[j])
+                    lbg += [-cas.inf]
+                    ubg += [self.domain_bounds[ctrl_idx, 1]]
+                    g_name += [f"domain_upper_control_{j}_step_{i+1}"]
+                    g = vertcat(g, k_ff_i[j])
+                    lbg += [-cas.inf]
+                    ubg += [self.domain_bounds[ctrl_idx, 1]]
+                    g_name += [f"domain_upper_control_{j}_step_{i+1}"]
 
         # intermediate state constraints
         if not self.h_mat_obs is None:
@@ -1107,6 +1191,17 @@ class SimpleSafeMPC(SafeMPC):
 
         self.ssm.update_model(x, y - y_prior, opt_hyp, replace_old)
         self.ssm_forward = self.ssm.get_forward_model_casadi(False)
+        
+        # Update domain bounds in case the model changed
+        self.domain_bounds = self._get_domain_bounds_from_gp()
+        
+        if opt_hyp:
+            warnings.warn(
+                "Optimized hyperparameters, recompute performance or safety bounds")
+        
+        if self.compute_bounds:
+            warnings.warn("Recomputing gp bounds after model update")
+            self._get_gp_bounds()
 
         if reinitialize_solver:
             self.init_solver(self.cost_func)

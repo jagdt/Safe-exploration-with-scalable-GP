@@ -95,6 +95,10 @@ class StaticSafeMPCExploration(ExplorationModule):
         self.sample_mean = sample_mean
         self.sample_std = sample_std
         self.verbosity = verbosity
+        
+        self.domain_bounds = self._get_domain_bounds_from_gp()
+        if self.domain_bounds is not None and self.verbosity > 0:
+            print(f"Domain bounds extracted from GP: {self.domain_bounds.T}")        
         self.init_solver()
 
     def init_solver(self, cost_func=None):
@@ -165,6 +169,36 @@ class StaticSafeMPCExploration(ExplorationModule):
         self.lbg = lbg
         self.ubg = ubg
 
+    def _get_domain_bounds_from_gp(self):
+        """Extract domain bounds from the GP model
+        
+        For scalable GPs with periods, the domain is defined by the domain_lengths.
+        Otherwise, returns None to indicate no domain constraints.
+        
+        Returns
+        -------
+        domain_bounds: ndarray [input_dim × 2] or None
+            Lower and upper bounds for each input dimension [state, action]
+            Format: [[lower_0, upper_0], [lower_1, upper_1], ...]
+            None if no domain bounds are available
+        """
+        if hasattr(self.gp, 'domain_lengths') and self.gp.domain_lengths is not None:
+            domain_lengths = np.asarray(self.gp.domain_lengths)
+            domain_bounds = np.zeros((len(domain_lengths), 2))
+            domain_bounds[:, 0] = -domain_lengths / 2
+            domain_bounds[:, 1] = domain_lengths / 2
+            return domain_bounds
+        elif hasattr(self.gp, 'periods'):
+            periods = np.asarray(self.gp.periods)
+            if periods.ndim == 2:
+                periods = periods[0, :]
+            domain_bounds = np.zeros((len(periods), 2))
+            domain_bounds[:, 0] = -periods / 2
+            domain_bounds[:, 1] = periods / 2
+            return domain_bounds
+        
+        return None
+
     def generate_safety_constraints(self, p_all, q_all, u_0, k_fb_ctrl,
                                     k_ff_all):
         """ Generate all safety constraints
@@ -190,6 +224,21 @@ class StaticSafeMPCExploration(ExplorationModule):
         g_name = []
 
         H = np.shape(p_all)[0]
+        
+        # Domain constraints for scalable GP
+        if self.domain_bounds is not None:
+            for i in range(H):
+                p_i = p_all[i, :].T
+                for j in range(self.n_s):
+                    g = vertcat(g, p_i[j])
+                    lbg += [self.domain_bounds[j, 0]]
+                    ubg += [cas.inf]
+                    g_name += [f"domain_lower_state_{j}_step_{i}"]
+                    g = vertcat(g, p_i[j])
+                    lbg += [-cas.inf]
+                    ubg += [self.domain_bounds[j, 1]]
+                    g_name += [f"domain_upper_state_{j}_step_{i}"]
+        
         # control constraints
         if self.has_ctrl_bounds:
             g_u_0, lbg_u_0, ubg_u_0 = self._generate_control_constraint(u_0)
@@ -197,6 +246,19 @@ class StaticSafeMPCExploration(ExplorationModule):
             lbg += lbg_u_0
             ubg += ubg_u_0
             g_name += ["u_0_ctrl_constraint"]
+        
+        # Domain constraints on control inputs if available
+        if self.domain_bounds is not None and len(self.domain_bounds) >= self.n_s + self.n_u:
+            for j in range(self.n_u):
+                ctrl_idx = self.n_s + j
+                g = vertcat(g, u_0[j])
+                lbg += [self.domain_bounds[ctrl_idx, 0]]
+                ubg += [cas.inf]
+                g_name += [f"domain_lower_control_{j}_step_0"]
+                g = vertcat(g, u_0[j])
+                lbg += [-cas.inf]
+                ubg += [self.domain_bounds[ctrl_idx, 1]]
+                g_name += [f"domain_upper_control_{j}_step_0"]
 
             for i in range(H - 1):
                 p_i = p_all[i, :].T
@@ -210,6 +272,19 @@ class StaticSafeMPCExploration(ExplorationModule):
                 lbg += lbg_u_i
                 ubg += ubg_u_i
                 g_name += ["ellipsoid_ctrl_constraint_{}".format(i)] * len(lbg_u_i)
+                
+                # Domain constraints on feed-forward controls
+                if self.domain_bounds is not None and len(self.domain_bounds) >= self.n_s + self.n_u:
+                    for j in range(self.n_u):
+                        ctrl_idx = self.n_s + j
+                        g = vertcat(g, k_ff_i[j])
+                        lbg += [self.domain_bounds[ctrl_idx, 0]]
+                        ubg += [cas.inf]
+                        g_name += [f"domain_lower_control_{j}_step_{i+1}"]
+                        g = vertcat(g, k_ff_i[j])
+                        lbg += [-cas.inf]
+                        ubg += [self.domain_bounds[ctrl_idx, 1]]
+                        g_name += [f"domain_upper_control_{j}_step_{i+1}"]
 
         # intermediate state constraints
         if not self.h_mat_obs is None:
@@ -345,6 +420,8 @@ class StaticSafeMPCExploration(ExplorationModule):
         """ Simple wrapper around the update_model function of SafeMPC"""
         self.safempc.update_model(x, y, train, replace_old)
         self.gp = self.safempc.ssm
+        # Update domain bounds in case the model changed
+        self.domain_bounds = self._get_domain_bounds_from_gp()
         self.init_solver()
 
     def get_information_gain(self):
