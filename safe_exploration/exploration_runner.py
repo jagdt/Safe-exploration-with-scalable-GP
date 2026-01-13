@@ -192,6 +192,12 @@ def run_exploration(conf, visualize=False):
 
             x_i = x_next
 
+        if save_vis and save_path is not None:
+            final_traj_plot_path = "{}/trajectory_final.png".format(save_path)
+            fig.savefig(final_traj_plot_path, dpi=150, bbox_inches='tight')
+            print(f"Saved final trajectory plot: {final_traj_plot_path}")
+            plt.close(fig)
+
         l_inf_gain += [inf_gain]
         l_sigm_sum += [sigm_sum]
         l_sigm += [sigm]

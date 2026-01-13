@@ -323,13 +323,20 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_b
     # 3D scatter of training data highlighting residual mismatch
     gp_mean_train, _ = safempc.ssm.predict(x_train_gp)
     true_error_train = compute_true_model_error(safempc, env, states_train_orig, actions_train)
+    
+    if save_dir is not None:
+        scatter_save_path = os.path.join(save_dir, 'model_error_training_scatter.png')
+    else:
+        scatter_save_path = None
+    
     plot_training_error_scatter(
         states_train_orig,
         actions_train,
         true_error_train,
         gp_mean_train,
         dim_names,
-        error_names
+        error_names,
+        save_path=scatter_save_path
     )
     
     print_statistics(true_error_2d_theta_u, gp_mean_2d_theta_u, gp_std_2d_theta_u, error_names)
@@ -392,8 +399,14 @@ def plot_1d_comparison(states, actions, true_error, gp_mean, gp_std,
     ax.grid(True, alpha=0.3)
     
     plt.tight_layout()
-    plt.show()
-    print(f"  Displayed: {error_names[state_dim]} (1D)")
+    
+    if save_path is not None:
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        print(f"  Saved: {error_names[state_dim]} (1D) -> {save_path}")
+        plt.close(fig)
+    else:
+        plt.show()
+        print(f"  Displayed: {error_names[state_dim]} (1D)")
 
 
 def plot_2d_comparison(states, actions, true_error, gp_mean, gp_std,
@@ -472,8 +485,13 @@ def plot_2d_comparison(states, actions, true_error, gp_mean, gp_std,
     cbar3 = plt.colorbar(im3, ax=axes[2])
     cbar3.set_label('Std Dev', fontsize=10)
     
-    plt.show()
-    print(f"  Displayed: {error_names[state_dim]} (2D)")
+    if save_path is not None:
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        print(f"  Saved: {error_names[state_dim]} (2D) -> {save_path}")
+        plt.close(fig)
+    else:
+        plt.show()
+        print(f"  Displayed: {error_names[state_dim]} (2D)")
 
 
 
@@ -506,7 +524,7 @@ def print_statistics(true_error, gp_mean, gp_std, error_names):
         print(f"  95% Coverage:  {coverage_2sigma:.1f}% (within 2σ)")
 
 
-def plot_training_error_scatter(states, actions, true_error, gp_mean, dim_names, error_names):
+def plot_training_error_scatter(states, actions, true_error, gp_mean, dim_names, error_names, save_path=None):
     """Render a 3D scatter of training inputs colored by model mismatch.
 
     Each point corresponds to a training tuple (dθ, θ, u). Color encodes the
@@ -537,5 +555,11 @@ def plot_training_error_scatter(states, actions, true_error, gp_mean, dim_names,
     cbar.set_label('Residual mismatch (norm)', fontsize=10)
 
     plt.tight_layout()
-    plt.show()
-    print("  Displayed: training error mismatch (3D scatter)")
+    
+    if save_path is not None:
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        print(f"  Saved: training error mismatch (3D scatter) -> {save_path}")
+        plt.close(fig)
+    else:
+        plt.show()
+        print("  Displayed: training error mismatch (3D scatter)")
