@@ -100,9 +100,9 @@ class DefaultConfigExploration(DefaultConfig):
 
     # general options
     verify_safety = False
-    save_results = False
-    save_vis = False
-    save_dir = None  # the directory such that the overall save location is save_path_base/save_dir/
+    save_results = True
+    save_vis = True
+    save_dir = None  # the directory such that the overall save location is save_path_base/save_dir/, if None uses timestamp
     save_path_base = "results_exploration"  # the directory such that the overall save location is save_path_base/save_dir/
     data_savename = None
     train_gp = True
