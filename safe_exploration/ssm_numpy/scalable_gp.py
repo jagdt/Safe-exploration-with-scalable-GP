@@ -457,8 +457,8 @@ class ScalableGPModel(GPModelBase):
 
         Phi[:, 0] = lambdas[0]
 
-        inner_products = 2 * np.pi * (omegas @ X.T)
         if E > 1:
+            inner_products = 2 * np.pi * (omegas @ X.T)
             phases = inner_products[1:, :]
             cos_block = (lambdas[1:E, None] * np.cos(phases)).T
             sin_block = (lambdas[1:E, None] * np.sin(phases)).T
@@ -524,6 +524,17 @@ class ScalableGPModel(GPModelBase):
         max_iter : int, optional
             Maximum number of optimization iterations
         """
+        try:
+            print(f"[Dim {dim_idx}] Precomputing feature matrices for optimization...")
+            C = self._compute_c_matrix(X, dim_idx)
+            M_cache = C.T @ C
+            v_cache = C.T @ y
+            cache = (M_cache, v_cache)
+            print(f"[Dim {dim_idx}] Cache created. Matrix size: {M_cache.shape}")
+        except MemoryError:
+            warnings.warn(f"[Dim {dim_idx}] Not enough memory for caching. Falling back to stanard optimization.")
+            cache = None
+
         if self.kern_types[dim_idx] == "sum_lin_rbf":
             # Stage 1: Optimize linear component first
             print(f"[Dim {dim_idx}] Stage 1: Optimizing linear component...")
@@ -534,7 +545,7 @@ class ScalableGPModel(GPModelBase):
             result = minimize(
                 self._neg_log_marginal_likelihood,
                 initial_params,
-                args=(X, y, dim_idx, "sum_lin_rbf_linear_only"),
+                args=(X, y, dim_idx, "sum_lin_rbf_linear_only", cache),
                 method='L-BFGS-B',
                 bounds=bounds,
                 options={'maxiter': max_iter, 'disp': False}
@@ -545,7 +556,7 @@ class ScalableGPModel(GPModelBase):
                 partial_hyp = self._unpack_hyperparameters(optimized_params[:-1], "sum_lin_rbf_linear_only")
                 self.hyp[dim_idx].update(partial_hyp)
                 self.noise_var[dim_idx] = optimized_params[-1]
-                print(f"[Dim {dim_idx}] Stage 1 succeeded, NLL: {result.fun:.4f}")
+                print(f"[Dim {dim_idx}] Stage 1 succeeded, NLL: {result.fun:.4f}, Reason: {result.message}")
             else:
                 warnings.warn(f"[Dim {dim_idx}] Linear optimization failed: {result.message}. Using initial values.")
             
@@ -554,9 +565,9 @@ class ScalableGPModel(GPModelBase):
             bounds = self._get_parameter_bounds("sum_lin_rbf_rbf_only")
             
             if self.use_global_opt_first and not self.hyp_optimized:
-                best_params, best_nll = self._global_optimize(X, y, dim_idx, bounds, "sum_lin_rbf_rbf_only", max_iter)
+                best_params, best_nll = self._global_optimize(X, y, dim_idx, bounds, "sum_lin_rbf_rbf_only", max_iter, cache)
             else:
-                best_params, best_nll = self._multi_start_optimize(X, y, dim_idx, bounds, "sum_lin_rbf_rbf_only", max_iter)
+                best_params, best_nll = self._multi_start_optimize(X, y, dim_idx, bounds, "sum_lin_rbf_rbf_only", max_iter, cache)
             
             if best_params is not None:
                 optimized_params = np.exp(best_params)
@@ -575,9 +586,9 @@ class ScalableGPModel(GPModelBase):
             
             if self.use_global_opt_first and not self.hyp_optimized:
                 print(f"[Dim {dim_idx}] Using differential evolution for global optimization...")
-                best_params, best_nll = self._global_optimize(X, y, dim_idx, bounds, kern_type, max_iter)
+                best_params, best_nll = self._global_optimize(X, y, dim_idx, bounds, kern_type, max_iter, cache)
             else:
-                best_params, best_nll = self._multi_start_optimize(X, y, dim_idx, bounds, kern_type, max_iter)
+                best_params, best_nll = self._multi_start_optimize(X, y, dim_idx, bounds, kern_type, max_iter, cache)
             
             if best_params is not None:
                 optimized_params = np.exp(best_params)
@@ -593,7 +604,60 @@ class ScalableGPModel(GPModelBase):
                 )
                 self.lambdas[dim_idx] = self._compute_lambdas(dim_idx)
     
-    def _multi_start_optimize(self, X, y, dim_idx, bounds, kern_type, max_iter):
+    def _compute_c_matrix(self, X, dim_idx):
+        """Compute the unscaled feature matrix C
+        
+        Phi = C @ diag(scaling_vec), where scaling_vec comes from hyperparameters.
+        """
+        omegas = self.omegas[dim_idx]
+        E = omegas.shape[0]
+        N = X.shape[0]
+        
+        n_rbf_cols = 2 * E - 1
+        n_cols = n_rbf_cols
+        if self.kern_types[dim_idx] == "sum_lin_rbf":
+            n_cols += self.input_dim
+            
+        C = np.zeros((N, n_cols))
+        
+        C[:, 0] = 1.0
+        
+        if E > 1:
+            inner_products = 2 * np.pi * (omegas @ X.T)
+            phases = inner_products[1:, :]
+            C[:, 1:n_rbf_cols:2] = np.cos(phases).T
+            C[:, 2:n_rbf_cols:2] = np.sin(phases).T
+            
+        if self.kern_types[dim_idx] == "sum_lin_rbf":
+            C[:, n_rbf_cols:] = X
+            
+        return C
+
+    def _make_scaling_vector(self, lambdas, dim_idx):
+        """Construct the scaling vector L such that Phi = C @ diag(L)"""
+        omegas = self.omegas[dim_idx]
+        E = omegas.shape[0]
+        
+        n_rbf_cols = 2 * E - 1
+        n_cols = n_rbf_cols
+        if self.kern_types[dim_idx] == "sum_lin_rbf":
+            n_cols += self.input_dim
+            
+        L_vec = np.empty(n_cols)
+        
+        L_vec[0] = lambdas[0]
+        if E > 1:
+            l_rest = lambdas[1:E]
+            L_vec[1:n_rbf_cols:2] = l_rest
+            L_vec[2:n_rbf_cols:2] = l_rest
+            
+        if self.kern_types[dim_idx] == "sum_lin_rbf":
+            lin_vars = lambdas[E:]
+            L_vec[n_rbf_cols:] = np.sqrt(lin_vars)
+            
+        return L_vec
+
+    def _multi_start_optimize(self, X, y, dim_idx, bounds, kern_type, max_iter, cache=None):
         """Multi-start L-BFGS-B optimization from random starting points
         
         Runs optimization from multiple random starting points within the
@@ -613,6 +677,8 @@ class ScalableGPModel(GPModelBase):
             Kernel type
         max_iter : int
             Maximum iterations per optimization run
+        cache : tuple, optional
+            Precomputed (M, v) 
             
         Returns
         -------
@@ -632,12 +698,13 @@ class ScalableGPModel(GPModelBase):
         result = minimize(
             self._neg_log_marginal_likelihood,
             initial_params_log,
-            args=(X, y, dim_idx, kern_type),
+            args=(X, y, dim_idx, kern_type, cache),
             method='L-BFGS-B',
             bounds=bounds,
             options={'maxiter': max_iter, 'disp': False}
         )
         if result.success or result.status == 1:
+            print(f"[Dim {dim_idx}] Multi-start 0/{self.n_restarts}: {result.message}, NLL: {result.fun:.4f}")
             results.append((result.x, result.fun))
         
         bounds_array = np.array(bounds)
@@ -647,12 +714,13 @@ class ScalableGPModel(GPModelBase):
             result = minimize(
                 self._neg_log_marginal_likelihood,
                 random_params,
-                args=(X, y, dim_idx, kern_type),
+                args=(X, y, dim_idx, kern_type, cache),
                 method='L-BFGS-B',
                 bounds=bounds,
                 options={'maxiter': max_iter, 'disp': False}
             )
             if result.success or result.status == 1:
+                print(f"[Dim {dim_idx}] Multi-start {i+1}/{self.n_restarts}: {result.message}, NLL: {result.fun:.4f}")
                 results.append((result.x, result.fun))
         
         if results:
@@ -662,7 +730,7 @@ class ScalableGPModel(GPModelBase):
         
         return best_params, best_nll
     
-    def _global_optimize(self, X, y, dim_idx, bounds, kern_type, max_iter):
+    def _global_optimize(self, X, y, dim_idx, bounds, kern_type, max_iter, cache=None):
         """Global optimization using differential evolution
         
         Uses differential evolution to find a good global solution, then
@@ -683,6 +751,8 @@ class ScalableGPModel(GPModelBase):
             Kernel type
         max_iter : int
             Maximum iterations for refinement
+        cache : tuple, optional
+            Precomputed (M, v)
             
         Returns
         -------
@@ -691,11 +761,10 @@ class ScalableGPModel(GPModelBase):
         best_nll : float
             Best negative log-likelihood found
         """
-        # Run differential evolution
         result_de = differential_evolution(
             self._neg_log_marginal_likelihood,
             bounds,
-            args=(X, y, dim_idx, kern_type),
+            args=(X, y, dim_idx, kern_type, cache),
             strategy='best1bin',
             maxiter=200,
             tol=1e-4,
@@ -705,26 +774,24 @@ class ScalableGPModel(GPModelBase):
             disp=False
         )
         
-        print(f"[Dim {dim_idx}] Diff. evolution NLL: {result_de.fun:.4f}")
+        print(f"[Dim {dim_idx}] Diff. evolution NLL: {result_de.fun:.4f}, Reason: {result_de.message}")
         
-        # Refine with L-BFGS-B
         result = minimize(
             self._neg_log_marginal_likelihood,
             result_de.x,
-            args=(X, y, dim_idx, kern_type),
+            args=(X, y, dim_idx, kern_type, cache),
             method='L-BFGS-B',
             bounds=bounds,
             options={'maxiter': max_iter, 'disp': False}
         )
         
         if result.success or result.status == 1:
-            print(f"[Dim {dim_idx}] Refined NLL: {result.fun:.4f}")
+            print(f"[Dim {dim_idx}] Refined NLL: {result.fun:.4f}, Reason: {result.message}")
             return result.x, result.fun
         else:
-            # Fall back to DE result
             return result_de.x, result_de.fun
     
-    def _neg_log_marginal_likelihood(self, params, X, y, dim_idx, kern_type_override=None):
+    def _neg_log_marginal_likelihood(self, params, X, y, dim_idx, kern_type_override=None, cache=None):
         """Negative log marginal likelihood for scalable GP
         
         Uses Woodbury identity for efficient computation:
@@ -744,6 +811,8 @@ class ScalableGPModel(GPModelBase):
             Output dimension index
         kern_type_override : str, optional
             Override kernel type for staged optimization (e.g., "sum_lin_rbf_linear_only")
+        cache : tuple, optional
+            Precomputed (M, v) where M=C^T C and v=C^T y
         
         Returns
         -------
@@ -768,19 +837,35 @@ class ScalableGPModel(GPModelBase):
         lambdas = self._compute_lambdas(dim_idx)
         self.hyp[dim_idx] = old_hyp
         
-        Phi_train = self._phi_features(X, lambdas, dim_idx)
-        E = Phi_train.shape[1]
+        use_cache = cache is not None
         N = len(X)
         
-        # A = ΦᵀΦ + σ²I
-        A = Phi_train.T @ Phi_train + noise_var * np.eye(E)
+        if use_cache:
+            M, v = cache
+            L_vec = self._make_scaling_vector(lambdas, dim_idx)
+            E = M.shape[0]
+            
+            # A = Phi^T Phi + sigma^2 I
+            # Phi^T Phi = diag(L) @ C^T @ C @ diag(L) = diag(L) @ M @ diag(L)            
+            A = M * np.outer(L_vec, L_vec) + noise_var * np.eye(E)
+            
+            # Phi^T y = diag(L) @ C^T @ y = L_vec * v
+            Phi_T_y = L_vec * v
+
+        else:
+            Phi_train = self._phi_features(X, lambdas, dim_idx)
+            E = Phi_train.shape[1]
+            
+            # A = ΦᵀΦ + σ²I
+            A = Phi_train.T @ Phi_train + noise_var * np.eye(E)
+            Phi_T_y = Phi_train.T @ y
+
         try:
             L = np.linalg.cholesky(A)
             
             # Log determinant: log|ΦᵀΦ + σ²I| = 2 * ∑ log(diag(L))
             log_det = 2 * np.sum(np.log(np.diag(L)))
             
-            Phi_T_y = Phi_train.T @ y
             A_inv_Phi_T_y = np.linalg.solve(L, Phi_T_y)
             A_inv_Phi_T_y = np.linalg.solve(L.T, A_inv_Phi_T_y)
             
@@ -926,43 +1011,43 @@ class ScalableGPModel(GPModelBase):
         bounds = []
         
         if kern_type == "rbf":
-            # Factor: [1e-6, 1e2]
-            bounds.append((-13.8, 4.6))
+            # Factor: [1e-6, 1e0]
+            bounds.append((-13.8, 0.0))
             # Exponential decay rates: [1e-3, 1e3]
             bounds.extend([(-6.9, 6.9)] * self.input_dim)
-            # Noise: [1e-10, 1e0]
-            bounds.append((-23.0, 0.0))
+            # Noise: [1e-10, 1e-4]
+            bounds.append((-23.0, -9.2))
         
         elif kern_type == "sum_lin_rbf":
-            # RBF factor: [1e-6, 1e2]
-            bounds.append((-13.8, 4.6))
+            # RBF factor: [1e-6, 1e0]
+            bounds.append((-13.8, 0.0))
             # RBF exponential decay rates: [1e-3, 1e3]
             bounds.extend([(-6.9, 6.9)] * self.input_dim)
-            # Linear variances: [1e-6, 1e1]
-            bounds.extend([(-13.8, 2.3)] * self.input_dim)
-            # Noise: [1e-10, 1e0]
-            bounds.append((-23.0, 0.0))
+            # Linear variances: [1e-6, 1e0]
+            bounds.extend([(-13.8, 0.0)] * self.input_dim)
+            # Noise: [1e-10, 1e-4]
+            bounds.append((-23.0, -9.2))
         
         elif kern_type == "sum_lin_rbf_linear_only":
-            # Linear variances: [1e-6, 1e1]
-            bounds.extend([(-13.8, 2.3)] * self.input_dim)
-            # Noise: [1e-10, 1e0]
-            bounds.append((-23.0, 0.0))
+            # Linear variances: [1e-6, 1e0]
+            bounds.extend([(-13.8, 0.0)] * self.input_dim)
+            # Noise: [1e-10, 1e-4]
+            bounds.append((-23.0, -9.2))
         
         elif kern_type == "sum_lin_rbf_rbf_only":
-            # RBF factor: [1e-6, 1e2]
-            bounds.append((-13.8, 4.6))
+            # RBF factor: [1e-6, 1e0]
+            bounds.append((-13.8, 0.0))
             # RBF exponential decay rates: [1e-3, 1e3]
             bounds.extend([(-6.9, 6.9)] * self.input_dim)
-            # Noise: [1e-10, 1e0]
-            bounds.append((-23.0, 0.0))
+            # Noise: [1e-10, 1e-4]
+            bounds.append((-23.0, -9.2))
         
         elif kern_type == "individual":
             # Individual lambdas: [1e-6, 1e2]
             n_omegas = self.omegas[0].shape[0] if len(self.omegas) > 0 else 0
             bounds.extend([(-13.8, 4.6)] * n_omegas)
-            # Noise: [1e-10, 1e0]
-            bounds.append((-23.0, 0.0))
+            # Noise: [1e-10, 1e-4]
+            bounds.append((-23.0, -9.2))
         
         else:
             raise ValueError(f"Unsupported kernel type: {kern_type}")
