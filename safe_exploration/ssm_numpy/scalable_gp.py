@@ -224,6 +224,7 @@ class ScalableGPModel(GPModelBase):
                 truncation_radius = self.n_frequencies * np.sqrt(np.min(A_tilde_diag))
             
             max_q = np.ceil(truncation_radius / np.sqrt(A_tilde_diag)).astype(int)
+            max_q = np.minimum(max_q, int(self.n_frequencies * 1.5))
         
         ranges = [np.arange(-max_q[i], max_q[i] + 1) for i in range(self.input_dim)]
         grids = np.meshgrid(*ranges, indexing='ij')
@@ -383,21 +384,23 @@ class ScalableGPModel(GPModelBase):
         """
         if Q is not None or r is not None:
             if self.kern_types[dim_idx] in ["rbf", "sum_lin_rbf"]:
-                if self.kern_types[dim_idx] == "rbf":
-                    decay_rates = self.hyp[dim_idx]["exponential_decay_rates"]
-                else:
-                    decay_rates = self.hyp[dim_idx]["rbf.exponential_decay_rates"]
+                # if self.kern_types[dim_idx] == "rbf":
+                #     decay_rates = self.hyp[dim_idx]["exponential_decay_rates"]
+                # else:
+                #     decay_rates = self.hyp[dim_idx]["rbf.exponential_decay_rates"]
                 
-                if r is not None:
-                    truncation_radius = r
-                else:
-                    A_tilde_diag = decay_rates / (self.periods[dim_idx] ** 2)
-                    truncation_radius = Q * np.sqrt(np.min(A_tilde_diag))
+                # if r is not None:
+                #     truncation_radius = r
+                # else:
+                #     A_tilde_diag = decay_rates / (self.periods[dim_idx] ** 2)
+                #     truncation_radius = Q * np.sqrt(np.min(A_tilde_diag))
+                #     max_truncation_radius = 2 * self.n_frequencies * np.sqrt(np.min(A_tilde_diag))
+                #     truncation_radius = min(truncation_radius, max_truncation_radius)
                 
                 omegas = self._create_ellipsoidal_frequencies(
                     self.periods[dim_idx], 
                     decay_rates=None,
-                    truncation_radius=truncation_radius
+                    truncation_radius=int(self.n_frequencies*Q)
                 )
             else:
                 raise NotImplementedError("Q-based lambda computation only for rbf/sum_lin_rbf")
@@ -560,7 +563,7 @@ class ScalableGPModel(GPModelBase):
                 partial_hyp = self._unpack_hyperparameters(optimized_params[:-1], "sum_lin_rbf_rbf_only")
                 self.hyp[dim_idx].update(partial_hyp)
                 self.noise_var[dim_idx] = optimized_params[-1]
-                self._update_frequencies_for_dim(dim_idx)
+                # self._update_frequencies_for_dim(dim_idx)
                 self.lambdas[dim_idx] = self._compute_lambdas(dim_idx)
                 print(f"[Dim {dim_idx}] Final hyperparameters: {self.hyp[dim_idx]}, noise_var: {self.noise_var[dim_idx]:.2e}, NLL: {best_nll:.4f}")
             else:
@@ -580,7 +583,7 @@ class ScalableGPModel(GPModelBase):
                 optimized_params = np.exp(best_params)
                 self.hyp[dim_idx] = self._unpack_hyperparameters(optimized_params[:-1], kern_type)
                 self.noise_var[dim_idx] = optimized_params[-1]
-                self._update_frequencies_for_dim(dim_idx)
+                # self._update_frequencies_for_dim(dim_idx)
                 self.lambdas[dim_idx] = self._compute_lambdas(dim_idx)
                 print(f"[Dim {dim_idx}] Optimized hyperparameters: {self.hyp[dim_idx]}, noise_var: {self.noise_var[dim_idx]:.2e}, NLL: {best_nll:.4f}")
             else:

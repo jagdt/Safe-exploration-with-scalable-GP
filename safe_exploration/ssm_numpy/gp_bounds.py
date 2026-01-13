@@ -383,9 +383,12 @@ class ScalableGPBounds(GPBounds):
         float
             Theoretical projection error term for the specified output dimension.
         """
-        all_lambdas = self.gp._compute_lambdas(dim_idx, Q=10000)
-        # used_lambdas = self.gp._compute_lambdas(dim_idx, Q=15)
+        all_lambdas = self.gp._compute_lambdas(dim_idx, Q=1.5)
+        all_lambdas_2 = self.gp._compute_lambdas(dim_idx, Q=2.0)
         used_lambdas = self.gp.lambdas[dim_idx]
+        sum1 = np.sum(all_lambdas)
+        sum2 = np.sum(all_lambdas_2)
+        sum3 = np.sum(used_lambdas) 
         lambda_sum = np.sum(all_lambdas) - np.sum(used_lambdas)
         projection_error = self.rkhs_norms[dim_idx] * np.sqrt(2 * lambda_sum)
 
