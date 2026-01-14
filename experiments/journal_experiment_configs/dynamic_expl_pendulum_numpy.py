@@ -11,8 +11,8 @@ class Config(DefaultConfigExploration):
     """
     Options class for the exploration setting
     """
-    verbose = 2
-    static_exploration = False
+    verbose = 0
+    static_exploration = True
 
     solver_type = "safempc"
 
@@ -23,7 +23,7 @@ class Config(DefaultConfigExploration):
     r = 1
 
     # -- GP model
-    gp_type = 'scalable'  # one of 'gpy', 'numpy', 'scalable'
+    gp_type = 'numpy'  # one of 'gpy', 'numpy', 'scalable'
 
     # -- Scalable GP specific parameters
     # Number of frequencies to use per dimension.
