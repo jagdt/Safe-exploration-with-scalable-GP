@@ -229,6 +229,7 @@ class NumpyGPBounds(GPBounds):
         """
         gram = self._gram_matrix(dim_idx)
         noise_term = self._noise_term(gram, self.gp.noise_var[dim_idx], dim_idx)
+        print(f"Beta components for dim {dim_idx}: RKHS norm={self.rkhs_norms[dim_idx]}, Noise term={noise_term}")
         return self.rkhs_norms[dim_idx] + noise_term
 
     def confidence_bounds(self, x_new, dim_idx):
@@ -388,7 +389,9 @@ class ScalableGPBounds(GPBounds):
         used_lambdas = self.gp.lambdas[dim_idx]
         sum1 = np.sum(all_lambdas)
         sum2 = np.sum(all_lambdas_2)
-        sum3 = np.sum(used_lambdas) 
+        # sum3 = np.sum(used_lambdas)
+        if not np.isclose(sum1, sum2):
+            print(f"Warning: Theoretical projection error sums differ significantly for dim {dim_idx}: {sum1} vs {sum2}")
         lambda_sum = np.sum(all_lambdas) - np.sum(used_lambdas)
         projection_error = self.rkhs_norms[dim_idx] * np.sqrt(2 * lambda_sum)
 
@@ -446,6 +449,7 @@ class ScalableGPBounds(GPBounds):
         PhiTPhi = self._feature_gram(dim_idx)
         noise_term = self._noise_term(PhiTPhi, self.gp.noise_var[dim_idx], dim_idx)
         projection_error_term = self.projection_error_term(dim_idx)
+        print(f"Beta components for dim {dim_idx}: RKHS norm={self.rkhs_norms[dim_idx]}, Noise term={noise_term}, Projection error term={projection_error_term}")
         return self.rkhs_norms[dim_idx] + noise_term + projection_error_term
 
     def confidence_bounds(self, x_new, dim_idx):

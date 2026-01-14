@@ -776,7 +776,7 @@ class ScalableGPModel(GPModelBase):
             seed=self.rng,
             polish=False,
             workers=1,
-            disp=True
+            disp=False
         )
         
         print(f"[Dim {dim_idx}] Diff. evolution NLL: {result_de.fun:.4f}, Reason: {result_de.message}")
