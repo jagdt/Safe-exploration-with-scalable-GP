@@ -766,8 +766,9 @@ class ScalableGPModel(GPModelBase):
             bounds,
             args=(X, y, dim_idx, kern_type, cache),
             strategy='best1bin',
-            maxiter=200,
-            tol=1e-4,
+            maxiter=500,
+            popsize=50,
+            tol=1e-5,
             seed=42 + dim_idx,
             polish=False,
             workers=1,
@@ -1011,43 +1012,43 @@ class ScalableGPModel(GPModelBase):
         bounds = []
         
         if kern_type == "rbf":
-            # Factor: [1e-6, 1e0]
-            bounds.append((-13.8, 0.0))
-            # Exponential decay rates: [1e-3, 1e3]
-            bounds.extend([(-6.9, 6.9)] * self.input_dim)
-            # Noise: [1e-10, 1e-4]
-            bounds.append((-23.0, -9.2))
+            # Factor: [1e-6, 1e-1]
+            bounds.append((-13.8, -2.3))
+            # Exponential decay rates: [1e-3, 1e2]
+            bounds.extend([(-6.9, 4.6)] * self.input_dim)
+            # Noise: [1e-9, 1e-5]
+            bounds.append((-20.7, -11.5))
         
         elif kern_type == "sum_lin_rbf":
-            # RBF factor: [1e-6, 1e0]
-            bounds.append((-13.8, 0.0))
-            # RBF exponential decay rates: [1e-3, 1e3]
-            bounds.extend([(-6.9, 6.9)] * self.input_dim)
-            # Linear variances: [1e-6, 1e0]
-            bounds.extend([(-13.8, 0.0)] * self.input_dim)
-            # Noise: [1e-10, 1e-4]
-            bounds.append((-23.0, -9.2))
+            # RBF factor: [1e-6, 1e-1]
+            bounds.append((-13.8, -2.3))
+            # RBF exponential decay rates: [1e-3, 1e2]
+            bounds.extend([(-6.9, 4.6)] * self.input_dim)
+            # Linear variances: [1e-6, 1e-1]
+            bounds.extend([(-13.8, -2.3)] * self.input_dim)
+            # Noise: [1e-9, 1e-5]
+            bounds.append((-20.7, -11.5))
         
         elif kern_type == "sum_lin_rbf_linear_only":
-            # Linear variances: [1e-6, 1e0]
-            bounds.extend([(-13.8, 0.0)] * self.input_dim)
-            # Noise: [1e-10, 1e-4]
-            bounds.append((-23.0, -9.2))
+            # Linear variances: [1e-6, 1e-1]
+            bounds.extend([(-13.8, -2.3)] * self.input_dim)
+            # Noise: [1e-9, 1e-5]
+            bounds.append((-20.7, -11.5))
         
         elif kern_type == "sum_lin_rbf_rbf_only":
-            # RBF factor: [1e-6, 1e0]
-            bounds.append((-13.8, 0.0))
-            # RBF exponential decay rates: [1e-3, 1e3]
-            bounds.extend([(-6.9, 6.9)] * self.input_dim)
-            # Noise: [1e-10, 1e-4]
-            bounds.append((-23.0, -9.2))
+            # RBF factor: [1e-6, 1e-1]
+            bounds.append((-13.8, -2.3))
+            # RBF exponential decay rates: [1e-3, 1e2]
+            bounds.extend([(-6.9, 4.6)] * self.input_dim)
+            # Noise: [1e-9, 1e-5]
+            bounds.append((-20.7, -11.5))
         
         elif kern_type == "individual":
             # Individual lambdas: [1e-6, 1e2]
             n_omegas = self.omegas[0].shape[0] if len(self.omegas) > 0 else 0
             bounds.extend([(-13.8, 4.6)] * n_omegas)
-            # Noise: [1e-10, 1e-4]
-            bounds.append((-23.0, -9.2))
+            # Noise: [1e-9, 1e-5]
+            bounds.append((-20.7, -11.5))
         
         else:
             raise ValueError(f"Unsupported kernel type: {kern_type}")
