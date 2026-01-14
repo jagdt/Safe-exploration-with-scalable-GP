@@ -25,7 +25,7 @@ class NumpyGPModel(KernelGPModel):
     """
 
     def __init__(self, n_s_out, n_s_in, n_u, X=None, y=None, kern_types=None,
-                 hyp=None, train=False, n_restarts=2, use_global_opt_first=True):
+                 hyp=None, train=False, n_restarts=2, use_global_opt_first=True, seed=None):
         """ Initialize GP Model (possibly without training set)
 
         Parameters
@@ -36,6 +36,7 @@ class NumpyGPModel(KernelGPModel):
             hyp (list[dict], optional): hyperparameters for each kernel
             n_restarts (int): Number of random restarts for multi-start optimization
             use_global_opt_first (bool): Use differential evolution on first training
+            seed (int, optional): Seed for random number generator
 
         """
         self.n_s_out = n_s_out
@@ -43,6 +44,7 @@ class NumpyGPModel(KernelGPModel):
         self.n_u = n_u
         self.input_dim = n_s_in + n_u
         self.gp_trained = False
+        self.rng = np.random.default_rng(seed)
         
         # Optimization settings
         self.n_restarts = n_restarts
@@ -362,12 +364,10 @@ class NumpyGPModel(KernelGPModel):
         bounds = self._get_parameter_bounds(self.kern_types[dim_idx])
         kern_type = self.kern_types[dim_idx]
         
-        # Use global optimization on first training pass if enabled
         if self.use_global_opt_first and not self.hyp_optimized:
             print(f"[Dim {dim_idx}] Using differential evolution for global optimization...")
             best_params, best_nll = self._global_optimize(X, y, dim_idx, bounds, kern_type, max_iter)
         else:
-            # Multi-start L-BFGS-B optimization
             best_params, best_nll = self._multi_start_optimize(X, y, dim_idx, bounds, kern_type, max_iter)
         
         if best_params is not None:
@@ -409,13 +409,11 @@ class NumpyGPModel(KernelGPModel):
         best_params = None
         best_nll = np.inf
         
-        # First run from current hyperparameters
         initial_params = self._pack_hyperparameters(self.hyp[dim_idx], kern_type, dim_idx)
         initial_params_log = np.log(initial_params)
         
         results = []
         
-        # Run from initial parameters
         result = minimize(
             self._neg_log_marginal_likelihood,
             initial_params_log,
@@ -427,11 +425,9 @@ class NumpyGPModel(KernelGPModel):
         if result.success or result.status == 1:
             results.append((result.x, result.fun))
         
-        # Additional random restarts
         bounds_array = np.array(bounds)
         for i in range(self.n_restarts - 1):
-            # Sample random starting point uniformly in log-space bounds
-            random_params = np.random.uniform(bounds_array[:, 0], bounds_array[:, 1])
+            random_params = self.rng.uniform(bounds_array[:, 0], bounds_array[:, 1])
             
             result = minimize(
                 self._neg_log_marginal_likelihood,
@@ -444,7 +440,6 @@ class NumpyGPModel(KernelGPModel):
             if result.success or result.status == 1:
                 results.append((result.x, result.fun))
         
-        # Select best result
         if results:
             best_idx = np.argmin([r[1] for r in results])
             best_params, best_nll = results[best_idx]
@@ -871,7 +866,7 @@ class NumpyGPModel(KernelGPModel):
         
         for i in range(self.n_s_out):
             for j in range(size):
-                S[:, j, i] = mu[:, i] + sigma[:, i] * np.random.randn(n)
+                S[:, j, i] = mu[:, i] + sigma[:, i] * self.rng.standard_normal(n)
 
         return S
 

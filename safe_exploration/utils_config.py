@@ -62,12 +62,12 @@ def _create_gp(conf, env):
                          kern_types=conf.kern_types, Z=conf.Z)
     elif conf.gp_type == "numpy":
         return NumpyGPModel(conf.gp_ns_out, conf.gp_ns_in, env.n_u,
-                         kern_types=conf.kern_types)
+                         kern_types=conf.kern_types, seed=conf.seed)
     elif conf.gp_type == "scalable":
         return ScalableGPModel(conf.gp_ns_out, conf.gp_ns_in, env.n_u,
                          kern_types=conf.kern_types, n_frequencies=conf.n_frequencies,
                          periods=conf.periods, domain_lengths=conf.domain_lengths,
-                         lengthscale_multiple=conf.lengthscale_multiple)
+                         lengthscale_multiple=conf.lengthscale_multiple, seed=conf.seed)
         raise NotImplementedError("Scalable GP not implemented for SimpleSafeMPC")
     else:
         raise ValueError(f"Unknown gp_type: {conf.gp_type}")
@@ -162,6 +162,9 @@ def create_env(conf, env_name, env_options_dict=None):
     if env_options_dict is None:
         env_options_dict = dict()
 
+    if "seed" not in env_options_dict:
+        env_options_dict["seed"] = conf.seed
+
     if env_name == "InvertedPendulum":
         if not hasattr(conf, 'pendulum_dimensions') or conf.pendulum_dimensions == 2:
             return InvertedPendulum(**env_options_dict, simple_constraints=conf.pendulum_simple_constraints,
@@ -175,7 +178,7 @@ def create_env(conf, env_name, env_options_dict=None):
         return CartPole(**env_options_dict)
 
     elif env_name == "LunarLander":
-        return LunarLander(conf)
+        return LunarLander(**env_options_dict)
 
     else:
         raise NotImplementedError("Unknown environment: {}".format(env_name))

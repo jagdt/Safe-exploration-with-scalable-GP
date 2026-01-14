@@ -71,7 +71,7 @@ class Environment(metaclass=abc.ABCMeta):
 
     def __init__(self, name: str, n_s: int, n_u: int, dt: float, init_m: ndarray, init_std: ndarray,
                  plant_noise: ndarray, u_min: ndarray, u_max: ndarray, target: ndarray, verbosity: int = 0,
-                 p_origin: ndarray = None):
+                 p_origin: ndarray = None, seed: int = None):
         self.name = name
         self.n_s = n_s
         self.n_u = n_u
@@ -89,6 +89,7 @@ class Environment(metaclass=abc.ABCMeta):
         self.delay = 20.0  # fps
         self.p_origin = p_origin if p_origin is not None else np.zeros((n_s,))
         self.current_episode_trajectory = []
+        self.rng = np.random.default_rng(seed)
 
     def reset(self, mean=None, std=None):
         """ Reset the system and sample a new start state."""
@@ -271,7 +272,7 @@ class Environment(metaclass=abc.ABCMeta):
         if init_m is None:
             init_m = self.init_m
 
-        samples = (repmat(init_std, n_samples, 1) * np.random.randn(n_samples, self.n_s) + repmat(init_m, n_samples, 1))
+        samples = (repmat(init_std, n_samples, 1) * self.rng.standard_normal((n_samples, self.n_s)) + repmat(init_m, n_samples, 1))
         # samples = (repmat(init_std, n_samples, 1) * np.random.uniform(low=-1.0, high=1.0, size=(n_samples, self.n_s)) + repmat(init_m, n_samples, 1))
 
         if normalize:
@@ -416,7 +417,7 @@ class InvertedPendulum(Environment):
     def __init__(self, name="InvertedPendulum", l=.5, m=.15, g=9.82, b=0.2, dt=.05, init_m=0., init_std=.01,
                  plant_noise=np.array([0.001, 0.0001]) ** 2, u_min=np.array([-1.]), u_max=np.array([1.]),
                  target=np.array([0.0, 0.0]), verbosity=1, norm_x=None, norm_u=None, simple_constraints=True,
-                 enable_objectives=False):
+                 enable_objectives=False, seed: int = None):
         """
         Parameters
         ----------
@@ -444,7 +445,7 @@ class InvertedPendulum(Environment):
             The target state
         """
         super(InvertedPendulum, self).__init__(name, 2, 1, dt, init_m, init_std, plant_noise, u_min, u_max, target,
-                                               verbosity)
+                                               verbosity, seed=seed)
         self.odesolver = ode(self._dynamics)
         self.l = l
         self.m = m
@@ -585,7 +586,7 @@ class InvertedPendulum(Environment):
             state = self.current_state
         noise = 0
         if add_noise:
-            noise += np.random.randn(self.n_s) * np.sqrt(self.plant_noise)
+            noise += self.rng.standard_normal(self.n_s) * np.sqrt(self.plant_noise)
 
         state_noise = state + noise
         state_norm = state_noise * self.inv_norm[0]
@@ -782,7 +783,7 @@ class InvertedPendulum(Environment):
 
     def random_action(self) -> ndarray:
         c = 0.5
-        return c * (np.random.rand(self.n_u) * (self.u_max_norm - self.u_min_norm) + self.u_min_norm)
+        return c * (self.rng.random(self.n_u) * (self.u_max_norm - self.u_min_norm) + self.u_min_norm)
 
     def _init_safety_constraints(self, simple_constraints: bool):
         """ Get state and safety constraints
@@ -891,9 +892,9 @@ class CartPole(Environment):
     def __init__(self, name='CartPole', dt=0.1, l=0.5, m=0.5, M=0.5, b=0.1, g=9.82,
                  init_m=np.array([0.0, 0.0, 0.0, 0.0]), visualize=True, init_std=0.0, u_min=np.array([-4.0]),
                  u_max=np.array([4.0]), norm_x=None, norm_u=None, plant_noise=np.array([0.02, 0.05, 0.02, 0.05]) ** 2,
-                 verbosity=1):
+                 verbosity=1, seed: int = None):
         super(CartPole, self).__init__(name, 4, 1, dt, init_m, init_std, plant_noise, u_min, u_max,
-                                       np.array([0.0, l, 0.0]), verbosity)
+                                       np.array([0.0, l, 0.0]), verbosity, seed=seed)
 
         self.ns_ode = 4
 
@@ -952,7 +953,7 @@ class CartPole(Environment):
         noise = 0.
 
         if add_noise:
-            noise += np.random.randn(self.n_s) * np.sqrt(self.plant_noise)
+            noise += self.rng.standard_normal(self.n_s) * np.sqrt(self.plant_noise)
 
         obs += noise
         obs = obs * self.inv_norm[0]
@@ -1178,7 +1179,7 @@ class CartPole(Environment):
         return h_mat_safe, self.h_safe, h_mat_obs, self.h_obs
 
     def random_action(self) -> ndarray:
-        return np.random.rand(self.n_u) * (self.u_max_norm - self.u_min_norm) + self.u_min_norm
+        return self.rng.random(self.n_u) * (self.u_max_norm - self.u_min_norm) + self.u_min_norm
 
     def _single_pend_top_pos(self, state):
         """

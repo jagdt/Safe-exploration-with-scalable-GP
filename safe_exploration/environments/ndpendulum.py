@@ -185,7 +185,7 @@ class NDPendulum(Environment):
             state = self.current_state
         noise = 0
         if add_noise:
-            noise += np.random.randn(self.n_s) * np.sqrt(self.plant_noise)
+            noise += self.rng.standard_normal(self.n_s) * np.sqrt(self.plant_noise)
 
         state_noise = state + noise
         state_norm = state_noise * self.inv_norm[0]
@@ -194,7 +194,7 @@ class NDPendulum(Environment):
 
     def random_action(self) -> ndarray:
         c = 0.5
-        return c * (np.random.rand(self.n_u) * (self.u_max - self.u_min) + self.u_min)
+        return c * (self.rng.random(self.n_u) * (self.u_max - self.u_min) + self.u_min)
 
     def _init_safety_constraints(self):
         """ Get state and safety constraints

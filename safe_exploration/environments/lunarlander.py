@@ -101,7 +101,7 @@ class LunarLander(Environment):
             state = self.current_state
         noise = 0
         if add_noise:
-            noise += np.random.randn(self.n_s) * np.sqrt(self.plant_noise)
+            noise += self.rng.standard_normal(self.n_s) * np.sqrt(self.plant_noise)
 
         state_noise = state + noise
         state_norm = state_noise * self.inv_norm[0]
@@ -145,7 +145,7 @@ class LunarLander(Environment):
         return done, result_code
 
     def random_action(self) -> ndarray:
-        return np.random.uniform(self.u_min_norm, self.u_max_norm, self.n_u)
+        return self.rng.uniform(self.u_min_norm, self.u_max_norm, self.n_u)
 
     def _render_env(self, screen, axis: [float], display_width: int, display_height: int):
         # Clear screen to black.

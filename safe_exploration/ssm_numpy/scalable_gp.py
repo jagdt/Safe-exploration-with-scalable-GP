@@ -26,7 +26,7 @@ class ScalableGPModel(GPModelBase):
     
     def __init__(self, n_s_out, n_s_in, n_u, X=None, y=None, kern_types=None,
                  hyp=None, train=False, n_frequencies=25, periods=10.0, domain_lengths=None, lengthscale_multiple=None,
-                 n_restarts=2, use_global_opt_first=True, truncation_radius=None):
+                 n_restarts=2, use_global_opt_first=True, truncation_radius=None, seed=None):
         """Initialize Scalable GP Model
         
         Parameters
@@ -59,6 +59,8 @@ class ScalableGPModel(GPModelBase):
         truncation_radius : float, optional
             Radius r for ellipsoidal frequency truncation. Frequencies satisfy q^T A_tilde q <= r^2.
             If None, computed from n_frequencies to approximately match the count. (default: None)
+        seed : int or None, optional
+            Seed for random number generator.
         """
 
         self.n_s_out = n_s_out
@@ -67,6 +69,8 @@ class ScalableGPModel(GPModelBase):
         self.input_dim = n_s_in + n_u
         self.gp_trained = False
         
+        self.rng = np.random.default_rng(seed)
+
         # Scalable GP specific attributes
         self.n_frequencies = n_frequencies
         self.truncation_radius = truncation_radius
@@ -709,7 +713,7 @@ class ScalableGPModel(GPModelBase):
         
         bounds_array = np.array(bounds)
         for i in range(self.n_restarts - 1):
-            random_params = np.random.uniform(bounds_array[:, 0], bounds_array[:, 1])
+            random_params = self.rng.uniform(bounds_array[:, 0], bounds_array[:, 1])
             
             result = minimize(
                 self._neg_log_marginal_likelihood,
@@ -769,7 +773,7 @@ class ScalableGPModel(GPModelBase):
             maxiter=500,
             popsize=50,
             tol=1e-5,
-            seed=42 + dim_idx,
+            seed=self.rng,
             polish=False,
             workers=1,
             disp=False
@@ -1171,7 +1175,7 @@ class ScalableGPModel(GPModelBase):
         
         for i in range(self.n_s_out):
             for j in range(size):
-                S[:, j, i] = mu[:, i] + sigma[:, i] * np.random.randn(n)
+                S[:, j, i] = mu[:, i] + sigma[:, i] * self.rng.standard_normal(n)
         
         return S
     

@@ -601,6 +601,7 @@ def generate_initial_samples(env, conf, relative_dynamics, solver, safe_policy):
                 margin=getattr(conf, "init_safe_policy_margin", 0.15),
                 exploration=getattr(conf, "init_safe_policy_exploration", 0.9),
                 min_width=getattr(conf, "init_safe_policy_min_width", 0.05),
+                seed=getattr(conf, "seed", None),
             )
         else:
             randomized_safe_policy = safe_policy
