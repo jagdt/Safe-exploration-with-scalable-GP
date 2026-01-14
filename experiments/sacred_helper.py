@@ -22,7 +22,7 @@ else:
 
 @ex.config
 def base_config():
-    seed = None
+    seed = 42
     save_to_db = False
     # File name of the base config file, or None to use the file associated with the environment below.
     scenario_file = None

@@ -771,12 +771,12 @@ class ScalableGPModel(GPModelBase):
             args=(X, y, dim_idx, kern_type, cache),
             strategy='best1bin',
             maxiter=500,
-            popsize=50,
-            tol=1e-5,
+            popsize=15,
+            tol=1e-4,
             seed=self.rng,
             polish=False,
             workers=1,
-            disp=False
+            disp=True
         )
         
         print(f"[Dim {dim_idx}] Diff. evolution NLL: {result_de.fun:.4f}, Reason: {result_de.message}")
@@ -1024,10 +1024,10 @@ class ScalableGPModel(GPModelBase):
             bounds.append((-20.7, -11.5))
         
         elif kern_type == "sum_lin_rbf":
-            # RBF factor: [1e-6, 1e-1]
-            bounds.append((-13.8, -2.3))
-            # RBF exponential decay rates: [1e-3, 1e2]
-            bounds.extend([(-6.9, 4.6)] * self.input_dim)
+            # RBF factor: [1e-4, 1e3]
+            bounds.append((-9.2, 6.9))
+            # RBF exponential decay rates: [1e-2, 1e2]
+            bounds.extend([(-4.6, 4.6)] * self.input_dim)
             # Linear variances: [1e-6, 1e-1]
             bounds.extend([(-13.8, -2.3)] * self.input_dim)
             # Noise: [1e-9, 1e-5]
@@ -1040,10 +1040,10 @@ class ScalableGPModel(GPModelBase):
             bounds.append((-20.7, -11.5))
         
         elif kern_type == "sum_lin_rbf_rbf_only":
-            # RBF factor: [1e-6, 1e-1]
-            bounds.append((-13.8, -2.3))
-            # RBF exponential decay rates: [1e-3, 1e2]
-            bounds.extend([(-6.9, 4.6)] * self.input_dim)
+            # RBF factor: [1e-4, 1e3]
+            bounds.append((-9.2, 6.9))
+            # RBF exponential decay rates: [1e1, 1e3]
+            bounds.extend([(4.6, 9.2)] * self.input_dim)
             # Noise: [1e-9, 1e-5]
             bounds.append((-20.7, -11.5))
         

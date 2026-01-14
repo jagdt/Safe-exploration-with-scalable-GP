@@ -27,7 +27,7 @@ class Config(DefaultConfigExploration):
 
     # -- Scalable GP specific parameters
     # Number of frequencies to use per dimension.
-    n_frequencies = 4
+    n_frequencies = 5
     # Periods for each dimension.
     periods = [3.0*2, 3.0*2, 3.0*2]
     # Domain lengths for each dimension.
