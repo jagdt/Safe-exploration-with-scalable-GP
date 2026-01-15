@@ -741,8 +741,8 @@ class InvertedPendulum(Environment):
         if new_fig:
             dtheta_norm = self.max_dtheta * self.inv_norm[0][0]
             theta_norm = self.max_rad * self.inv_norm[0][1]
-            ax.set_xlim(-dtheta_norm*1.1, dtheta_norm*1.1)
-            ax.set_ylim(-theta_norm*1.1, theta_norm*1.1)
+            ax.set_xlim(-dtheta_norm*3.0, dtheta_norm*3.0)
+            ax.set_ylim(-theta_norm*3.0, theta_norm*3.0)
             ax.set_xlabel('dθ (angular velocity)')
             ax.set_ylabel('θ (angle)')
             ax.legend()
@@ -797,26 +797,29 @@ class InvertedPendulum(Environment):
         inertia = self.m * self.l**2
         alpha_u = self.u_max[0] / inertia
         
-        max_deg = 45
-        self.max_rad = np.deg2rad(max_deg)
+        max_deg = 20
+        max_rad = np.deg2rad(max_deg)
+        max_dtheta = 1.2
+        max_dtheta_theta_0 = 0.8
         
         # safety_margin = 0.5
         # max_dtheta = safety_margin * np.sqrt(alpha_u * max_rad)
-        self.max_dtheta = 3.0
+
 
         if simple_constraints:
-            corners_polygon = np.array([[-self.max_dtheta, self.max_rad],
-                                        [self.max_dtheta, self.max_rad],
-                                        [self.max_dtheta, -self.max_rad],
-                                        [-self.max_dtheta, -self.max_rad]])
+            corners_polygon = np.array([[-max_dtheta_theta_0, max_rad],
+                                        [max_dtheta_theta_0, max_rad],
+                                        [max_dtheta_theta_0, -max_rad],
+                                        [-max_dtheta_theta_0, -max_rad]])
         else:
-            corners_polygon = np.array([[0, self.max_rad],
-                                        [self.max_dtheta, 0.0],
-                                        [0, -self.max_rad],
-                                        [-self.max_dtheta, 0.0]])  
-
+            corners_polygon = np.array([[-max_dtheta, max_rad],
+                                        [max_dtheta_theta_0, 0.0],
+                                        [max_dtheta, -max_rad],
+                                        [-max_dtheta_theta_0, 0.0]])
         ch = ConvexHull(corners_polygon)
 
+        self.max_rad = max_rad
+        self.max_dtheta = max_dtheta
         # returns the equation for the convex hull of the corner points s.t. eq = [H,h]
         # with Hx <= -h
         eq = ch.equations

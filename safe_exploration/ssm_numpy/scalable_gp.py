@@ -26,7 +26,7 @@ class ScalableGPModel(GPModelBase):
     
     def __init__(self, n_s_out, n_s_in, n_u, X=None, y=None, kern_types=None,
                  hyp=None, train=False, n_frequencies=25, periods=10.0, domain_lengths=None, lengthscale_multiple=None,
-                 n_restarts=2, use_global_opt_first=True, truncation_radius=None, seed=None):
+                 n_restarts=1, use_global_opt_first=True, truncation_radius=None, seed=None):
         """Initialize Scalable GP Model
         
         Parameters

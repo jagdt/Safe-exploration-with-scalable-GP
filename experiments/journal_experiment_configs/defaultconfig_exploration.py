@@ -21,7 +21,7 @@ class DefaultConfigExploration(DefaultConfig):
     # environment
     env_name = "InvertedPendulum"
     env_options = dict()
-    init_std = np.array([.1, .1])
+    init_std = np.array([0.5, 0.2]) # standard deviation of random initial states for static exploration
     env_options["init_std"] = init_std
     env_options["plant_noise"] = np.array([0.001, 0.0001]) ** 2
     solver_type = "safempc"
@@ -29,7 +29,7 @@ class DefaultConfigExploration(DefaultConfig):
     c_max_probing_init = 3
     c_max_probing_next_state = 2
 
-    init_std_initial_data = np.array([.1, .1])
+    init_std_initial_data = np.array([0.5, 0.2]) # standard deviation of initial safe samples
     init_m_initial_data = np.array([0., 0.])
 
     # safempc
@@ -68,7 +68,7 @@ class DefaultConfigExploration(DefaultConfig):
     m = 25  # subset of data of size m for training
     kern_types = ["sum_lin_rbf", "sum_lin_rbf"]
     train_gp = True  # train the gp initially?
-    retrain_gp_interval = 100 # retrain the gp every n-th iteration, None to disable
+    retrain_gp_interval = 1 # retrain the gp every n-th iteration, None to disable
     gp_hyp = None
     Z = None
     lin_trafo_gp_input = None
@@ -76,20 +76,6 @@ class DefaultConfigExploration(DefaultConfig):
     gp_ns_out = 2
     relative_dynamics = False  ## This should be False
     # gp_ns_in, gp_ns_out = np.shape(lin_trafo_gp_input)
-
-    # Similar setting as in befelix/safe_learning
-    # with variances = [(a_true-a.b_true-b)**2]
-    kern_dict_0 = dict()
-    kern_dict_0["mul.Mat52.variance"] = 1.0
-    kern_dict_0["mul.Mat52.lengthscale"] = 1.0
-    kern_dict_0["mul.linear.variances"] = 5e-2
-    kern_dict_0["linear.variances"] = np.array([4.74667619e-05, 1.11359543e-05, 4.67080600e-01])
-
-    kern_dict_1 = dict()
-    kern_dict_1["mul.Mat52.variance"] = 1.0
-    kern_dict_1["mul.Mat52.lengthscale"] = 1.0
-    kern_dict_1["mul.linear.variances"] = 1e-3
-    kern_dict_1["linear.variances"] = np.array([2.88698464e-08, 3.05621919e-09, 2.86362642e-04])
 
     # gp_hyp = [kern_dict_0, kern_dict_1]
     gp_hyp = None
