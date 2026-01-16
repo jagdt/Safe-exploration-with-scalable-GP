@@ -160,7 +160,8 @@ class StaticSafeMPCExploration(ExplorationModule):
                         'acceptable_tol': 1e-4, "acceptable_constr_viol_tol": 1e-5,
                         "bound_frac": 0.5, "start_with_resto": "no",
                         "required_infeasibility_reduction": 0.85,
-                        "acceptable_iter": 8}}
+                        "acceptable_iter": 8,
+                        "print_level": 2}}
         # opt = {'qpsol':'qpoases','max_iter':120,'hessian_approximation':'exact'}#,"c1":5e-4} #sqpmethod #,'hessian_approximation':'limited-memory'
         # opt = {'max_iter':120,'qpsol':'qpoases'}
 
@@ -405,6 +406,8 @@ class StaticSafeMPCExploration(ExplorationModule):
                             print((
                                 "New feasible solution with sigma sum {} found".format(
                                     str(sigm_i))))
+        if x_best is None or u_best is None:
+            raise ValueError("No feasible solution found in exploration optimization!")
 
         return x_best, u_best
 

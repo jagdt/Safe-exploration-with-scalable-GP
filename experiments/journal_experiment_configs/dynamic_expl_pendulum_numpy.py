@@ -13,6 +13,7 @@ class Config(DefaultConfigExploration):
     """
     verbose = 2
     static_exploration = True
+    visualize_initial_samples = False
 
     solver_type = "safempc"
 

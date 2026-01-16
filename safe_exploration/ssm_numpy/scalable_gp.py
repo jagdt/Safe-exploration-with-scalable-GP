@@ -1043,7 +1043,7 @@ class ScalableGPModel(GPModelBase):
             # RBF factor: [1e-4, 1e3]
             bounds.append((-9.2, 6.9))
             # RBF exponential decay rates: [1e1, 1e3]
-            bounds.extend([(4.6, 9.2)] * self.input_dim)
+            bounds.extend([(2.3, 9.2)] * self.input_dim)
             # Noise: [1e-9, 1e-5]
             bounds.append((-20.7, -11.5))
         

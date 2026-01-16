@@ -100,10 +100,11 @@ def run_exploration(conf, visualize=False):
 
             # plot the initial train set
             x_train_init = exploration_module.x_train
-            c_black = (0., 0., 0.)
-            n_train, _ = np.shape(x_train_init)
-            for i in range(n_train):
-                ax = env.plot_state(ax, x_train_init[i, :env.n_s], color=c_black)
+            if conf.visualize_initial_samples:            
+                c_black = (0., 0., 0.)
+                n_train, _ = np.shape(x_train_init)
+                for i in range(n_train):
+                    ax = env.plot_state(ax, x_train_init[i, :env.n_s], color=c_black)
 
             ell = None
 
