@@ -3,7 +3,7 @@
 import numpy as np
 from scipy.optimize import minimize, differential_evolution
 import warnings
-from casadi import horzcat, vertcat, mtimes, solve, sum1, sqrt, fmax, cos, sin, jacobian, SX, Function
+from casadi import horzcat, vertcat, mtimes, solve, sum1, sqrt, fmax, cos, sin, jacobian, SX, Function, reshape, DM
 from ..ssm_gp_base import GPModelBase
 from .gp_bounds import ScalableGPBounds
 
@@ -1024,10 +1024,10 @@ class ScalableGPModel(GPModelBase):
             bounds.append((-20.7, -11.5))
         
         elif kern_type == "sum_lin_rbf":
-            # RBF factor: [1e-4, 1e3]
-            bounds.append((-9.2, 6.9))
-            # RBF exponential decay rates: [1e-2, 1e2]
-            bounds.extend([(-4.6, 4.6)] * self.input_dim)
+            # RBF factor: [1e-4, 1e4]
+            bounds.append((-9.2, 9.2))
+            # RBF exponential decay rates: [1e2, 1e4]
+            bounds.extend([(4.6, 9.2)] * self.input_dim)
             # Linear variances: [1e-6, 1e-1]
             bounds.extend([(-13.8, -2.3)] * self.input_dim)
             # Noise: [1e-9, 1e-5]
@@ -1040,10 +1040,10 @@ class ScalableGPModel(GPModelBase):
             bounds.append((-20.7, -11.5))
         
         elif kern_type == "sum_lin_rbf_rbf_only":
-            # RBF factor: [1e-4, 1e3]
-            bounds.append((-9.2, 6.9))
-            # RBF exponential decay rates: [1e1, 1e3]
-            bounds.extend([(2.3, 9.2)] * self.input_dim)
+            # RBF factor: [1e-4, 1e4]
+            bounds.append((-9.2, 9.2))
+            # RBF exponential decay rates: [1e2, 1e4]
+            bounds.extend([(4.6, 9.2)] * self.input_dim)
             # Noise: [1e-9, 1e-5]
             bounds.append((-20.7, -11.5))
         
@@ -1273,7 +1273,7 @@ class ScalableGPModel(GPModelBase):
             V = solve(self.L_PhiT_Phi[i], Phi.T)
             V = solve(self.L_PhiT_Phi[i].T, V)
             variance = self.noise_var[i] * sum1(Phi @ V)
-            sigma_new = sqrt(fmax(variance, 1e-10))
+            sigma_new = fmax(variance, 1e-10)
             
             pred_func = Function("pred_func", [inp], [mu_new, sigma_new], ["inp"], ["mu_1", "sigma_1"])
             F_1 = pred_func(inp=x_new)
@@ -1319,17 +1319,16 @@ class ScalableGPModel(GPModelBase):
         
         if E > 1:
             phases = inner_products[1:]
-            lambdas_rest = lambdas[1:E]
             
-            cos_features = horzcat(*[lambdas_rest[i] * cos(phases[i]) for i in range(E-1)])
-            sin_features = horzcat(*[lambdas_rest[i] * sin(phases[i]) for i in range(E-1)])
+            lambdas_rest = DM(lambdas[1:E])
             
-            interleaved = []
-            for i in range(E-1):
-                interleaved.append(cos_features[i])
-                interleaved.append(sin_features[i])
+            cos_vec = lambdas_rest * cos(phases)
+            sin_vec = lambdas_rest * sin(phases)
+
+            stacked = vertcat(cos_vec.T, sin_vec.T)
+            interleaved = reshape(stacked, 1, 2 * (E - 1))
             
-            features.extend(interleaved)
+            features.append(interleaved)
         
         Phi_rbf = horzcat(*features)
         
