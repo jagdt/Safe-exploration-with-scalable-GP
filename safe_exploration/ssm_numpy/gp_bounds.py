@@ -385,14 +385,16 @@ class ScalableGPBounds(GPBounds):
             Theoretical projection error term for the specified output dimension.
         """
         all_lambdas = self.gp._compute_lambdas(dim_idx, Q=1.5)
-        all_lambdas_2 = self.gp._compute_lambdas(dim_idx, Q=2.0)
+        all_lambdas2 = self.gp._compute_lambdas(dim_idx, Q=2.0)
         used_lambdas = self.gp.lambdas[dim_idx]
         sum1 = np.sum(all_lambdas)
-        sum2 = np.sum(all_lambdas_2)
-        # sum3 = np.sum(used_lambdas)
+        sum2 = np.sum(all_lambdas2)
+        # sum_used = np.sum(used_lambdas)
         if not np.isclose(sum1, sum2):
             print(f"Warning: Theoretical projection error sums differ significantly for dim {dim_idx}: {sum1} vs {sum2}")
         lambda_sum = np.sum(all_lambdas) - np.sum(used_lambdas)
+        if lambda_sum < 0 and lambda_sum > -1e-8:
+            lambda_sum = 0.0
         projection_error = self.rkhs_norms[dim_idx] * np.sqrt(2 * lambda_sum)
 
         print(f"Computed theoretical projection error for dim {dim_idx}: {projection_error}")
