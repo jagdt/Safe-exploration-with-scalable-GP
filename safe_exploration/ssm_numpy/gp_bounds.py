@@ -2,6 +2,8 @@
 
 import numpy as np
 from abc import ABC, abstractmethod
+from scipy.special import gamma
+from scipy.integrate import quad
 
 
 class GPBounds(ABC):
@@ -357,6 +359,11 @@ class ScalableGPBounds(GPBounds):
     def compute_projection_error(self, dim_idx):
         """Compute an upper bound for the projection error ||f - P(f)|| for one output dimension.
         
+        This implements the ellipsoidal projection error bound:
+        sup_z |g(z) - Pg(z)| <= sqrt(2*B*C / sqrt(det(A_tilde)) * S_(d-1) * integral)
+        
+        where the integral is over the tail of the spectral distribution.
+        
         Parameters
         ----------
         dim_idx : int
@@ -367,9 +374,116 @@ class ScalableGPBounds(GPBounds):
         float
             Upper bound of the projection error for the specified output dimension.
         """
-        # For ellipsoidal frequencies, use theoretical projection error
-        # (old rectangular grid analytical bound no longer applicable)
-        return self.compute_theoretical_projection_error(dim_idx)
+        return self.compute_ellipsoidal_projection_error(dim_idx)
+
+    def _compute_sphere_surface_area(self, d):
+        """Compute surface area of unit sphere in d dimensions.
+        
+        S_(d-1) = 2 * pi^(d/2) / Gamma(d/2)
+        
+        Parameters
+        ----------
+        d : int
+            Dimension.
+        
+        Returns
+        -------
+        float
+            Surface area of unit (d-1)-sphere.
+        """
+        return 2.0 * np.pi ** (d / 2.0) / gamma(d / 2.0)
+    
+    def _tail_integral(self, r_minus_rho, rho, d):
+        """Compute the radial tail integral.
+        
+        Integral = int_{t=r-rho}^{infty} exp(-(t-rho)^2) * t^(d-1) dt
+        
+        Parameters
+        ----------
+        r_minus_rho : float
+            Lower limit of integration (r - rho).
+        rho : float
+            Cell radius parameter.
+        d : int
+            Dimension.
+        
+        Returns
+        -------
+        float
+            Value of the tail integral.
+        """
+        def integrand(t):
+            return np.exp(-(t - rho) ** 2) * (t ** (d - 1))
+        
+        # Use numerical integration with appropriate limits
+        # For large r-rho, the integral decays quickly
+        upper_limit = max(r_minus_rho + 10.0, rho + 10.0)  # Practical upper bound
+        
+        try:
+            result, _ = quad(integrand, r_minus_rho, upper_limit, limit=100)
+            # Check if we need to extend the upper limit
+            if integrand(upper_limit) > 1e-10 * result:
+                result, _ = quad(integrand, r_minus_rho, np.inf, limit=100)
+        except:
+            # Fallback to simpler integration if quad fails
+            result, _ = quad(integrand, r_minus_rho, np.inf, limit=50)
+        
+        return result
+    
+    def compute_ellipsoidal_projection_error(self, dim_idx):
+        """Compute projection error using ellipsoidal truncation bound.
+        
+        Implements the formula:
+        sup_z |g(z) - Pg(z)| <= sqrt(2*B*C / sqrt(det(A_tilde)) * S_(d-1) * I)
+        
+        where I is the tail integral over the discarded spectral mass.
+        
+        Parameters
+        ----------
+        dim_idx : int
+            Output dimension index.
+        
+        Returns
+        -------
+        float
+            Ellipsoidal projection error bound.
+        """
+        # Get kernel hyperparameters
+        kern_type = self.gp.kern_types[dim_idx]
+        if kern_type == "rbf":
+            C = self.gp.hyp[dim_idx]["factor"]
+            decay_rates = self.gp.hyp[dim_idx]["exponential_decay_rates"]
+        elif kern_type == "sum_lin_rbf":
+            C = self.gp.hyp[dim_idx]["rbf.factor"]
+            decay_rates = self.gp.hyp[dim_idx]["rbf.exponential_decay_rates"]
+        else:
+            raise NotImplementedError(f"Projection error not implemented for kernel type {kern_type}")
+        
+        periods = self.gp.periods[dim_idx]
+        A_tilde = decay_rates / (periods ** 2)
+        
+        B = self.rkhs_norms[dim_idx]
+        d = self.gp.input_dim
+        
+        if hasattr(self.gp, 'truncation_radius') and self.gp.truncation_radius is not None:
+            r = self.gp.truncation_radius
+        else:
+            r = np.sqrt(np.min(A_tilde)) * self.gp.n_frequencies
+        
+        rho = 0.5 * np.sqrt(np.sum(A_tilde))
+        
+        S_d_minus_1 = self._compute_sphere_surface_area(d)
+        
+        r_minus_rho = max(r - rho, 0.0)
+        tail_integral = self._tail_integral(r_minus_rho, rho, d)
+        
+        det_A_tilde = np.prod(A_tilde)
+        sqrt_det_A_tilde = np.sqrt(det_A_tilde)
+        
+        projection_error = B * np.sqrt(
+            2.0 * C / sqrt_det_A_tilde * S_d_minus_1 * tail_integral)
+        
+        return projection_error
 
     def compute_theoretical_projection_error(self, dim_idx):
         """Compute theoretical projection error term for scalable GP for one output dimension.
