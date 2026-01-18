@@ -476,13 +476,11 @@ class InvertedPendulum(Environment):
 
     @property
     def l_mu(self) -> ndarray:
-        # return np.array([0.05, .02])
         return np.array([0.0, 0.0])
 
     @property
     def l_sigm(self) -> ndarray:
-        # return np.array([0.05, .02])
-        return np.array([0.1, .02])
+        return np.array([0.5, .02])
 
     def _reset(self):
         self.odesolver.set_initial_value(self.current_state, 0.0)
