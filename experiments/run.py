@@ -67,8 +67,6 @@ def _run_scenario(_run, scenario_file: Optional[str], environment: Optional[str]
     else:
         raise ValueError('Must provide scenario file OR environment name')
 
-    conf.add_sacred_config(_run.config)
-
     conflict, conflict_str = check_config_conflicts(conf)
     if conflict:
         raise ValueError("There are conflicting settings: {}".format(conflict_str))
