@@ -327,7 +327,7 @@ class ScalableGPBounds(GPBounds):
         """
         if projection_error is None:
             return np.array([
-                self.compute_theoretical_projection_error(dim_idx) 
+                self.compute_projection_error(dim_idx) 
                 for dim_idx in range(self.gp.n_s_out)
             ])
         else:
@@ -448,7 +448,6 @@ class ScalableGPBounds(GPBounds):
         float
             Ellipsoidal projection error bound.
         """
-        # Get kernel hyperparameters
         kern_type = self.gp.kern_types[dim_idx]
         if kern_type == "rbf":
             C = self.gp.hyp[dim_idx]["factor"]
@@ -500,8 +499,10 @@ class ScalableGPBounds(GPBounds):
         float
             Theoretical projection error term for the specified output dimension.
         """
-        all_lambdas = self.gp._compute_lambdas(dim_idx, Q=1.5)
-        all_lambdas2 = self.gp._compute_lambdas(dim_idx, Q=2.0)
+        # all_lambdas = self.gp._compute_lambdas(dim_idx, Q=1.5)
+        # all_lambdas2 = self.gp._compute_lambdas(dim_idx, Q=2.0)
+        all_lambdas = self.gp._compute_lambdas(dim_idx, r=15.0)
+        all_lambdas2 = self.gp._compute_lambdas(dim_idx, r=20.0)
         used_lambdas = self.gp.lambdas[dim_idx]
         sum1 = np.sum(all_lambdas)
         sum2 = np.sum(all_lambdas2)
