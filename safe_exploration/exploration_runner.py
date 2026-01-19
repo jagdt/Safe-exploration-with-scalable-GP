@@ -7,6 +7,7 @@ Created on Tue Nov 21 09:37:59 2017
 
 import warnings
 import numpy as np
+import time
 
 from .gp_reachability import verify_trajectory_safety, trajectory_inside_ellipsoid
 from .safempc_exploration import StaticSafeMPCExploration, DynamicSafeMPCExploration
@@ -61,6 +62,8 @@ def run_exploration(conf, visualize=False):
     l_x_next_obs_all = []
     l_x_next_pred = []
     l_x_next_prior = []
+    l_timing = []
+    l_projection_error = []
 
     for jj in range(n_experiments):
         env = create_env(conf, conf.env_name, conf.env_options)
@@ -88,6 +91,14 @@ def run_exploration(conf, visualize=False):
         x_next_obs_all = np.empty((n_iterations, env.n_s))
         x_next_pred = np.empty((n_iterations, env.n_s))
         x_next_prior = np.empty((n_iterations, env.n_s))
+        
+        # Initialize timing tracking
+        timing_per_iteration = {
+            'mpc_optimization': np.empty(n_iterations),
+            'gp_prediction': np.empty(n_iterations),
+            'gp_training': np.empty(n_iterations),
+            'total': np.empty(n_iterations),
+        }
 
         # initialize color code for plotting the states
         # d_blue = np.linspace(1.0,0.0,n_iterations)
@@ -119,8 +130,11 @@ def run_exploration(conf, visualize=False):
             x_i = env.reset(env.p_origin)
 
         for i in range(n_iterations):
+            print(f"Iteration {i+1}/{n_iterations}")
+            t_iter_start = time.time()
+            
             # find the most informative sample
-
+            t_mpc_start = time.time()
             if verify_safety:
                 x_i, u_i, feasible, k_fb_all, k_ff_all, p_ctrl, q_all = exploration_module.find_max_variance_verbose(x_i
                                                                                                                      )
@@ -157,6 +171,9 @@ def run_exploration(conf, visualize=False):
 
             else:
                 x_i, u_i = exploration_module.find_max_variance(x_i)
+            
+            t_mpc_end = time.time()
+            timing_per_iteration['mpc_optimization'][i] = t_mpc_end - t_mpc_start
 
             if visualize or save_vis:
                 ax = env.plot_state(ax, x=x_i, color=c_sample(i), normalize=False)
@@ -171,13 +188,17 @@ def run_exploration(conf, visualize=False):
                 x_next, x_next_obs = env.simulate_onestep(x_i.squeeze(), u_i.squeeze())
             else:
                 _, x_next, x_next_obs, _, _ = env.step(u_i.squeeze())
-
+            
             x_next_obs_all[i, :] = x_next_obs
 
             # gather some information
             z_i = np.vstack((x_i, u_i)).T
             z_all[i] = z_i.squeeze()
+            
+            t_pred_start = time.time()
             mu_next, s2_next = exploration_module.ssm_predict(z_i)
+            timing_per_iteration['gp_prediction'][i] = time.time() - t_pred_start
+            
             pred_conf = np.sqrt(s2_next)
             sigm[i] = pred_conf.squeeze()
             x_next_prior[i, :] = safempc.eval_prior(x_i.T, u_i.T).squeeze()
@@ -187,9 +208,14 @@ def run_exploration(conf, visualize=False):
 
             # update model and information gain
             retrain = (i % conf.retrain_gp_interval == 0)
+            t_train_start = time.time()
             exploration_module.update_model(z_i, x_next_obs.reshape((1, env.n_s)),
                                             train=retrain, replace_old=False)
+            timing_per_iteration['gp_training'][i] = time.time() - t_train_start
+            
             inf_gain[i, :] = exploration_module.get_information_gain()
+            
+            timing_per_iteration['total'][i] = time.time() - t_iter_start
 
             x_i = x_next
 
@@ -206,6 +232,17 @@ def run_exploration(conf, visualize=False):
         l_x_next_obs_all += [x_next_obs_all]
         l_x_next_pred += [x_next_pred]
         l_x_next_prior += [x_next_prior]
+        l_timing += [timing_per_iteration]
+        
+        # Extract projection error if available
+        if hasattr(exploration_module.safempc.ssm, 'projection_error_per_dim'):
+            proj_error = exploration_module.safempc.ssm.projection_error_per_dim
+            if proj_error is not None:
+                l_projection_error.append(np.mean(proj_error))
+            else:
+                l_projection_error.append(np.nan)
+        else:
+            l_projection_error.append(np.nan)
 
         if not save_path is None:
             # TODO extend saving method for CemSafeMPC
@@ -217,12 +254,25 @@ def run_exploration(conf, visualize=False):
                     f"If using CemSafeMPC, you may need to implement a custom save method or disable saving."
                 )
             save_results(save_path, l_sigm_sum, l_sigm, l_inf_gain, l_z_all, l_x_next_obs_all, l_x_next_pred,
-                         x_next_prior, exploration_module.safempc.ssm, safety_all, x_train_init)
-        if visualize:
+                         x_next_prior, exploration_module.safempc.ssm, x_train_init, l_timing, safety_all=safety_all)
+        if visualize or save_vis:
             plot_model_error_comparison(exploration_module.safempc, exploration_module.env, save_dir=save_path, n_points=50, plot_bounds=conf.plot_bounds)
+    
+    # Return aggregated results
+    return {
+        'inf_gain': l_inf_gain,
+        'sigm_sum': l_sigm_sum,
+        'sigm': l_sigm,
+        'z_all': l_z_all,
+        'x_next_obs_all': l_x_next_obs_all,
+        'x_next_pred': l_x_next_pred,
+        'x_next_prior': l_x_next_prior,
+        'timing': l_timing,
+        'projection_error': l_projection_error,
+    }
 
 def save_results(save_path, sigm_sum, sigm, inf_gain, z_all, x_next_obs_all,
-                 x_next_pred, x_next_prior, gp, x_train_0, safety_all=None):
+                 x_next_pred, x_next_prior, gp, x_train_0, timing, safety_all=None):
     """ Create a dictionary from the results and save it """
     results_dict = dict()
     results_dict["sigm_sum"] = sigm_sum
@@ -233,6 +283,11 @@ def save_results(save_path, sigm_sum, sigm, inf_gain, z_all, x_next_obs_all,
     results_dict["x_next_pred"] = x_next_pred
     results_dict["x_next_prior"] = x_next_prior
     results_dict["x_train_0"] = x_train_0
+    results_dict["timing"] = timing
+    
+    # Save projection error if available
+    if hasattr(gp, 'projection_error_per_dim') and gp.projection_error_per_dim is not None:
+        results_dict["projection_error"] = np.mean(gp.projection_error_per_dim)
 
     if not safety_all is None:
         results_dict["safety_all"] = safety_all
