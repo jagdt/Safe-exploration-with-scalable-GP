@@ -25,7 +25,7 @@ class NumpyGPModel(KernelGPModel):
     """
 
     def __init__(self, n_s_out, n_s_in, n_u, X=None, y=None, kern_types=None,
-                 hyp=None, train=False, n_restarts=1, use_global_opt_first=True, seed=None):
+                 hyp=None, train=False, n_restarts=1, use_global_opt_first=False, seed=None):
         """ Initialize GP Model (possibly without training set)
 
         Parameters

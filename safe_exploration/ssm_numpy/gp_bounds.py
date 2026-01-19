@@ -483,6 +483,8 @@ class ScalableGPBounds(GPBounds):
         projection_error = B * np.sqrt(
             2.0 * C / sqrt_det_A_tilde * S_d_minus_1 * tail_integral)
         
+        print(f"Computed ellipsoidal projection error for dim {dim_idx}: {projection_error}")
+
         return projection_error
 
     def compute_theoretical_projection_error(self, dim_idx):
