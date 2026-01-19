@@ -86,7 +86,7 @@ class DefaultConfigExploration(DefaultConfig):
     gp_hyp = None
     # exploration
     n_experiments = 1
-    n_iterations = 1
+    n_iterations = 0
     n_restarts_optimizer = 20
 
     # general options

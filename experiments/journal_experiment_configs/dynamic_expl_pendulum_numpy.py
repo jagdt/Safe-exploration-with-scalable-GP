@@ -4,6 +4,7 @@ Created on Tue Dec 11 14:44:14 2025
 
 @author: jjagdt
 """
+import numpy as np
 from .defaultconfig_exploration import DefaultConfigExploration
 
 
@@ -18,10 +19,10 @@ class Config(DefaultConfigExploration):
     # -- Scalable GP specific parameters
     # Number of frequencies to use per dimension.
     n_frequencies = 5
-    # Periods for each dimension.
-    periods = [3.0*2, 2.0*2, 2.0*2]
     # Domain lengths for each dimension.
-    domain_lengths = [3.0, 2.0, 2.0] # [dθ, θ, u]
+    domain_lengths = [4.0, 2.5, 2.0] # [dθ, θ, u]
+    # Periods for each dimension.
+    periods = list(1.5 * np.array(domain_lengths))
     # Lengthscale multiple for the scalable GP to compute periods.
     lengthscale_multiple = 3.0
 
