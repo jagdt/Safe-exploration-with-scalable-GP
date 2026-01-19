@@ -15,24 +15,20 @@ class Config(DefaultConfigExploration):
     """
     task = "rkhs_norm_estimation"
 
-    verbose = 2
-    static_exploration = True
-
-    solver_type = "safempc"
-
-    # safempc
-    beta_safety = 2.0
-    n_safe = 2
-    n_perf = 0
-    r = 1
-
-    init_std_initial_data = np.array([1.0, .8])
+    init_mode = "safe_samples"
+    n_safe_samples = 800
+    init_std_initial_data = np.array([1.0, .4]) # standard deviation of initial safe samples
     init_m_initial_data = np.array([0., 0.])
+    visualize_initial_samples = True
 
     env_options = dict()
-    init_std = np.array([.1, .1])
-    env_options["init_std"] = init_std
     env_options["plant_noise"] = np.array([0.0, 0.0])
+    env_options["max_deg"] = 60
+    env_options["max_dtheta_theta_0"] = 2.4
+    pendulum_simple_constraints = True
+
+    n_experiments = 1
+    n_iterations = 0
 
     # -- GP model
     gp_type = 'numpy'  # one of 'gpy', 'numpy', 'scalable'

@@ -23,6 +23,7 @@ def run_rkhs_norm_estimation(conf):
 	"""Estimate RKHS norms of the true model error from safe initial data."""
 	n_experiments = conf.n_experiments
 	visualize = conf.visualize
+	save_vis = conf.save_vis
 	save_path = conf.save_path
 
 	experiment_results = []
@@ -49,7 +50,7 @@ def run_rkhs_norm_estimation(conf):
 		rkhs_norms = gp_model.estimate_true_rkhs_norm(x_train, y_train)
 		rkhs_norms = np.asarray(rkhs_norms, dtype=float)
 
-		if visualize:
+		if visualize or save_vis:
 			fig, ax = env.plot_safety_bounds(color="b")
 
 			# plot the initial train set
@@ -57,6 +58,12 @@ def run_rkhs_norm_estimation(conf):
 			n_train, _ = np.shape(x_train)
 			for i in range(n_train):
 				ax = env.plot_state(ax, x_train[i, :env.n_s], color=c_black)
+
+			if save_vis and save_path is not None:
+				final_traj_plot_path = "{}/trajectory_final.png".format(save_path)
+				fig.savefig(final_traj_plot_path, dpi=150, bbox_inches='tight')
+				print(f"Saved final trajectory plot: {final_traj_plot_path}")			
+				plt.close(fig)
 
 			plot_model_error_comparison(safempc, env, save_dir=save_path, n_points=50, plot_bounds=conf.plot_bounds)
 

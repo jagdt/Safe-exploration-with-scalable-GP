@@ -119,12 +119,12 @@ def build_polytope_randomized_policy(base_policy, *, a_lin, b_lin,
         )
 
         if interval is None or base_flat.size != 1:
-            return base_action
+            return np.clip(base_action, u_lower, u_upper)
 
         lower, upper = interval
         span = upper - lower
         if span <= 0:
-            return base_action
+            return np.clip(base_action, u_lower, u_upper)
 
         if span < min_width:
             extra = 0.5 * (min_width - span)
@@ -132,7 +132,7 @@ def build_polytope_randomized_policy(base_policy, *, a_lin, b_lin,
             upper = min(u_upper, upper + extra)
             span = upper - lower
             if span <= 0:
-                return base_action
+                return np.clip(base_action, u_lower, u_upper)
 
         shrink = margin * span
         if shrink > 0.0:

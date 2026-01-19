@@ -27,6 +27,9 @@ class DefaultConfigExploration(DefaultConfig):
     init_std = np.array([0.5, 0.2]) # standard deviation of random initial states for static exploration
     env_options["init_std"] = init_std
     env_options["plant_noise"] = np.array([0.001, 0.0001]) ** 2
+    env_options["max_deg"] = 20
+    env_options["max_dtheta"] = 1.2
+    env_options["max_dtheta_theta_0"] = 0.8
     solver_type = "safempc"
     pendulum_simple_constraints = False
     enable_objectives = False

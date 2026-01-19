@@ -416,8 +416,9 @@ class InvertedPendulum(Environment):
 
     def __init__(self, name="InvertedPendulum", l=.5, m=.15, g=9.82, b=0.2, dt=.05, init_m=0., init_std=.01,
                  plant_noise=np.array([0.001, 0.0001]) ** 2, u_min=np.array([-1.]), u_max=np.array([1.]),
-                 target=np.array([0.0, 0.0]), verbosity=1, norm_x=None, norm_u=None, simple_constraints=True,
-                 enable_objectives=False, seed: int = None):
+                 target=np.array([0.0, 0.0]), verbosity=1, norm_x=None, norm_u=None,
+                 max_deg=20, max_dtheta=1.2, max_dtheta_theta_0=0.8,
+                 simple_constraints=True, enable_objectives=False, seed: int = None):
         """
         Parameters
         ----------
@@ -462,7 +463,7 @@ class InvertedPendulum(Environment):
         self._current_achieved_objective_states = []
         self._achieved_objectives = []
 
-        max_deg = 30
+        # max_deg = 30
         if norm_x is None:
             norm_x = np.array([1.0, np.deg2rad(max_deg)])
 
@@ -471,6 +472,10 @@ class InvertedPendulum(Environment):
 
         self.norm = [norm_x, norm_u]
         self.inv_norm = [arr ** -1 for arr in self.norm]
+        
+        self.max_deg = max_deg
+        self.max_dtheta = max_dtheta
+        self.max_dtheta_theta_0 = max_dtheta_theta_0
 
         self._init_safety_constraints(simple_constraints)
 
@@ -792,17 +797,9 @@ class InvertedPendulum(Environment):
             If TRUE: Use simple box constraints for safety region
             If FALSE: Use diamond shaped constraints for safety region
         """
-        inertia = self.m * self.l**2
-        alpha_u = self.u_max[0] / inertia
-        
-        max_deg = 20
-        max_rad = np.deg2rad(max_deg)
-        max_dtheta = 1.2
-        max_dtheta_theta_0 = 0.8
-        
-        # safety_margin = 0.5
-        # max_dtheta = safety_margin * np.sqrt(alpha_u * max_rad)
-
+        max_rad = np.deg2rad(self.max_deg)
+        max_dtheta = self.max_dtheta
+        max_dtheta_theta_0 = self.max_dtheta_theta_0
 
         if simple_constraints:
             corners_polygon = np.array([[-max_dtheta_theta_0, max_rad],
@@ -817,7 +814,6 @@ class InvertedPendulum(Environment):
         ch = ConvexHull(corners_polygon)
 
         self.max_rad = max_rad
-        self.max_dtheta = max_dtheta
         # returns the equation for the convex hull of the corner points s.t. eq = [H,h]
         # with Hx <= -h
         eq = ch.equations
