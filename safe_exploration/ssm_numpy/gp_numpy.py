@@ -350,6 +350,10 @@ class NumpyGPModel(KernelGPModel):
         On first training pass, can optionally use differential evolution
         for global optimization.
         
+        For sum_lin_rbf kernel, uses staged optimization:
+        1. Optimize linear component first
+        2. Optimize RBF component with linear fixed
+        
         Parameters
         ----------
         X : ndarray [N × (n_s_in + n_u)]
@@ -361,22 +365,65 @@ class NumpyGPModel(KernelGPModel):
         max_iter : int, optional
             Maximum number of optimization iterations
         """
-        bounds = self._get_parameter_bounds(self.kern_types[dim_idx])
-        kern_type = self.kern_types[dim_idx]
-        
-        if self.use_global_opt_first and not self.hyp_optimized:
-            print(f"[Dim {dim_idx}] Using differential evolution for global optimization...")
-            best_params, best_nll = self._global_optimize(X, y, dim_idx, bounds, kern_type, max_iter)
+        if self.kern_types[dim_idx] == "sum_lin_rbf":
+            # Stage 1: Optimize linear component first
+            print(f"[Dim {dim_idx}] Stage 1: Optimizing linear component...")
+            initial_params = self._pack_hyperparameters(self.hyp[dim_idx], "sum_lin_rbf_linear_only", dim_idx)
+            initial_params = np.log(initial_params)
+            bounds = self._get_parameter_bounds("sum_lin_rbf_linear_only")
+            
+            result = minimize(
+                self._neg_log_marginal_likelihood,
+                initial_params,
+                args=(X, y, dim_idx, "sum_lin_rbf_linear_only"),
+                method='L-BFGS-B',
+                bounds=bounds,
+                options={'maxiter': max_iter, 'disp': False}
+            )
+            
+            if result.success or result.status == 1:
+                optimized_params = np.exp(result.x)
+                partial_hyp = self._unpack_hyperparameters(optimized_params[:-1], "sum_lin_rbf_linear_only")
+                self.hyp[dim_idx].update(partial_hyp)
+                self.noise_var[dim_idx] = optimized_params[-1]
+                print(f"[Dim {dim_idx}] Stage 1 succeeded, NLL: {result.fun:.4f}")
+            else:
+                warnings.warn(f"[Dim {dim_idx}] Linear optimization failed: {result.message}. Using initial values.")
+            
+            # Stage 2: Optimize RBF component with global opt and restarts
+            print(f"[Dim {dim_idx}] Stage 2: Optimizing RBF component...")
+            bounds = self._get_parameter_bounds("sum_lin_rbf_rbf_only")
+            
+            if self.use_global_opt_first and not self.hyp_optimized:
+                best_params, best_nll = self._global_optimize(X, y, dim_idx, bounds, "sum_lin_rbf_rbf_only", max_iter)
+            else:
+                best_params, best_nll = self._multi_start_optimize(X, y, dim_idx, bounds, "sum_lin_rbf_rbf_only", max_iter)
+            
+            if best_params is not None:
+                optimized_params = np.exp(best_params)
+                partial_hyp = self._unpack_hyperparameters(optimized_params[:-1], "sum_lin_rbf_rbf_only")
+                self.hyp[dim_idx].update(partial_hyp)
+                self.noise_var[dim_idx] = optimized_params[-1]
+                print(f"[Dim {dim_idx}] Final hyperparameters: {self.hyp[dim_idx]}, noise_var: {self.noise_var[dim_idx]:.2e}, NLL: {best_nll:.4f}")
+            else:
+                warnings.warn(f"[Dim {dim_idx}] RBF optimization failed. Using initial values.")
         else:
-            best_params, best_nll = self._multi_start_optimize(X, y, dim_idx, bounds, kern_type, max_iter)
-        
-        if best_params is not None:
-            optimized_params = np.exp(best_params)
-            self.hyp[dim_idx] = self._unpack_hyperparameters(optimized_params[:-1], kern_type)
-            self.noise_var[dim_idx] = optimized_params[-1]
-            print(f"[Dim {dim_idx}] Optimized hyperparameters: {self.hyp[dim_idx]}, noise_var: {self.noise_var[dim_idx]:.2e}, NLL: {best_nll:.4f}")
-        else:
-            warnings.warn(f"Hyperparameter optimization failed for dimension {dim_idx}. Using initial values.")
+            bounds = self._get_parameter_bounds(self.kern_types[dim_idx])
+            kern_type = self.kern_types[dim_idx]
+            
+            if self.use_global_opt_first and not self.hyp_optimized:
+                print(f"[Dim {dim_idx}] Using differential evolution for global optimization...")
+                best_params, best_nll = self._global_optimize(X, y, dim_idx, bounds, kern_type, max_iter)
+            else:
+                best_params, best_nll = self._multi_start_optimize(X, y, dim_idx, bounds, kern_type, max_iter)
+            
+            if best_params is not None:
+                optimized_params = np.exp(best_params)
+                self.hyp[dim_idx] = self._unpack_hyperparameters(optimized_params[:-1], kern_type)
+                self.noise_var[dim_idx] = optimized_params[-1]
+                print(f"[Dim {dim_idx}] Optimized hyperparameters: {self.hyp[dim_idx]}, noise_var: {self.noise_var[dim_idx]:.2e}, NLL: {best_nll:.4f}")
+            else:
+                warnings.warn(f"Hyperparameter optimization failed for dimension {dim_idx}. Using initial values.")
     
     def _multi_start_optimize(self, X, y, dim_idx, bounds, kern_type, max_iter):
         """Multi-start L-BFGS-B optimization from random starting points
@@ -417,7 +464,7 @@ class NumpyGPModel(KernelGPModel):
         result = minimize(
             self._neg_log_marginal_likelihood,
             initial_params_log,
-            args=(X, y, dim_idx),
+            args=(X, y, dim_idx, kern_type),
             method='L-BFGS-B',
             bounds=bounds,
             options={'maxiter': max_iter, 'disp': False}
@@ -432,7 +479,7 @@ class NumpyGPModel(KernelGPModel):
             result = minimize(
                 self._neg_log_marginal_likelihood,
                 random_params,
-                args=(X, y, dim_idx),
+                args=(X, y, dim_idx, kern_type),
                 method='L-BFGS-B',
                 bounds=bounds,
                 options={'maxiter': max_iter, 'disp': False}
@@ -480,7 +527,7 @@ class NumpyGPModel(KernelGPModel):
         result_de = differential_evolution(
             self._neg_log_marginal_likelihood,
             bounds,
-            args=(X, y, dim_idx),
+            args=(X, y, dim_idx, kern_type),
             strategy='best1bin',
             maxiter=200,
             tol=1e-4,
@@ -496,7 +543,7 @@ class NumpyGPModel(KernelGPModel):
         result = minimize(
             self._neg_log_marginal_likelihood,
             result_de.x,
-            args=(X, y, dim_idx),
+            args=(X, y, dim_idx, kern_type),
             method='L-BFGS-B',
             bounds=bounds,
             options={'maxiter': max_iter, 'disp': False}
@@ -509,7 +556,7 @@ class NumpyGPModel(KernelGPModel):
             # Fall back to DE result
             return result_de.x, result_de.fun
 
-    def _neg_log_marginal_likelihood(self, hyp_array_log, X, y, dim_idx):
+    def _neg_log_marginal_likelihood(self, hyp_array_log, X, y, dim_idx, kern_type_override=None):
         """Negative log marginal likelihood
         
         Parameters
@@ -522,6 +569,8 @@ class NumpyGPModel(KernelGPModel):
             Training targets
         dim_idx : int
             Output dimension index
+        kern_type_override : str, optional
+            Override kernel type for virtual types in staged optimization
             
         Returns
         -------
@@ -530,7 +579,15 @@ class NumpyGPModel(KernelGPModel):
         """
         hyp_array = np.exp(hyp_array_log)
         
-        hyp_dict = self._unpack_hyperparameters(hyp_array[:-1], self.kern_types[dim_idx])
+        kern_type = kern_type_override if kern_type_override is not None else self.kern_types[dim_idx]
+        partial_hyp = self._unpack_hyperparameters(hyp_array[:-1], kern_type)
+        
+        if kern_type in ["sum_lin_rbf_linear_only", "sum_lin_rbf_rbf_only"]:
+            hyp_dict = self.hyp[dim_idx].copy()
+            hyp_dict.update(partial_hyp)
+        else:
+            hyp_dict = partial_hyp
+        
         K = self.compute_kernel(X, X, self.kern_types[dim_idx], hyp_dict)
         noise_var = hyp_array[-1]
         K += noise_var * np.eye(X.shape[0])
@@ -559,7 +616,7 @@ class NumpyGPModel(KernelGPModel):
         hyp_dict : dict
             Hyperparameter dictionary
         kern_type : str
-            Kernel type
+            Kernel type (including virtual types for staged optimization)
         dim_idx : int
             Output dimension index
             
@@ -579,6 +636,17 @@ class NumpyGPModel(KernelGPModel):
                 hyp_dict['rbf.lengthscale'],
                 [hyp_dict['rbf.variance']],
                 hyp_dict['linear.variances'],
+                [self.noise_var[dim_idx]]
+            ])
+        elif kern_type == 'sum_lin_rbf_linear_only':
+            hyp_array = np.concatenate([
+                hyp_dict['linear.variances'],
+                [self.noise_var[dim_idx]]
+            ])
+        elif kern_type == 'sum_lin_rbf_rbf_only':
+            hyp_array = np.concatenate([
+                hyp_dict['rbf.lengthscale'],
+                [hyp_dict['rbf.variance']],
                 [self.noise_var[dim_idx]]
             ])
         elif kern_type == 'prod_lin_rbf':
@@ -635,6 +703,20 @@ class NumpyGPModel(KernelGPModel):
             # Noise: [1e-10, 1e0]
             bounds.append((-23.0, 0.0))
         
+        elif kern_type == 'sum_lin_rbf_linear_only':
+            # Linear variances: [1e-6, 1e1]
+            bounds.extend([(-13.8, 2.3)] * self.input_dim)
+            # Noise: [1e-10, 1e0]
+            bounds.append((-23.0, 0.0))
+        
+        elif kern_type == 'sum_lin_rbf_rbf_only':
+            # RBF lengthscales: [1e-3, 1e3]
+            bounds.extend([(-6.9, 6.9)] * self.input_dim)
+            # RBF variance: [1e-6, 1e2]
+            bounds.append((-13.8, 4.6))
+            # Noise: [1e-10, 1e0]
+            bounds.append((-23.0, 0.0))
+        
         elif kern_type == 'prod_lin_rbf' or kern_type == 'lin_mat52':
             # Lengthscales: [1e-3, 1e3]
             bounds.extend([(-6.9, 6.9)] * self.input_dim)
@@ -678,6 +760,12 @@ class NumpyGPModel(KernelGPModel):
             hyp_dict['rbf.variance'] = hyp_array[idx]
             idx += 1
             hyp_dict['linear.variances'] = hyp_array[idx:idx+n]
+        elif kern_type == 'sum_lin_rbf_linear_only':
+            hyp_dict['linear.variances'] = hyp_array
+        elif kern_type == 'sum_lin_rbf_rbf_only':
+            n = self.input_dim
+            hyp_dict['rbf.lengthscale'] = hyp_array[:n]
+            hyp_dict['rbf.variance'] = hyp_array[n]
         elif kern_type == 'prod_lin_rbf':
             n = self.input_dim
             idx = 0
