@@ -217,6 +217,101 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
     plt.show()
 
 
+def plot_info_gain_trajectories(results_by_type, gp_types, param_name, param_values, output_dir=None):
+    """
+    Plot information gain development over iterations for different parameter values
+    
+    Parameters
+    ----------
+    results_by_type : dict
+        {gp_type: {param_value: [results]}}
+    gp_types : list
+        List of GP types to compare
+    param_name : str
+        Name of the parameter being varied
+    param_values : list
+        Sorted list of parameter values
+    output_dir : str, optional
+        Directory to save plots
+    """
+    fig, axes = plt.subplots(1, len(gp_types), figsize=(8 * len(gp_types), 6))
+    if len(gp_types) == 1:
+        axes = [axes]
+    
+    # Color palette for different parameter values
+    colors = plt.cm.viridis(np.linspace(0, 0.9, len(param_values)))
+    
+    for ax_idx, gp_type in enumerate(gp_types):
+        ax = axes[ax_idx]
+        
+        for param_idx, param_val in enumerate(param_values):
+            if param_val not in results_by_type[gp_type]:
+                continue
+            
+            results_list = results_by_type[gp_type][param_val]
+            
+            # Extract information gain trajectories
+            trajectories = []
+            for result in results_list:
+                if 'information_gain' in result:
+                    # New format: dict with 'trajectory' or 'per_iteration'
+                    if isinstance(result['information_gain'], dict):
+                        if 'trajectory' in result['information_gain']:
+                            traj = result['information_gain']['trajectory']
+                        elif 'per_iteration' in result['information_gain']:
+                            traj = result['information_gain']['per_iteration']
+                        else:
+                            continue
+                        if isinstance(traj, list):
+                            traj = np.array(traj)
+                        # Sum across dimensions if multi-dimensional
+                        if traj.ndim > 1:
+                            traj = np.sum(traj, axis=1)
+                        trajectories.append(traj)
+                    # Legacy format: array
+                    elif isinstance(result['information_gain'], (list, np.ndarray)):
+                        traj = np.array(result['information_gain'])
+                        if traj.ndim > 1:
+                            traj = np.sum(traj, axis=1)
+                        trajectories.append(traj)
+            
+            if not trajectories:
+                continue
+            
+            # Ensure all trajectories have the same length
+            min_len = min(len(t) for t in trajectories)
+            trajectories = [t[:min_len] for t in trajectories]
+            trajectories = np.array(trajectories)
+            
+            # Calculate mean and std across seeds
+            mean_traj = np.mean(trajectories, axis=0)
+            std_traj = np.std(trajectories, axis=0)
+            iterations = np.arange(1, len(mean_traj) + 1)
+            
+            # Plot with shaded error region
+            label = f'{param_name.replace("_", " ").replace("n ", "N=").replace("N=safe samples", "N=")}{param_val}'
+            ax.plot(iterations, mean_traj, color=colors[param_idx], label=label, linewidth=2.5)
+            ax.fill_between(iterations, mean_traj - std_traj, mean_traj + std_traj, 
+                          color=colors[param_idx], alpha=0.2)
+        
+        ax.set_xlabel('Iteration')
+        ax.set_ylabel('Information Gain')
+        gp_label = 'Standard GP' if gp_type == 'numpy' else 'Scalable GP'
+        ax.set_title(f'Information Gain Development: {gp_label}')
+        ax.legend(loc='best')
+        ax.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    
+    if output_dir:
+        save_path = Path(output_dir) / f"info_gain_trajectory_{param_name}.png"
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        print(f"Saved: {save_path}")
+    
+    plt.show()
+
+
 def plot_initial_samples_comparison(results_dir, output_dir=None):
     """
     Plot timing comparison between standard GP and scalable GP
@@ -466,6 +561,10 @@ def plot_initial_samples_comparison(results_dir, output_dir=None):
     }
     plot_timing_breakdown(results_by_type, ['numpy', 'scalable'], 'n_safe_samples', n_samples_values, output_dir)
     
+    # Create information gain trajectory plot
+    print("\nCreating information gain trajectory plots...")
+    plot_info_gain_trajectories(results_by_type, ['numpy', 'scalable'], 'n_safe_samples', n_samples_values.tolist(), output_dir)
+    
     # Print summary
     print("\n" + "="*80)
     print("SUMMARY: INITIAL SAMPLES SWEEP")
@@ -699,6 +798,10 @@ def plot_frequency_sweep(results_dir, output_dir=None):
         scalable_results_dict[n_freq] = results
     results_by_type = {'scalable': scalable_results_dict}
     plot_timing_breakdown(results_by_type, ['scalable'], 'n_frequencies', freq_values.tolist(), output_dir)
+    
+    # Create information gain trajectory plot
+    print("\nCreating information gain trajectory plots...")
+    plot_info_gain_trajectories(results_by_type, ['scalable'], 'n_frequencies', freq_values.tolist(), output_dir)
     
     # Print summary
     print("\n" + "="*80)

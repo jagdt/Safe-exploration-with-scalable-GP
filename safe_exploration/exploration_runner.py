@@ -240,6 +240,14 @@ def run_exploration(conf, visualize=False):
                 l_projection_error.append(np.nan)
         else:
             l_projection_error.append(np.nan)
+        
+        # Extract GP hyperparameters if available
+        gp_hyperparameters = None
+        if hasattr(exploration_module.safempc.ssm, 'hyp'):
+            gp_hyperparameters = {
+                'hyp': exploration_module.safempc.ssm.hyp,
+                'noise_var': exploration_module.safempc.ssm.noise_var.tolist() if hasattr(exploration_module.safempc.ssm, 'noise_var') else None
+            }
 
         if not save_path is None:
             # TODO extend saving method for CemSafeMPC
@@ -266,6 +274,7 @@ def run_exploration(conf, visualize=False):
         'x_next_prior': l_x_next_prior,
         'timing': l_timing,
         'projection_error': l_projection_error,
+        'gp_hyperparameters': gp_hyperparameters,
     }
 
 def save_results(save_path, sigm_sum, sigm, inf_gain, z_all, x_next_obs_all,

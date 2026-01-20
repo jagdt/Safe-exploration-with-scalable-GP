@@ -102,6 +102,10 @@ def run_exploration_experiment(config, experiment_name="experiment"):
             if proj_err is not None and not np.isnan(proj_err):
                 metrics['projection_error'] = float(proj_err)
         
+        # Extract GP hyperparameters
+        if 'gp_hyperparameters' in results and results['gp_hyperparameters'] is not None:
+            metrics['gp_hyperparameters'] = results['gp_hyperparameters']
+        
         print(f"\n✓ Completed: {experiment_name}")
         
         return metrics
@@ -343,21 +347,21 @@ def main():
     # Common overrides for all experiments
     base_overrides = {
         'verbose': 1,
-        'n_iterations': 20,
+        'n_iterations': 200,
         'save_results': True,
         'save_vis': True,
         'visualize': False,
     }
     
     # Random seeds for statistical robustness
-    seeds = list(range(1))
+    seeds = list(range(2))
     
     # Sweep 1: Vary initial samples, compare GP types
     print("\n" + "="*80)
     print("SWEEP 1: INITIAL SAMPLES (Standard GP vs Scalable GP)")
     print("="*80)
     
-    n_values = [200, 400, 600, 800]
+    n_values = [400, 600]
     # n_values = [500]
     overrides_samples = base_overrides.copy()
     overrides_samples['n_frequencies'] = 5  # Fixed for scalable GP in this sweep
@@ -376,7 +380,7 @@ def main():
     overrides_freq['n_safe_samples'] = 400  # Fixed number of initial safe samples
     
     output_dir_freq = f"results_exploration/frequencies_sweep_{timestamp}"
-    sweep_frequencies(n_frequencies_list, seeds, overrides_freq, output_dir_freq)
+    # sweep_frequencies(n_frequencies_list, seeds, overrides_freq, output_dir_freq)
     
     print("\n" + "="*80)
     print("ALL SWEEPS COMPLETE")
