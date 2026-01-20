@@ -102,4 +102,4 @@ class DefaultConfigExploration(DefaultConfig):
     data_savename = None
 
     def __init__(self, file_path):
-        super(DefaultConfigExploration, self).create_savedirs(file_path)
+        self.file_path = file_path

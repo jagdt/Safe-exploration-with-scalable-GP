@@ -153,20 +153,22 @@ def sweep_initial_samples(n_values, seeds, base_overrides, output_dir):
     for gp_type in ['numpy', 'scalable']:
         for n in n_values:
             for seed in seeds:
-                # Create fresh config instance with modified parameters
+                # Create fresh config instance
                 from journal_experiment_configs.dynamic_expl_pendulum_numpy import Config
                 exp_config = Config()
                 exp_config.gp_type = gp_type
-                exp_config.n_safe_samples = n  # Set number of initial safe samples
+                exp_config.n_safe_samples = n
                 exp_config.seed = seed
                 
                 # Apply any additional base config overrides
                 if base_overrides:
                     for key, value in base_overrides.items():
-                        if key not in ['gp_type', 'n_safe_samples', 'seed']:  # Don't override varying params
+                        if key not in ['gp_type', 'n_safe_samples', 'seed']:
                             setattr(exp_config, key, value)
                 
                 exp_name = f"{gp_type}_n{n}_seed{seed}"
+                exp_config.save_dir = f"{output_dir}/{exp_name}"
+                exp_config.save_path_base = "."
 
                 # Run experiment
                 results = run_exploration_experiment(exp_config, exp_name)
@@ -244,7 +246,9 @@ def sweep_frequencies(n_frequencies_list, seeds, base_overrides, output_dir):
                     setattr(exp_config, key, value)
         
         exp_name = f"numpy_baseline_seed{seed}"
-        
+        exp_config.save_dir = f"{output_dir}/{exp_name}"
+        exp_config.save_path_base = "."
+
         # Run experiment
         results = run_exploration_experiment(exp_config, exp_name)
         all_results.append(results)
@@ -262,7 +266,7 @@ def sweep_frequencies(n_frequencies_list, seeds, base_overrides, output_dir):
     print(f"\nRunning Scalable GP with varying frequencies...")
     for n_freq in n_frequencies_list:
         for seed in seeds:
-            # Create fresh config instance with modified parameters
+            # Create fresh config instance
             from journal_experiment_configs.dynamic_expl_pendulum_numpy import Config
             exp_config = Config()
             exp_config.gp_type = 'scalable'
@@ -272,10 +276,12 @@ def sweep_frequencies(n_frequencies_list, seeds, base_overrides, output_dir):
             # Apply any additional base config overrides
             if base_overrides:
                 for key, value in base_overrides.items():
-                    if key not in ['gp_type', 'n_frequencies', 'seed']:  # Don't override varying params
+                    if key not in ['gp_type', 'n_frequencies', 'seed']:
                         setattr(exp_config, key, value)
             
             exp_name = f"scalable_freq{n_freq}_seed{seed}"
+            exp_config.save_dir = f"{output_dir}/{exp_name}"
+            exp_config.save_path_base = "."
             
             # Run experiment
             results = run_exploration_experiment(exp_config, exp_name)
@@ -337,7 +343,7 @@ def main():
     # Common overrides for all experiments
     base_overrides = {
         'verbose': 1,
-        'n_iterations': 1,
+        'n_iterations': 20,
         'save_results': True,
         'save_vis': True,
         'visualize': False,
@@ -351,8 +357,8 @@ def main():
     print("SWEEP 1: INITIAL SAMPLES (Standard GP vs Scalable GP)")
     print("="*80)
     
-    # n_values = [250, 500, 750]
-    n_values = [500]
+    n_values = [200, 400, 600, 800]
+    # n_values = [500]
     overrides_samples = base_overrides.copy()
     overrides_samples['n_frequencies'] = 5  # Fixed for scalable GP in this sweep
     
@@ -364,10 +370,10 @@ def main():
     print("SWEEP 2: FREQUENCIES (Scalable GP)")
     print("="*80)
     
-    # n_frequencies_list = [4, 5, 6]
-    n_frequencies_list = [6]
+    n_frequencies_list = [5]
+    # n_frequencies_list = [6]
     overrides_freq = base_overrides.copy()
-    overrides_freq['n_safe_samples'] = 500  # Fixed number of initial safe samples
+    overrides_freq['n_safe_samples'] = 400  # Fixed number of initial safe samples
     
     output_dir_freq = f"results_exploration/frequencies_sweep_{timestamp}"
     sweep_frequencies(n_frequencies_list, seeds, overrides_freq, output_dir_freq)

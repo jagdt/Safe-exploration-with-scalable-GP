@@ -67,8 +67,8 @@ def _create_gp(conf, env):
         return ScalableGPModel(conf.gp_ns_out, conf.gp_ns_in, env.n_u,
                          kern_types=conf.kern_types, n_frequencies=conf.n_frequencies,
                          periods=conf.periods, domain_lengths=conf.domain_lengths,
-                         lengthscale_multiple=conf.lengthscale_multiple, seed=conf.seed)
-        raise NotImplementedError("Scalable GP not implemented for SimpleSafeMPC")
+                         lengthscale_multiple=conf.lengthscale_multiple,
+                         truncation_radius=conf.truncation_radius, seed=conf.seed)
     else:
         raise ValueError(f"Unknown gp_type: {conf.gp_type}")
 

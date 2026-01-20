@@ -44,7 +44,7 @@ def run_exploration(conf, visualize=False):
         The Config class for the exploration setting (see DefaultConfigExploration for details)
 
     """
-
+    conf.create_savedirs(conf.file_path)
     # Get configs (see DefaultConfigExploration for Details)
 
     static_exploration = conf.static_exploration
@@ -95,7 +95,6 @@ def run_exploration(conf, visualize=False):
         # Initialize timing tracking
         timing_per_iteration = {
             'mpc_optimization': np.empty(n_iterations),
-            'gp_prediction': np.empty(n_iterations),
             'gp_training': np.empty(n_iterations),
             'total': np.empty(n_iterations),
         }
@@ -195,9 +194,7 @@ def run_exploration(conf, visualize=False):
             z_i = np.vstack((x_i, u_i)).T
             z_all[i] = z_i.squeeze()
             
-            t_pred_start = time.time()
             mu_next, s2_next = exploration_module.ssm_predict(z_i)
-            timing_per_iteration['gp_prediction'][i] = time.time() - t_pred_start
             
             pred_conf = np.sqrt(s2_next)
             sigm[i] = pred_conf.squeeze()

@@ -125,8 +125,8 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
         axes = [axes]
     
     # Timing components to visualize
-    components = ['mpc_optimization', 'gp_training', 'gp_prediction']
-    component_labels = ['MPC Optimization', 'GP Training', 'GP Prediction']
+    components = ['mpc_optimization', 'gp_training', 'total']
+    component_labels = ['MPC Optimization', 'GP Training', 'Other']
     component_colors = [RWTH_BLUE, RWTH_ORANGE, RWTH_GREEN]
     
     for ax_idx, gp_type in enumerate(gp_types):
@@ -158,12 +158,31 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
                 else:
                     timing_means[comp].append(0.0)
         
+        # Calculate 'other' time as total - mpc - gp_training
+        other_time = []
+        for i in range(len(param_values)):
+            total = timing_means['total'][i]
+            mpc = timing_means['mpc_optimization'][i]
+            gp = timing_means['gp_training'][i]
+            other = max(0.0, total - mpc - gp)  # Ensure non-negative
+            other_time.append(other)
+        
+        # Build list of components to plot (exclude 'total', add 'other')
+        plot_components = ['mpc_optimization', 'gp_training', 'other']
+        plot_labels = ['MPC Optimization', 'GP Training', 'Other']
+        plot_colors = [RWTH_BLUE, RWTH_ORANGE, RWTH_GREEN]
+        plot_values = {
+            'mpc_optimization': timing_means['mpc_optimization'],
+            'gp_training': timing_means['gp_training'],
+            'other': other_time
+        }
+        
         # Filter out components with all zeros (for cleaner visualization)
         active_components = []
         active_labels = []
         active_colors = []
-        for comp, label, color in zip(components, component_labels, component_colors):
-            if np.sum(timing_means[comp]) > 1e-6:  # Only include if there's meaningful time
+        for comp, label, color in zip(plot_components, plot_labels, plot_colors):
+            if np.sum(plot_values[comp]) > 1e-6:
                 active_components.append(comp)
                 active_labels.append(label)
                 active_colors.append(color)
@@ -174,13 +193,14 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
         bottom = np.zeros(len(param_values))
         
         for comp, label, color in zip(active_components, active_labels, active_colors):
-            values = np.array(timing_means[comp])
+            values = np.array(plot_values[comp])
             ax.bar(x, values, width, label=label, bottom=bottom, color=color, alpha=0.8)
             bottom += values
         
         ax.set_xlabel(param_name.replace('_', ' ').title())
         ax.set_ylabel('Average Time per Iteration (s)')
-        ax.set_title(f'Timing Breakdown: {gp_type.upper()} GP')
+        gp_label = 'Standard GP' if gp_type == 'numpy' else 'Scalable GP'
+        ax.set_title(f'Timing Breakdown: {gp_label}')
         ax.set_xticks(x)
         ax.set_xticklabels([str(p) for p in param_values])
         ax.legend(loc='upper left')
@@ -703,7 +723,7 @@ def main():
     """Main evaluation function"""
     
     # Specify result directories
-    timestamp = "20260119_134448"
+    timestamp = "20260120_011500"
     
     initial_samples_dir = f"experiments/results_exploration/initial_samples_sweep_{timestamp}"
     frequencies_dir = f"experiments/results_exploration/frequencies_sweep_{timestamp}"

@@ -225,6 +225,7 @@ class ScalableGPModel(GPModelBase):
             
             if truncation_radius is None:
                 truncation_radius = self.n_frequencies * np.sqrt(np.min(A_tilde_diag))
+                print(f"Computed truncation radius: {truncation_radius}")
             
             max_q = np.ceil(truncation_radius / np.sqrt(A_tilde_diag)).astype(int)
             max_q = np.minimum(max_q, int(self.n_frequencies * 1.5))
@@ -1197,7 +1198,7 @@ class ScalableGPModel(GPModelBase):
         inf_gain_x_f = [None] * self.n_s_out
         for i in range(self.n_s_out):
             noise_var_i = self.noise_var[i]
-            Phi = self._phi_features(x, self.lambdas[i], i)#
+            Phi = self._phi_features(x, self.lambdas[i], i)
             n_features = Phi.shape[1]
             PhiTPhi = Phi.T @ Phi
             inf_gain_x_f[i] = np.log(
