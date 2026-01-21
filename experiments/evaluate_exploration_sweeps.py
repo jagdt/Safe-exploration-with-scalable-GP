@@ -251,15 +251,19 @@ def plot_info_gain_trajectories(results_by_type, gp_types, param_name, param_val
             results_list = results_by_type[gp_type][param_val]
             
             # Extract information gain trajectories
+            # Prefer reference information gain (ground truth hyperparameters) if available
             trajectories = []
             for result in results_list:
-                if 'information_gain' in result:
+                # Try reference information gain first
+                info_gain_key = 'information_gain_reference' if 'information_gain_reference' in result else 'information_gain'
+                
+                if info_gain_key in result:
                     # New format: dict with 'trajectory' or 'per_iteration'
-                    if isinstance(result['information_gain'], dict):
-                        if 'trajectory' in result['information_gain']:
-                            traj = result['information_gain']['trajectory']
-                        elif 'per_iteration' in result['information_gain']:
-                            traj = result['information_gain']['per_iteration']
+                    if isinstance(result[info_gain_key], dict):
+                        if 'trajectory' in result[info_gain_key]:
+                            traj = result[info_gain_key]['trajectory']
+                        elif 'per_iteration' in result[info_gain_key]:
+                            traj = result[info_gain_key]['per_iteration']
                         else:
                             continue
                         if isinstance(traj, list):
@@ -381,15 +385,19 @@ def plot_initial_samples_comparison(results_dir, output_dir=None):
                 numpy_time_std.append(np.nan)
             
             # Extract information gain (final value)
+            # Prefer reference information gain (ground truth hyperparameters) if available
             info_gains = []
             for r in results:
-                if 'information_gain' in r:
+                # Try reference information gain first
+                info_gain_key = 'information_gain_reference' if 'information_gain_reference' in r else 'information_gain'
+                
+                if info_gain_key in r:
                     # New format: dict with 'final'
-                    if isinstance(r['information_gain'], dict) and 'final' in r['information_gain']:
-                        info_gains.append(r['information_gain']['final'])
+                    if isinstance(r[info_gain_key], dict) and 'final' in r[info_gain_key]:
+                        info_gains.append(r[info_gain_key]['final'])
                     # Legacy format: array
-                    elif isinstance(r['information_gain'], (list, np.ndarray)) and len(r['information_gain']) > 0:
-                        info_gains.append(r['information_gain'][-1])
+                    elif isinstance(r[info_gain_key], (list, np.ndarray)) and len(r[info_gain_key]) > 0:
+                        info_gains.append(r[info_gain_key][-1])
             
             if info_gains:
                 numpy_info_gain_mean.append(np.mean(info_gains))
@@ -443,15 +451,19 @@ def plot_initial_samples_comparison(results_dir, output_dir=None):
                 scalable_time_std.append(np.nan)
             
             # Extract information gain
+            # Prefer reference information gain (ground truth hyperparameters) if available
             info_gains = []
             for r in results:
-                if 'information_gain' in r:
+                # Try reference information gain first
+                info_gain_key = 'information_gain_reference' if 'information_gain_reference' in r else 'information_gain'
+                
+                if info_gain_key in r:
                     # New format: dict with 'final'
-                    if isinstance(r['information_gain'], dict) and 'final' in r['information_gain']:
-                        info_gains.append(r['information_gain']['final'])
+                    if isinstance(r[info_gain_key], dict) and 'final' in r[info_gain_key]:
+                        info_gains.append(r[info_gain_key]['final'])
                     # Legacy format: array
-                    elif isinstance(r['information_gain'], (list, np.ndarray)) and len(r['information_gain']) > 0:
-                        info_gains.append(r['information_gain'][-1])
+                    elif isinstance(r[info_gain_key], (list, np.ndarray)) and len(r[info_gain_key]) > 0:
+                        info_gains.append(r[info_gain_key][-1])
             
             if info_gains:
                 scalable_info_gain_mean.append(np.mean(info_gains))
@@ -618,11 +630,14 @@ def plot_frequency_sweep(results_dir, output_dir=None):
         print(f"\nStandard GP baseline: {len(numpy_baseline)} runs")
         numpy_info_gains = []
         for r in numpy_baseline:
-            if 'information_gain' in r:
-                if isinstance(r['information_gain'], dict) and 'final' in r['information_gain']:
-                    numpy_info_gains.append(r['information_gain']['final'])
-                elif isinstance(r['information_gain'], (list, np.ndarray)) and len(r['information_gain']) > 0:
-                    numpy_info_gains.append(r['information_gain'][-1])
+            # Prefer reference information gain (ground truth hyperparameters)
+            info_gain_key = 'information_gain_reference' if 'information_gain_reference' in r else 'information_gain'
+            
+            if info_gain_key in r:
+                if isinstance(r[info_gain_key], dict) and 'final' in r[info_gain_key]:
+                    numpy_info_gains.append(r[info_gain_key]['final'])
+                elif isinstance(r[info_gain_key], (list, np.ndarray)) and len(r[info_gain_key]) > 0:
+                    numpy_info_gains.append(r[info_gain_key][-1])
         
         if numpy_info_gains:
             numpy_info_gain_mean = np.mean(numpy_info_gains)
@@ -651,15 +666,18 @@ def plot_frequency_sweep(results_dir, output_dir=None):
             projection_error_std.append(np.nan)
         
         # Information gain
+        # Prefer reference information gain (ground truth hyperparameters) if available
         info_gains = []
         for r in results:
-            if 'information_gain' in r:
+            info_gain_key = 'information_gain_reference' if 'information_gain_reference' in r else 'information_gain'
+            
+            if info_gain_key in r:
                 # New format: dict with 'final'
-                if isinstance(r['information_gain'], dict) and 'final' in r['information_gain']:
-                    info_gains.append(r['information_gain']['final'])
+                if isinstance(r[info_gain_key], dict) and 'final' in r[info_gain_key]:
+                    info_gains.append(r[info_gain_key]['final'])
                 # Legacy format: array
-                elif isinstance(r['information_gain'], (list, np.ndarray)) and len(r['information_gain']) > 0:
-                    info_gains.append(r['information_gain'][-1])
+                elif isinstance(r[info_gain_key], (list, np.ndarray)) and len(r[info_gain_key]) > 0:
+                    info_gains.append(r[info_gain_key][-1])
         
         if info_gains:
             info_gain_mean.append(np.mean(info_gains))
@@ -826,7 +844,7 @@ def main():
     """Main evaluation function"""
     
     # Specify result directories
-    timestamp = "20260120_105148"
+    timestamp = "20260121_103628"
     
     initial_samples_dir = f"experiments/results_exploration/initial_samples_sweep_{timestamp}"
     frequencies_dir = f"experiments/results_exploration/frequencies_sweep_{timestamp}"

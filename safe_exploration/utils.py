@@ -798,6 +798,41 @@ def assert_shape(x, shape: tuple, ignore_if_none=False) -> None:
         raise ValueError(f"Wanted shape {shape}, got {x.shape}")
 
 
+def make_json_serializable(obj):
+    """Convert numpy arrays and other non-serializable objects to JSON-serializable format.
+    
+    Recursively converts:
+    - numpy arrays to lists
+    - numpy numeric types to Python floats
+    - dicts and lists to serializable equivalents
+    - None, bool, int, float, str remain unchanged
+    - Other objects are converted to strings
+    
+    Parameters
+    ----------
+    obj : any
+        Object to convert to JSON-serializable format
+        
+    Returns
+    -------
+    serializable_obj : any
+        JSON-serializable version of the input object
+    """
+    if isinstance(obj, dict):
+        return {key: make_json_serializable(value) for key, value in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [make_json_serializable(item) for item in obj]
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, (np.integer, np.floating)):
+        return float(obj)
+    elif obj is None or isinstance(obj, (bool, int, float, str)):
+        return obj
+    else:
+        # For other objects, try to convert to string
+        return str(obj)
+
+
 def eigenvalues_batch(xs: Tensor) -> Tensor:
     """Computes the eigenvalues of a batch of 2D tensors, using torch.eig().
 

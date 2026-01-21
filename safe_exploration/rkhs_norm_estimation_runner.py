@@ -7,7 +7,7 @@ from typing import Dict, List
 
 import numpy as np
 
-from .utils import generate_initial_samples, unavailable
+from .utils import generate_initial_samples, unavailable, make_json_serializable
 from .utils_config import create_env, create_solver
 from .visualization import plot_model_error_comparison
 
@@ -21,7 +21,8 @@ except:
 @unavailable(not _has_matplotlib, "matplotlib", conditionals=["visualize"])
 def run_rkhs_norm_estimation(conf):
 	"""Estimate RKHS norms of the true model error from safe initial data."""
-	n_experiments = conf.n_experiments
+	conf.create_savedirs(conf.file_path)
+
 	visualize = conf.visualize
 	save_vis = conf.save_vis
 	save_path = conf.save_path
@@ -79,8 +80,11 @@ def run_rkhs_norm_estimation(conf):
 		save_path_obj.mkdir(parents=True, exist_ok=True)
 		result_file = save_path_obj / "rkhs_norm_estimation_result.json"
 		
+		# Convert all numpy arrays to JSON-serializable format
+		result_serializable = make_json_serializable(result)
+		
 		with open(result_file, 'w') as f:
-			json.dump(result, f, indent=2)
+			json.dump(result_serializable, f, indent=2)
 		print(f"Saved RKHS norm estimation results to: {result_file}")
 	
 	print(

@@ -16,7 +16,7 @@ class Config(DefaultConfigExploration):
     task = "rkhs_norm_estimation"
 
     init_mode = "safe_samples"
-    n_safe_samples = 800
+    n_safe_samples = 1000
     init_std_initial_data = np.array([1.0, .4]) # standard deviation of initial safe samples
     init_m_initial_data = np.array([0., 0.])
     visualize_initial_samples = True
@@ -32,16 +32,22 @@ class Config(DefaultConfigExploration):
 
     # -- GP model
     gp_type = 'numpy'  # one of 'gpy', 'numpy', 'scalable'
+    # Whether to use global hyperparameter optimization first
+    use_global_opt_first = True
+    # Number of restarts for hyperparameter optimization
+    n_restarts_gp = 2
 
     # -- Scalable GP specific parameters
     # Number of frequencies to use per dimension.
     n_frequencies = 5
-    # Periods for each dimension.
-    periods = [0.2*2, 1.5*2, 6.0*2]
     # Domain lengths for each dimension.
-    domain_lengths = [0.2, 1.5, 6.0] # [dθ, θ, u]
+    domain_lengths = [4.0, 2.5, 2.0] # [dθ, θ, u]
+    # Periods for each dimension.
+    periods = list(1.5 * np.array(domain_lengths))
     # Lengthscale multiple for the scalable GP to compute periods.
     lengthscale_multiple = 3.0
+    # Truncation radius for the scalable GP features
+    truncation_radius = 12.0
 
     # -- GP Bounds parameters
     # Whether to compute GP bounds. Otherwise uses constant ß.

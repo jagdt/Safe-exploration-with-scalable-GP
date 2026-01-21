@@ -14,8 +14,11 @@ from datetime import datetime
 import json
 from pathlib import Path
 
+from safe_exploration.utils import make_json_serializable
+
 # Add parent directory to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 
 # Change to experiments directory to ensure relative paths work correctly
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -192,7 +195,7 @@ def sweep_initial_samples(n_values, seeds, base_overrides, output_dir):
                 save_path.parent.mkdir(parents=True, exist_ok=True)
                 with open(save_path, 'w') as f:
                     # Convert numpy arrays to lists for JSON serialization
-                    results_serializable = _make_serializable(results)
+                    results_serializable = make_json_serializable(results)
                     json.dump(results_serializable, f, indent=2)
                 
                 print(f"Saved results to: {save_path}")
@@ -270,7 +273,7 @@ def sweep_frequencies(n_frequencies_list, seeds, base_overrides, output_dir):
         save_path = Path(output_dir) / f"{exp_name}.json"
         save_path.parent.mkdir(parents=True, exist_ok=True)
         with open(save_path, 'w') as f:
-            results_serializable = _make_serializable(results)
+            results_serializable = make_json_serializable(results)
             json.dump(results_serializable, f, indent=2)
         
         print(f"Saved results to: {save_path}")
@@ -304,7 +307,7 @@ def sweep_frequencies(n_frequencies_list, seeds, base_overrides, output_dir):
             save_path = Path(output_dir) / f"{exp_name}.json"
             save_path.parent.mkdir(parents=True, exist_ok=True)
             with open(save_path, 'w') as f:
-                results_serializable = _make_serializable(results)
+                results_serializable = make_json_serializable(results)
                 json.dump(results_serializable, f, indent=2)
             
             print(f"Saved results to: {save_path}")
@@ -329,22 +332,6 @@ def sweep_frequencies(n_frequencies_list, seeds, base_overrides, output_dir):
     print(f"Failed: {sum(1 for r in all_results if not r['success'])}")
     print(f"Results saved to: {output_dir}")
     print(f"{'='*80}\n")
-
-
-def _make_serializable(obj):
-    """Convert numpy arrays and other non-serializable objects to JSON-serializable format"""
-    if isinstance(obj, dict):
-        return {key: _make_serializable(value) for key, value in obj.items()}
-    elif isinstance(obj, list):
-        return [_make_serializable(item) for item in obj]
-    elif isinstance(obj, np.ndarray):
-        return obj.tolist()
-    elif isinstance(obj, (np.integer, np.floating)):
-        return float(obj)
-    elif hasattr(obj, '__dict__'):
-        return _make_serializable(obj.__dict__)
-    else:
-        return obj
 
 
 def main():
