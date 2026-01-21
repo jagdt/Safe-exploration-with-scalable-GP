@@ -465,7 +465,7 @@ class ScalableGPBounds(GPBounds):
         d = self.gp.input_dim
         
         if hasattr(self.gp, 'truncation_radius') and self.gp.truncation_radius is not None:
-            r = self.gp.truncation_radius
+            r = self.gp.truncation_radius[dim_idx]
         else:
             r = np.sqrt(np.min(A_tilde)) * self.gp.n_frequencies
         

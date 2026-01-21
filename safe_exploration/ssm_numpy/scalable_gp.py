@@ -26,7 +26,7 @@ class ScalableGPModel(GPModelBase):
     
     def __init__(self, n_s_out, n_s_in, n_u, X=None, y=None, kern_types=None,
                  hyp=None, train=False, n_frequencies=25, periods=10.0, domain_lengths=None, lengthscale_multiple=None,
-                 n_restarts=1, use_global_opt_first=False, truncation_radius=12, seed=None):
+                 n_restarts=1, use_global_opt_first=False, truncation_radius=12.0, seed=None):
         """Initialize Scalable GP Model
         
         Parameters
@@ -73,7 +73,7 @@ class ScalableGPModel(GPModelBase):
 
         # Scalable GP specific attributes
         self.n_frequencies = n_frequencies
-        self.truncation_radius = truncation_radius
+        self.truncation_radius = self._init_truncation_radius(truncation_radius)
         self.periods = self._init_periods(periods)
         self.domain_lengths = domain_lengths
         self.lengthscale_multiple = lengthscale_multiple
@@ -135,6 +135,17 @@ class ScalableGPModel(GPModelBase):
             "(n_s_out × input_dim) array"
         )
     
+    def _init_truncation_radius(self, truncation_radius):
+        if truncation_radius is None:
+            return [None] * self.n_s_out
+
+        if np.isscalar(truncation_radius):
+            return [truncation_radius] * self.n_s_out
+        else:
+            if len(truncation_radius) != self.n_s_out:
+                raise ValueError("truncation_radius must be scalar or list of length n_s_out")
+            return truncation_radius
+    
     def _set_periods_based_on_domain_and_lengthscales(self, max_period_multiple=10.0, dampening_alpha=0.05):
         """Set periods based on domain lengths and lengthscale multiples.
 
@@ -184,7 +195,7 @@ class ScalableGPModel(GPModelBase):
             self.omegas[dim_idx] = self._create_ellipsoidal_frequencies(
                 self.periods[dim_idx], 
                 decay_rates=None,
-                truncation_radius=self.truncation_radius
+                truncation_radius=self.truncation_radius[dim_idx]
             )
 
     def _create_ellipsoidal_frequencies(self, period_vector, decay_rates, truncation_radius=None):
@@ -305,7 +316,7 @@ class ScalableGPModel(GPModelBase):
         self.omegas[dim_idx] = self._create_ellipsoidal_frequencies(
             self.periods[dim_idx],
             decay_rates=decay_rates,
-            truncation_radius=self.truncation_radius
+            truncation_radius=self.truncation_radius[dim_idx]
         )
   
     def _init_kernel_function(self, kern_types=None, hyp=None):
@@ -1026,8 +1037,8 @@ class ScalableGPModel(GPModelBase):
         elif kern_type == "sum_lin_rbf":
             # RBF factor: [1e-4, 1e4]
             bounds.append((-9.2, 9.2))
-            # RBF exponential decay rates: [1e2, 1e4]
-            bounds.extend([(4.6, 9.2)] * self.input_dim)
+            # RBF exponential decay rates: [1e-4, 1e4]
+            bounds.extend([(-9.2, 9.2)] * self.input_dim)
             # Linear variances: [1e-6, 1e-1]
             bounds.extend([(-13.8, -2.3)] * self.input_dim)
             # Noise: [1e-9, 1e-5]
@@ -1042,8 +1053,8 @@ class ScalableGPModel(GPModelBase):
         elif kern_type == "sum_lin_rbf_rbf_only":
             # RBF factor: [1e-4, 1e4]
             bounds.append((-9.2, 9.2))
-            # RBF exponential decay rates: [1e2, 1e4]
-            bounds.extend([(4.6, 9.2)] * self.input_dim)
+            # RBF exponential decay rates: [1e-4, 1e4]
+            bounds.extend([(-9.2, 9.2)] * self.input_dim)
             # Noise: [1e-9, 1e-5]
             bounds.append((-20.7, -11.5))
         
