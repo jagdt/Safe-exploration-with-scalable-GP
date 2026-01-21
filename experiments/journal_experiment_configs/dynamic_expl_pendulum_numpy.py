@@ -42,6 +42,27 @@ class Config(DefaultConfigExploration):
     # Model mismatch offset
     projection_error = None # None to compute automatically
 
+    # -- Reference GP parameters
+    # Whether to use a reference GP with ground truth hyperparameters
+    reference_gp = True
+    # Kernel types for the reference GP
+    reference_kern_types = ['sum_lin_rbf', 'sum_lin_rbf']
+    # Hyperparameters of the reference GP
+    reference_hyp = [
+        {
+            'rbf.lengthscale': np.array([0.5, 0.2, 1.0]),
+            'rbf.variance': 0.05,
+            'linear.variances': np.array([0.001, 0.001, 0.001])
+        },
+        {
+            'rbf.lengthscale': np.array([0.3, 0.15, 0.8]),
+            'rbf.variance': 0.01,
+            'linear.variances': np.array([0.0005, 0.0005, 0.0005])
+        }
+    ]
+    # Noise variances for the reference GP
+    reference_noise_var = np.array([0.001, 0.0001]) ** 2
+
     def __init__(self):
         """ """
         super(Config, self).__init__(__file__)

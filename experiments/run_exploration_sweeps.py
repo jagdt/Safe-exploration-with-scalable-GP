@@ -96,6 +96,15 @@ def run_exploration_experiment(config, experiment_name="experiment"):
                     'per_iteration': [float(np.sum(ig)) for ig in inf_gain]
                 }
         
+        # Extract reference information gain (with ground truth hyperparameters)
+        if 'inf_gain_reference' in results and results['inf_gain_reference']:
+            inf_gain_ref = results['inf_gain_reference'][0] if len(results['inf_gain_reference']) > 0 else None
+            if inf_gain_ref is not None:
+                metrics['information_gain_reference'] = {
+                    'final': float(np.sum(inf_gain_ref[-1])) if len(inf_gain_ref) > 0 else 0.0,
+                    'per_iteration': [float(np.sum(ig)) for ig in inf_gain_ref]
+                }
+        
         # Extract projection error (for scalable GP)
         if 'projection_error' in results and results['projection_error']:
             proj_err = results['projection_error'][0] if len(results['projection_error']) > 0 else None
@@ -347,14 +356,14 @@ def main():
     # Common overrides for all experiments
     base_overrides = {
         'verbose': 1,
-        'n_iterations': 200,
+        'n_iterations': 50,
         'save_results': True,
         'save_vis': True,
         'visualize': False,
     }
     
     # Random seeds for statistical robustness
-    seeds = list(range(2))
+    seeds = list(range(1))
     
     # Sweep 1: Vary initial samples, compare GP types
     print("\n" + "="*80)

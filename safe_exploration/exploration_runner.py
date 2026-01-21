@@ -56,6 +56,7 @@ def run_exploration(conf, visualize=False):
     n_experiments = conf.n_experiments
 
     l_inf_gain = []
+    l_inf_gain_reference = []  # Information gain with reference kernel
     l_sigm_sum = []
     l_sigm = []
     l_z_all = []
@@ -71,6 +72,25 @@ def run_exploration(conf, visualize=False):
         X, y = generate_initial_samples(env, conf, conf.relative_dynamics, safempc,
                                         safe_policy)
         safempc.update_model(X, y, opt_hyp=conf.train_gp, reinitialize_solver=False)
+        
+        # Initialize reference GP with ground truth hyperparameters if provided
+        reference_gp = None
+        if conf.reference_gp:
+            print("Initializing reference GP with ground truth hyperparameters...")
+            from .ssm_numpy import NumpyGPModel
+            
+            reference_gp = NumpyGPModel(
+                n_s_out=env.n_s,
+                n_s_in=env.n_s,
+                n_u=env.n_u,
+                kern_types=conf.reference_kern_types,
+                hyp=conf.reference_hyp,
+                train=False
+            )
+            reference_gp.noise_var = conf.reference_noise_var
+            
+            reference_gp.train(X, y, opt_hyp=False)
+            print(f"Reference GP initialized with fixed hyperparameters")
 
         if static_exploration:
             exploration_module = StaticSafeMPCExploration(safempc, env, conf.n_restarts_optimizer,
@@ -84,6 +104,7 @@ def run_exploration(conf, visualize=False):
 
         # Initialize some logging variables
         inf_gain = np.empty((n_iterations, env.n_s))
+        inf_gain_reference = np.empty((n_iterations, env.n_s)) if reference_gp is not None else None
         sigm_sum = np.empty(
             (n_iterations, 1))  # the sum of the confidence intervals per dimension
         sigm = np.empty((n_iterations, env.n_s))  # the individual confidence intervals
@@ -212,6 +233,12 @@ def run_exploration(conf, visualize=False):
             
             inf_gain[i, :] = exploration_module.get_information_gain()
             
+            # Update reference GP and compute reference information gain
+            if reference_gp is not None:
+                reference_gp.update_model(z_i, x_next_obs.reshape((1, env.n_s)),
+                                        opt_hyp=False, replace_old=False)
+                inf_gain_reference[i, :] = reference_gp.information_gain()
+            
             timing_per_iteration['total'][i] = time.time() - t_iter_start
 
             x_i = x_next
@@ -223,6 +250,8 @@ def run_exploration(conf, visualize=False):
             plt.close(fig)
 
         l_inf_gain += [inf_gain]
+        if reference_gp is not None:
+            l_inf_gain_reference += [inf_gain_reference]
         l_sigm_sum += [sigm_sum]
         l_sigm += [sigm]
         l_z_all += [z_all]
@@ -264,7 +293,7 @@ def run_exploration(conf, visualize=False):
             plot_model_error_comparison(exploration_module.safempc, exploration_module.env, save_dir=save_path, n_points=50, plot_bounds=conf.plot_bounds)
     
     # Return aggregated results
-    return {
+    results = {
         'inf_gain': l_inf_gain,
         'sigm_sum': l_sigm_sum,
         'sigm': l_sigm,
@@ -276,6 +305,11 @@ def run_exploration(conf, visualize=False):
         'projection_error': l_projection_error,
         'gp_hyperparameters': gp_hyperparameters,
     }
+    
+    if l_inf_gain_reference:
+        results['inf_gain_reference'] = l_inf_gain_reference
+    
+    return results
 
 def save_results(save_path, sigm_sum, sigm, inf_gain, z_all, x_next_obs_all,
                  x_next_pred, x_next_prior, gp, x_train_0, timing, safety_all=None):
