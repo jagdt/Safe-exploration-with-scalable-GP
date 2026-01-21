@@ -54,13 +54,13 @@ class Config(DefaultConfigExploration):
     # Hyperparameters of the reference GP
     reference_hyp = [
         {
-            'rbf.lengthscale': np.array([0.39, 0.50, 0.42]),
-            'rbf.variance': 0.0019,
-            'linear.variances': np.array([0.11, 0.081, 0.0016])
+            'rbf.lengthscale': np.array([0.53, 0.71, 0.61]),
+            'rbf.variance': 0.0068,
+            'linear.variances': np.array([0.94, 0.07, 0.0014])
         },
         {
-            'rbf.lengthscale': np.array([0.43, 0.77, 0.75]),
-            'rbf.variance': 0.0000038,
+            'rbf.lengthscale': np.array([0.52, 0.96, 1.08]),
+            'rbf.variance': 1.05e-05,
             'linear.variances': np.array([0.01, 0.01, 0.01])
         }
     ]
