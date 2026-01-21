@@ -24,7 +24,7 @@ class Config(DefaultConfigExploration):
     # Number of frequencies to use per dimension.
     n_frequencies = 5
     # Domain lengths for each dimension.
-    domain_lengths = [4.0, 2.5, 2.0] # [dθ, θ, u]
+    domain_lengths = [7.0, 2.5, 2.0] # [dθ, θ, u]
     # Periods for each dimension.
     periods = list(1.5 * np.array(domain_lengths))
     # Lengthscale multiple for the scalable GP to compute periods.
@@ -40,7 +40,7 @@ class Config(DefaultConfigExploration):
     # Confidence level for the GP bounds
     delta = 0.05
     # Assumed RKHS norm of the true function
-    rkhs_norm = [20.0, 7.0]
+    rkhs_norm = [20.0, 10.0]
     # Subgaussian noise bound
     R_subgaussian = [0.001, 0.0001] # Match the noise of the environment
     # Model mismatch offset
