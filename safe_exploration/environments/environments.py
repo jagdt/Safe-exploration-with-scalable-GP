@@ -744,8 +744,8 @@ class InvertedPendulum(Environment):
         if new_fig:
             dtheta_norm = self.max_dtheta * self.inv_norm[0][0]
             theta_norm = self.max_rad * self.inv_norm[0][1]
-            ax.set_xlim(-dtheta_norm*3.0, dtheta_norm*3.0)
-            ax.set_ylim(-theta_norm*3.0, theta_norm*3.0)
+            ax.set_xlim(-dtheta_norm*4.0, dtheta_norm*4.0)
+            ax.set_ylim(-theta_norm*2.0, theta_norm*2.0)
             ax.set_xlabel('dθ (angular velocity)')
             ax.set_ylabel('θ (angle)')
             ax.legend()
