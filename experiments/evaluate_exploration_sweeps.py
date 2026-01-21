@@ -200,7 +200,6 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
         ax.set_xlabel(param_name.replace('_', ' ').title())
         ax.set_ylabel('Average Time per Iteration (s)')
         gp_label = 'Standard GP' if gp_type == 'numpy' else 'Scalable GP'
-        ax.set_title(f'Timing Breakdown: {gp_label}')
         ax.set_xticks(x)
         ax.set_xticklabels([str(p) for p in param_values])
         ax.legend(loc='upper left')
@@ -301,7 +300,6 @@ def plot_info_gain_trajectories(results_by_type, gp_types, param_name, param_val
         ax.set_xlabel('Iteration')
         ax.set_ylabel('Information Gain')
         gp_label = 'Standard GP' if gp_type == 'numpy' else 'Scalable GP'
-        ax.set_title(f'Information Gain Development: {gp_label}')
         ax.legend(loc='best')
         ax.grid(True, alpha=0.3)
     
@@ -523,7 +521,6 @@ def plot_initial_samples_comparison(results_dir, output_dir=None):
                    label='Scalable GP', marker='s', capsize=5, color=RWTH_BLUE)
     ax1.set_xlabel('Number of Initial Samples')
     ax1.set_ylabel('Avg. Time per Iteration (s)')
-    ax1.set_title('Computational Time vs Initial Samples')
     ax1.legend()
     ax1.grid(True, alpha=0.3)
     
@@ -551,7 +548,6 @@ def plot_initial_samples_comparison(results_dir, output_dir=None):
                    label='Scalable GP', marker='s', capsize=5, color=RWTH_BLUE)
     ax2.set_xlabel('Number of Initial Samples')
     ax2.set_ylabel('Final Information Gain')
-    ax2.set_title('Exploration Performance vs Initial Samples')
     ax2.legend()
     ax2.grid(True, alpha=0.3)
     
@@ -738,7 +734,6 @@ def plot_frequency_sweep(results_dir, output_dir=None):
                    marker='o', capsize=5, color=RWTH_RED)
         ax1.set_xlabel('Number of Frequencies')
         ax1.set_ylabel('Projection Error')
-        ax1.set_title('Projection Error vs Frequencies')
         ax1.grid(True, alpha=0.3)
     
     plt.tight_layout()
@@ -773,7 +768,6 @@ def plot_frequency_sweep(results_dir, output_dir=None):
     
     ax2.set_xlabel('Number of Frequencies')
     ax2.set_ylabel('Final Information Gain')
-    ax2.set_title('Exploration Performance vs Frequencies')
     ax2.legend()
     ax2.grid(True, alpha=0.3)
     
