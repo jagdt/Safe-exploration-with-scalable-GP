@@ -30,7 +30,9 @@ class Config(DefaultConfigExploration):
     # Lengthscale multiple for the scalable GP to compute periods.
     lengthscale_multiple = 3.0
     # Truncation radius for the scalable GP features
-    truncation_radius = [9.0, 20.0]
+    truncation_radius = [13.0, 14.0]
+    # Target projection error for adaptive truncation
+    truncation_target = 1e-6
 
     # -- GP Bounds parameters
     # Whether to compute GP bounds. Otherwise uses constant ß.

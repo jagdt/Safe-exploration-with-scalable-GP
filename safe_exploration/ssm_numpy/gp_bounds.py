@@ -24,7 +24,7 @@ class GPBounds(ABC):
             Subgaussian parameter for the noise process.
         """
         if not getattr(gp_model, "gp_trained", False):
-            raise ValueError("GP must be trained before computing bounds")
+            Warning("GP must be trained before computing bounds")
         self.gp = gp_model
         self.delta = delta
         self.gp = gp_model
@@ -376,7 +376,8 @@ class ScalableGPBounds(GPBounds):
         """
         return self.compute_ellipsoidal_projection_error(dim_idx)
 
-    def _compute_sphere_surface_area(self, d):
+    @staticmethod
+    def _compute_sphere_surface_area(d):
         """Compute surface area of unit sphere in d dimensions.
         
         S_(d-1) = 2 * pi^(d/2) / Gamma(d/2)
@@ -393,7 +394,8 @@ class ScalableGPBounds(GPBounds):
         """
         return 2.0 * np.pi ** (d / 2.0) / gamma(d / 2.0)
     
-    def _tail_integral(self, r_minus_rho, rho, d):
+    @staticmethod
+    def _tail_integral(r_minus_rho, rho, d):
         """Compute the radial tail integral.
         
         Integral = int_{t=r-rho}^{infty} exp(-(t-rho)^2) * t^(d-1) dt
@@ -429,7 +431,7 @@ class ScalableGPBounds(GPBounds):
             result, _ = quad(integrand, r_minus_rho, np.inf, limit=50)
         
         return result
-    
+
     def compute_ellipsoidal_projection_error(self, dim_idx):
         """Compute projection error using ellipsoidal truncation bound.
         

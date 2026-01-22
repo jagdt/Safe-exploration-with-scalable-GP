@@ -72,7 +72,10 @@ def _create_gp(conf, env):
                          n_frequencies=conf.n_frequencies,
                          periods=conf.periods, domain_lengths=conf.domain_lengths,
                          lengthscale_multiple=conf.lengthscale_multiple,
-                         truncation_radius=conf.truncation_radius, seed=conf.seed)
+                         truncation_radius=conf.truncation_radius, 
+                         truncation_target=conf.truncation_target,
+                         rkhs_norm=conf.rkhs_norm,
+                         seed=conf.seed)
     else:
         raise ValueError(f"Unknown gp_type: {conf.gp_type}")
 

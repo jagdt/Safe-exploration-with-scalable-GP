@@ -14,7 +14,7 @@ class DefaultConfigExploration(DefaultConfig):
     """
     Options class for the exploration setting
     """
-    seed = 42
+    seed = 1
     verbose = 2
 
     # task options

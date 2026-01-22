@@ -22,11 +22,12 @@ class ScalableGPModel(GPModelBase):
         hyp (list[dict]): List of hyperparameter dictionaries
         n_frequencies (int): Number of trigonometric frequencies to use per dimension
         truncation_radius (float): Radius for ellipsoidal frequency truncation
+        truncation_target (float): Target value for projection error in adaptive truncation
     """
     
     def __init__(self, n_s_out, n_s_in, n_u, X=None, y=None, kern_types=None,
                  hyp=None, train=False, n_frequencies=25, periods=10.0, domain_lengths=None, lengthscale_multiple=None,
-                 n_restarts=1, use_global_opt_first=False, truncation_radius=12.0, seed=None):
+                 n_restarts=1, use_global_opt_first=False, truncation_radius=12.0, truncation_target=1e-6, rkhs_norm=None, seed=None):
         """Initialize Scalable GP Model
         
         Parameters
@@ -79,6 +80,10 @@ class ScalableGPModel(GPModelBase):
         self.lengthscale_multiple = lengthscale_multiple
         self.hyp_optimized = False
         
+        # Adaptive truncation control
+        self._truncation_target = truncation_target
+        self.rkhs_norms = self._init_truncation_radius(rkhs_norm)
+
         # Optimization settings
         self.n_restarts = n_restarts
         self.use_global_opt_first = use_global_opt_first
@@ -195,10 +200,11 @@ class ScalableGPModel(GPModelBase):
             self.omegas[dim_idx] = self._create_ellipsoidal_frequencies(
                 self.periods[dim_idx], 
                 decay_rates=None,
+                dim_idx=dim_idx,
                 truncation_radius=self.truncation_radius[dim_idx]
             )
 
-    def _create_ellipsoidal_frequencies(self, period_vector, decay_rates, truncation_radius=None):
+    def _create_ellipsoidal_frequencies(self, period_vector, decay_rates, dim_idx, truncation_radius=None):
         """Create ellipsoidal half-lattice of frequency vectors ω for spectral approximation
         
         Generates frequencies from integer lattice Z^d that satisfy:
@@ -267,7 +273,7 @@ class ScalableGPModel(GPModelBase):
         
         omegas = q_unique / period_vector
         
-        print(f"Created {omegas.shape[0]} frequencies.")
+        print(f"Created {omegas.shape[0]} frequencies for dimension {dim_idx}.")
 
         if len(omegas) == 0:
             omegas = np.zeros((1, self.input_dim))
@@ -301,6 +307,8 @@ class ScalableGPModel(GPModelBase):
     def _update_frequencies_for_dim(self, dim_idx):
         """Update frequencies for a specific dimension after hyperparameters change
         
+        If adaptive truncation is enabled, recomputes the radius to achieve target error.
+        
         Parameters
         ----------
         dim_idx : int
@@ -313,9 +321,15 @@ class ScalableGPModel(GPModelBase):
         else:
             return
         
+        if self._truncation_target is not None:
+            self.truncation_radius[dim_idx] = self.compute_truncation_radius_from_target_error(
+                dim_idx, self._truncation_target
+            )
+
         self.omegas[dim_idx] = self._create_ellipsoidal_frequencies(
             self.periods[dim_idx],
             decay_rates=decay_rates,
+            dim_idx=dim_idx,
             truncation_radius=self.truncation_radius[dim_idx]
         )
   
@@ -413,8 +427,9 @@ class ScalableGPModel(GPModelBase):
                 #     truncation_radius = min(truncation_radius, max_truncation_radius)
                 
                 omegas = self._create_ellipsoidal_frequencies(
-                    self.periods[dim_idx], 
+                    self.periods[dim_idx],
                     decay_rates=decay_rates,
+                    dim_idx=dim_idx,
                     truncation_radius=truncation_radius
                 )
             else:
@@ -1053,8 +1068,9 @@ class ScalableGPModel(GPModelBase):
         elif kern_type == "sum_lin_rbf_rbf_only":
             # RBF factor: [1e-4, 1e4]
             bounds.append((-9.2, 9.2))
-            # RBF exponential decay rates: [1e-4, 1e4]
-            bounds.extend([(-9.2, 9.2)] * self.input_dim)
+            # RBF exponential decay rates: [1e2, 1e4]
+            # bounds.extend([(4.6, 9.2),(-9.2, 9.2),(-9.2, 9.2)])
+            bounds.extend([(4.6, 9.2)] * self.input_dim)
             # Noise: [1e-9, 1e-5]
             bounds.append((-20.7, -11.5))
         
@@ -1244,7 +1260,89 @@ class ScalableGPModel(GPModelBase):
         self.beta_safety_per_dim = np.array([bounds.beta(dim_idx) for dim_idx in range(self.n_s_out)])
         self.projection_error_per_dim = np.array([bounds.projection_errors[dim_idx] for dim_idx in range(self.n_s_out)])
         print(f"Computed beta_safety_per_dim: {self.beta_safety_per_dim}")
-    
+
+    def compute_truncation_radius_from_target_error(self, dim_idx, target_error):
+        """Compute truncation radius to achieve target projection error.
+        
+        Inverts the projection error formula to solve for r given a target error.
+        Uses binary search since the tail integral is monotonically decreasing in r.
+        
+        Parameters
+        ----------
+        dim_idx : int
+            Output dimension index.
+        target_error : float
+            Desired projection error bound (e.g., 1e-6).
+        
+        Returns
+        -------
+        float
+            Truncation radius r to achieve approximately the target error.
+        """
+        print(f"Computing truncation radius for dim {dim_idx} to achieve target error {target_error:.2e}...")   
+        kern_type = self.kern_types[dim_idx]
+        if kern_type == "rbf":
+            C = self.hyp[dim_idx]["factor"]
+            decay_rates = self.hyp[dim_idx]["exponential_decay_rates"]
+        elif kern_type == "sum_lin_rbf":
+            C = self.hyp[dim_idx]["rbf.factor"]
+            decay_rates = self.hyp[dim_idx]["rbf.exponential_decay_rates"]
+        else:
+            raise NotImplementedError(f"Projection error not implemented for kernel type {kern_type}")
+        
+        periods = self.periods[dim_idx]
+        A_tilde = decay_rates / (periods ** 2)
+        
+        B = self.rkhs_norms[dim_idx]
+        d = self.input_dim
+        
+        rho = 0.5 * np.sqrt(np.sum(A_tilde))
+        S_d_minus_1 = ScalableGPBounds._compute_sphere_surface_area(d)
+        det_A_tilde = np.prod(A_tilde)
+        sqrt_det_A_tilde = np.sqrt(det_A_tilde)
+        
+        # Compute target tail integral from target error
+        # target_error = B * sqrt(2*C/sqrt(det) * S * I)
+        # I_target = (target_error/B)^2 * sqrt(det) / (2*C*S)
+        if B == 0:
+            return rho + 1.0
+        
+        tail_integral_target = (target_error / B) ** 2 * sqrt_det_A_tilde / (2.0 * C * S_d_minus_1)
+        
+        r_min = rho + 0.5
+        r_max = rho + 50.0
+        
+        integral_max = ScalableGPBounds._tail_integral(r_max - rho, rho, d)
+        if integral_max > tail_integral_target:
+            print(f"Warning: Target error {target_error} too small, using r_max={r_max}")
+            return r_max
+        
+        integral_min = ScalableGPBounds._tail_integral(r_min - rho, rho, d)
+        if integral_min < tail_integral_target:
+            print(f"Warning: Target error {target_error} too large, using r_min={r_min}")
+            return r_min
+        
+        tolerance = 1e-9
+        print(tail_integral_target)
+        print(tolerance * tail_integral_target)
+        max_iterations = 50
+        for iteration in range(max_iterations):
+            r_mid = (r_min + r_max) / 2.0
+            integral_mid = ScalableGPBounds._tail_integral(r_mid - rho, rho, d)
+            
+            if abs(integral_mid - tail_integral_target) < tolerance * tail_integral_target:
+                print(f"Truncation radius search converged to r={r_mid:.4f} after {iteration+1} iterations")
+                return r_mid
+            
+            if integral_mid > tail_integral_target:
+                r_min = r_mid
+            else:
+                r_max = r_mid
+        
+        r_final = (r_min + r_max) / 2.0
+        print(f"Truncation radius search converged to r={r_final:.4f} after {max_iterations} iterations")
+        return r_final
+
     def predict_casadi_symbolic(self, x_new, compute_grads=False):
         """Return symbolic CasADi expressions for predictive mean/variance
         
