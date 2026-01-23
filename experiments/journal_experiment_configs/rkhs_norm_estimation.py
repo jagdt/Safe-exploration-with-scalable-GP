@@ -34,8 +34,6 @@ class Config(DefaultConfigExploration):
     gp_type = 'numpy'  # one of 'gpy', 'numpy', 'scalable'
     # Whether to use global hyperparameter optimization first
     use_global_opt_first = True
-    # Number of restarts for hyperparameter optimization
-    n_restarts_gp = 2
 
     # -- Scalable GP specific parameters
     # Number of frequencies to use per dimension.

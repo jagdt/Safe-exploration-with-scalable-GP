@@ -17,8 +17,6 @@ class Config(DefaultConfigExploration):
     gp_type = 'scalable'  # one of 'gpy', 'numpy', 'scalable'
     # Whether to use global hyperparameter optimization first
     use_global_opt_first = False
-    # Number of restarts for hyperparameter optimization
-    n_restarts_gp = 1
 
     # -- Scalable GP specific parameters
     # Number of frequencies to use per dimension.
@@ -26,7 +24,7 @@ class Config(DefaultConfigExploration):
     # Domain lengths for each dimension.
     domain_lengths = [7.0, 2.5, 2.0] # [dθ, θ, u]
     # Periods for each dimension.
-    periods = list(1.5 * np.array(domain_lengths))
+    periods = list(1.0 * np.array(domain_lengths))
     # Lengthscale multiple for the scalable GP to compute periods.
     lengthscale_multiple = 3.0
     # Truncation radius for the scalable GP features

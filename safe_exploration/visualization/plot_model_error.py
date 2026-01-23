@@ -16,6 +16,7 @@ from matplotlib.colors import Normalize
 from mpl_toolkits.mplot3d import Axes3D
 import warnings
 import os
+import pickle
 
 
 def compute_true_model_error(safempc, env, states, actions):
@@ -531,7 +532,6 @@ def plot_training_error_scatter(states, actions, true_error, gp_mean, dim_names,
     norm of `true_error - gp_mean`, so vivid hues highlight where the GP
     deviates most from the ground-truth residuals.
     """
-
     if states.shape[1] != 2 or actions.shape[1] != 1:
         warnings.warn("3D scatter currently implemented for 2D state / 1D action setups.")
         return
@@ -559,6 +559,13 @@ def plot_training_error_scatter(states, actions, true_error, gp_mean, dim_names,
     if save_path is not None:
         plt.savefig(save_path, dpi=150, bbox_inches='tight')
         print(f"  Saved: training error mismatch (3D scatter) -> {save_path}")
+        
+        # Also save as pickle for interactive viewing
+        pkl_path = save_path.replace('.png', '.pkl')
+        with open(pkl_path, 'wb') as f:
+            pickle.dump(fig, f)
+        print(f"  Saved: interactive figure (pickle) -> {pkl_path}")
+        
         plt.close(fig)
     else:
         plt.show()

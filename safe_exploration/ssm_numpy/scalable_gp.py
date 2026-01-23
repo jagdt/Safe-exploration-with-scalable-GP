@@ -27,7 +27,7 @@ class ScalableGPModel(GPModelBase):
     
     def __init__(self, n_s_out, n_s_in, n_u, X=None, y=None, kern_types=None,
                  hyp=None, train=False, n_frequencies=25, periods=10.0, domain_lengths=None, lengthscale_multiple=None,
-                 n_restarts=1, use_global_opt_first=False, truncation_radius=12.0, truncation_target=1e-6, rkhs_norm=None, seed=None):
+                 use_global_opt_first=False, truncation_radius=12.0, truncation_target=1e-6, rkhs_norm=None, seed=None):
         """Initialize Scalable GP Model
         
         Parameters
@@ -85,7 +85,6 @@ class ScalableGPModel(GPModelBase):
         self.rkhs_norms = self._init_truncation_radius(rkhs_norm)
 
         # Optimization settings
-        self.n_restarts = n_restarts
         self.use_global_opt_first = use_global_opt_first
 
         # Spectral parameters
@@ -690,8 +689,7 @@ class ScalableGPModel(GPModelBase):
     def _multi_start_optimize(self, X, y, dim_idx, bounds, kern_type, max_iter, cache=None):
         """Multi-start L-BFGS-B optimization from random starting points
         
-        Runs optimization from multiple random starting points within the
-        parameter bounds, returning the solution with lowest NLL.
+        Runs optimization from multiple random starting points until one succeeds.
         
         Parameters
         ----------
@@ -734,11 +732,14 @@ class ScalableGPModel(GPModelBase):
             options={'maxiter': max_iter, 'disp': False}
         )
         if result.success or result.status == 1:
-            print(f"[Dim {dim_idx}] Multi-start 0/{self.n_restarts}: {result.message}, NLL: {result.fun:.4f}")
+            print(f"[Dim {dim_idx}] Multi-start 0: {result.message}, NLL: {result.fun:.4f}")
             results.append((result.x, result.fun))
         
         bounds_array = np.array(bounds)
-        for i in range(self.n_restarts - 1):
+        attempt = 0
+        max_attempts = 100
+        
+        while len(results) == 0 and attempt < max_attempts:
             random_params = self.rng.uniform(bounds_array[:, 0], bounds_array[:, 1])
             
             result = minimize(
@@ -749,14 +750,17 @@ class ScalableGPModel(GPModelBase):
                 bounds=bounds,
                 options={'maxiter': max_iter, 'disp': False}
             )
+            attempt += 1
             if result.success or result.status == 1:
-                print(f"[Dim {dim_idx}] Multi-start {i+1}/{self.n_restarts}: {result.message}, NLL: {result.fun:.4f}")
+                print(f"[Dim {dim_idx}] Multi-start {attempt}: {result.message}, NLL: {result.fun:.4f}")
                 results.append((result.x, result.fun))
         
         if results:
             best_idx = np.argmin([r[1] for r in results])
             best_params, best_nll = results[best_idx]
-            print(f"[Dim {dim_idx}] Multi-start: {len(results)}/{self.n_restarts} successful, best NLL: {best_nll:.4f}")
+            print(f"[Dim {dim_idx}] Multi-start: {len(results)} successful, best NLL: {best_nll:.4f}")
+        else:
+            print(f"[Dim {dim_idx}] WARNING: All {attempt} optimization attempts failed!")
         
         return best_params, best_nll
     
@@ -1070,7 +1074,8 @@ class ScalableGPModel(GPModelBase):
             bounds.append((-9.2, 9.2))
             # RBF exponential decay rates: [1e2, 1e4]
             # bounds.extend([(4.6, 9.2),(-9.2, 9.2),(-9.2, 9.2)])
-            bounds.extend([(4.6, 9.2)] * self.input_dim)
+            # bounds.extend([(4.6, 9.2)] * self.input_dim)
+            bounds.extend([(-9.2, 9.2)] * self.input_dim)
             # Noise: [1e-9, 1e-5]
             bounds.append((-20.7, -11.5))
         

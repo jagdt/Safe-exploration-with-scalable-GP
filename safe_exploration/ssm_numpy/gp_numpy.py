@@ -25,7 +25,7 @@ class NumpyGPModel(KernelGPModel):
     """
 
     def __init__(self, n_s_out, n_s_in, n_u, X=None, y=None, kern_types=None,
-                 hyp=None, train=False, n_restarts=1, use_global_opt_first=False, seed=None):
+                 hyp=None, train=False, use_global_opt_first=False, seed=None):
         """ Initialize GP Model (possibly without training set)
 
         Parameters
@@ -34,7 +34,6 @@ class NumpyGPModel(KernelGPModel):
             y (np.ndarray[float], optional): Training targets
             kern_types (list[str]): a list of pre-specified covariance function types
             hyp (list[dict], optional): hyperparameters for each kernel
-            n_restarts (int): Number of random restarts for multi-start optimization
             use_global_opt_first (bool): Use differential evolution on first training
             seed (int, optional): Seed for random number generator
 
@@ -47,7 +46,6 @@ class NumpyGPModel(KernelGPModel):
         self.rng = np.random.default_rng(seed)
         
         # Optimization settings
-        self.n_restarts = n_restarts
         self.use_global_opt_first = use_global_opt_first
         self.hyp_optimized = False
 
@@ -428,8 +426,7 @@ class NumpyGPModel(KernelGPModel):
     def _multi_start_optimize(self, X, y, dim_idx, bounds, kern_type, max_iter):
         """Multi-start L-BFGS-B optimization from random starting points
         
-        Runs optimization from multiple random starting points within the
-        parameter bounds, returning the solution with lowest NLL.
+        Runs optimization from multiple random starting points until one succeeds.
         
         Parameters
         ----------
@@ -470,10 +467,14 @@ class NumpyGPModel(KernelGPModel):
             options={'maxiter': max_iter, 'disp': False}
         )
         if result.success or result.status == 1:
+            print(f"[Dim {dim_idx}] Multi-start 0: {result.message}, NLL: {result.fun:.4f}")
             results.append((result.x, result.fun))
         
         bounds_array = np.array(bounds)
-        for i in range(self.n_restarts - 1):
+        attempt = 0
+        max_attempts = 100
+        
+        while len(results) == 0 and attempt < max_attempts:
             random_params = self.rng.uniform(bounds_array[:, 0], bounds_array[:, 1])
             
             result = minimize(
@@ -484,13 +485,17 @@ class NumpyGPModel(KernelGPModel):
                 bounds=bounds,
                 options={'maxiter': max_iter, 'disp': False}
             )
+            attempt += 1
             if result.success or result.status == 1:
+                print(f"[Dim {dim_idx}] Multi-start {attempt}: {result.message}, NLL: {result.fun:.4f}")
                 results.append((result.x, result.fun))
         
         if results:
             best_idx = np.argmin([r[1] for r in results])
             best_params, best_nll = results[best_idx]
-            print(f"[Dim {dim_idx}] Multi-start: {len(results)}/{self.n_restarts} successful, best NLL: {best_nll:.4f}")
+            print(f"[Dim {dim_idx}] Multi-start: {len(results)} successful, best NLL: {best_nll:.4f}")
+        else:
+            print(f"[Dim {dim_idx}] WARNING: All {attempt} optimization attempts failed!")
         
         return best_params, best_nll
     

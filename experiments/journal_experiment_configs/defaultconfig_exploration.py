@@ -41,10 +41,10 @@ class DefaultConfigExploration(DefaultConfig):
 
     # Initial samples
     init_mode = "safe_samples"
-    n_safe_samples = 300
+    n_safe_samples = 1500
     init_randomized_safe_policy = True
-    init_safe_policy_margin = 0.15
-    init_safe_policy_exploration = 0.85
+    init_safe_policy_margin = 0.0
+    init_safe_policy_exploration = 1.0
     init_safe_policy_min_width = 0.05
     c_max_probing_init = 3
     c_max_probing_next_state = 2
@@ -90,7 +90,7 @@ class DefaultConfigExploration(DefaultConfig):
     # exploration
     n_experiments = 1
     n_iterations = 0
-    n_restarts_optimizer = 20
+    n_restarts_optimizer = 10
 
     # general options
     verify_safety = False
