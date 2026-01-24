@@ -1070,12 +1070,12 @@ class ScalableGPModel(GPModelBase):
             bounds.append((-20.7, -11.5))
         
         elif kern_type == "sum_lin_rbf_rbf_only":
-            # RBF factor: [1e-4, 1e4]
-            bounds.append((-9.2, 9.2))
+            # RBF factor: [1e-2, 1e4]
+            bounds.append((-4.6, 9.2))
             # RBF exponential decay rates: [1e2, 1e4]
             # bounds.extend([(4.6, 9.2),(-9.2, 9.2),(-9.2, 9.2)])
             # bounds.extend([(4.6, 9.2)] * self.input_dim)
-            bounds.extend([(-9.2, 9.2)] * self.input_dim)
+            bounds.extend([(-2.3, 9.2)] * self.input_dim)
             # Noise: [1e-9, 1e-5]
             bounds.append((-20.7, -11.5))
         
@@ -1214,6 +1214,9 @@ class ScalableGPModel(GPModelBase):
     def information_gain(self, x=None):
         """Mutual information between samples and system
         
+        Uses Cholesky decomposition for numerical stability to avoid overflow
+        when computing log-determinant of large matrices.
+        
         Parameters
         ----------
         x : ndarray, optional
@@ -1233,8 +1236,16 @@ class ScalableGPModel(GPModelBase):
             Phi = self._phi_features(x, self.lambdas[i], i)
             n_features = Phi.shape[1]
             PhiTPhi = Phi.T @ Phi
-            inf_gain_x_f[i] = np.log(
-                np.linalg.det(np.eye(n_features) + (1 / noise_var_i) * PhiTPhi))
+            
+            # Compute log(det(I + PhiTPhi/noise_var)) using Cholesky for numerical stability
+            try:
+                A = np.eye(n_features) + (1 / noise_var_i) * PhiTPhi
+                L = np.linalg.cholesky(A)
+                inf_gain_x_f[i] = 2 * np.sum(np.log(np.diag(L)))
+            except np.linalg.LinAlgError:
+                warnings.warn(f"Cholesky decomposition failed for dimension {i} in information_gain. "
+                             f"Matrix may be ill-conditioned. Returning NaN.")
+                inf_gain_x_f[i] = np.nan
 
         return inf_gain_x_f
 

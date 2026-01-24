@@ -717,8 +717,8 @@ class NumpyGPModel(KernelGPModel):
         elif kern_type == 'sum_lin_rbf_rbf_only':
             # RBF lengthscales: [1e-3, 1e3]
             bounds.extend([(-6.9, 6.9)] * self.input_dim)
-            # RBF variance: [1e-6, 1e2]
-            bounds.append((-13.8, 4.6))
+            # RBF variance: [1e-5, 1e2]
+            bounds.append((-11.5, 4.6))
             # Noise: [1e-10, 1e0]
             bounds.append((-23.0, 0.0))
         
@@ -1020,7 +1020,11 @@ class NumpyGPModel(KernelGPModel):
         print(f"Computed β-values per dimension: {self.beta_safety_per_dim}")
 
     def information_gain(self, x=None):
-        """ Mutual information between samples and system """
+        """ Mutual information between samples and system 
+        
+        Uses Cholesky decomposition for numerical stability to avoid overflow
+        when computing log-determinant of large matrices.
+        """
 
         if x is None:
             x = self.z
@@ -1030,7 +1034,16 @@ class NumpyGPModel(KernelGPModel):
         for i in range(self.n_s_out):
             noise_var_i = self.noise_var[i]
             K = self.compute_kernel(x, x, self.kern_types[i], self.hyp[i])
-            inf_gain_x_f[i] = np.log(
-                np.linalg.det(np.eye(n_data) + (1 / noise_var_i) * K))
+            
+            # Compute log(det(I + K/noise_var)) using Cholesky for numerical stability
+            # log(det(A)) = 2 * sum(log(diag(L))) where A = L @ L.T
+            try:
+                K_scaled = np.eye(n_data) + (1 / noise_var_i) * K
+                L = np.linalg.cholesky(K_scaled)
+                inf_gain_x_f[i] = 2 * np.sum(np.log(np.diag(L)))
+            except np.linalg.LinAlgError:
+                warnings.warn(f"Cholesky decomposition failed for dimension {i} in information_gain. "
+                             f"Matrix may be ill-conditioned. Returning NaN.")
+                inf_gain_x_f[i] = np.nan
 
         return inf_gain_x_f

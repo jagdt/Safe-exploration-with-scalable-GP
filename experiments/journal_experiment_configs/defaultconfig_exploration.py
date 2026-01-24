@@ -26,7 +26,7 @@ class DefaultConfigExploration(DefaultConfig):
     env_options = dict()
     init_std = np.array([0.5, 0.2]) # standard deviation of random initial states for static exploration
     env_options["init_std"] = init_std
-    env_options["plant_noise"] = np.array([0.001, 0.0001]) ** 2
+    env_options["plant_noise"] = np.array([0.002, 0.0002]) ** 2
     env_options["max_deg"] = 20
     env_options["max_dtheta"] = 1.2
     env_options["max_dtheta_theta_0"] = 0.8
@@ -78,7 +78,7 @@ class DefaultConfigExploration(DefaultConfig):
     m = None  # subset of data of size m for training
     kern_types = ["sum_lin_rbf", "sum_lin_rbf"]
     train_gp = True  # train the gp initially?
-    retrain_gp_interval = 1 # retrain the gp every n-th iteration, None to disable
+    retrain_gp_interval = 20 # retrain the gp every n-th iteration, None to disable
     gp_hyp = None
     Z = None
     lin_trafo_gp_input = None
@@ -89,7 +89,7 @@ class DefaultConfigExploration(DefaultConfig):
     gp_hyp = None
     # exploration
     n_experiments = 1
-    n_iterations = 0
+    n_iterations = 1
     n_restarts_optimizer = 10
 
     # general options
