@@ -569,7 +569,7 @@ class ScalableGPModel(GPModelBase):
             print(f"[Dim {dim_idx}] Stage 1: Optimizing linear component...")
             initial_params = self._pack_hyperparameters(self.hyp[dim_idx], "sum_lin_rbf_linear_only", dim_idx)
             initial_params = np.log(initial_params)
-            bounds = self._get_parameter_bounds("sum_lin_rbf_linear_only")
+            bounds = self._get_parameter_bounds("sum_lin_rbf_linear_only", dim_idx)
             
             result = minimize(
                 self._neg_log_marginal_likelihood,
@@ -591,7 +591,7 @@ class ScalableGPModel(GPModelBase):
             
             # Stage 2: Optimize RBF component with global opt and restarts
             print(f"[Dim {dim_idx}] Stage 2: Optimizing RBF component...")
-            bounds = self._get_parameter_bounds("sum_lin_rbf_rbf_only")
+            bounds = self._get_parameter_bounds("sum_lin_rbf_rbf_only", dim_idx)
             
             if self.use_global_opt_first and not self.hyp_optimized:
                 best_params, best_nll = self._global_optimize(X, y, dim_idx, bounds, "sum_lin_rbf_rbf_only", max_iter, cache)
@@ -610,7 +610,7 @@ class ScalableGPModel(GPModelBase):
                 warnings.warn(f"[Dim {dim_idx}] RBF optimization failed. Using initial values.")
                 self.lambdas[dim_idx] = self._compute_lambdas(dim_idx)
         else:
-            bounds = self._get_parameter_bounds(self.kern_types[dim_idx])
+            bounds = self._get_parameter_bounds(self.kern_types[dim_idx], dim_idx)
             kern_type = self.kern_types[dim_idx]
             
             if self.use_global_opt_first and not self.hyp_optimized:
@@ -1030,7 +1030,7 @@ class ScalableGPModel(GPModelBase):
         
         return hyp_dict
     
-    def _get_parameter_bounds(self, kern_type):
+    def _get_parameter_bounds(self, kern_type, dim_idx=None):
         """Get parameter-specific bounds to prevent degenerate solutions
         
         Parameters
@@ -1070,12 +1070,14 @@ class ScalableGPModel(GPModelBase):
             bounds.append((-20.7, -11.5))
         
         elif kern_type == "sum_lin_rbf_rbf_only":
-            # RBF factor: [1e-2, 1e4]
-            bounds.append((-4.6, 9.2))
+            # RBF factor: [1e-5, 1e5]
+            bounds.append((-11.5, 11.5))
             # RBF exponential decay rates: [1e2, 1e4]
-            # bounds.extend([(4.6, 9.2),(-9.2, 9.2),(-9.2, 9.2)])
+            if dim_idx==0:
+                bounds.extend([(4.6, 9.2), (2.3, 9.2), (2.3, 9.2)])
+            else:
+                bounds.extend([(3.0, 9.2),(-4.6, 9.2), (-4.6, 9.2)])
             # bounds.extend([(4.6, 9.2)] * self.input_dim)
-            bounds.extend([(-2.3, 9.2)] * self.input_dim)
             # Noise: [1e-9, 1e-5]
             bounds.append((-20.7, -11.5))
         
