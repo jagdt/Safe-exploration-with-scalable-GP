@@ -360,14 +360,11 @@ class StaticSafeMPCExploration(ExplorationModule):
     def find_max_variance(self, x0, sol_verbose=False):
         """Find the most informative sample in the space constrained by the mpc structure."""
 
+        sigma_best = 0
         x_best = None
         u_best = None
-        sigma_best = 0
-        
-        max_iterations = max(self.n_restarts_optimizer, 100)
-        i = 0
 
-        while i < max_iterations:
+        for i in range(self.n_restarts_optimizer):
 
             x_0 = self.env._sample_start_state(self.sample_mean, self.sample_std)[:,
                   None]  # sample initial state
@@ -392,25 +389,28 @@ class StaticSafeMPCExploration(ExplorationModule):
 
             f_opt = sol["f"]
             sigm_i = -float(f_opt)
-            g_sol = np.array(sol["g"]).squeeze()
 
-            if self._is_feasible(g_sol, np.array(self.lbg), np.array(self.ubg)):
-                w_sol = sol["x"]
-                x_best = np.array(w_sol[:self.n_s])
-                u_best = np.array(w_sol[self.n_s:self.n_s + self.n_u])
-                sigma_best = sigm_i
+            if sigm_i > sigma_best:  # check if solution would improve upon current best
+                g_sol = np.array(sol["g"]).squeeze()
 
-                if self.verbosity > 0:
-                    print(("Feasible solution with sigma sum {} found at iteration {}".format(
-                        str(sigm_i), i)))
-                break
-            
-            i += 1
+                if self._is_feasible(g_sol, np.array(self.lbg), np.array(self.ubg)):  # check if solution is feasible
+                    w_sol = sol["x"]
+                    x_best = np.array(w_sol[:self.n_s])
+                    u_best = np.array(w_sol[self.n_s:self.n_s + self.n_u])
+                    sigma_best = sigm_i
 
+                    z_i = np.vstack((x_best, u_best)).T
+                    if self.verbosity > 0:
+                        print(("New optimal sigma found at iteration {}".format(i)))
+                        if self.verbosity > 1:
+                            print((
+                                "New feasible solution with sigma sum {} found".format(
+                                    str(sigm_i))))
         if x_best is None or u_best is None:
-            raise ValueError("No feasible solution found in exploration optimization after {} iterations!".format(i))
+            raise ValueError("No feasible solution found in exploration optimization!")
 
         return x_best, u_best
+
 
     @staticmethod
     def _is_feasible(g, lbg, ubg, feas_tol=1e-7):
