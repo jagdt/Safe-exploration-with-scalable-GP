@@ -22,9 +22,9 @@ class Config(DefaultConfigExploration):
     # Number of frequencies to use per dimension.
     n_frequencies = 5
     # Domain lengths for each dimension.
-    domain_lengths = [7.0, 2.5, 2.0] # [dθ, θ, u]
+    domain_lengths = [8.0, 2.5, 2.0] # [dθ, θ, u]
     # Periods for each dimension.
-    periods = list(1.0 * np.array(domain_lengths))
+    periods = list(1.2 * np.array(domain_lengths))
     # Lengthscale multiple for the scalable GP to compute periods.
     lengthscale_multiple = 3.0
     # Truncation radius for the scalable GP features

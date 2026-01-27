@@ -1070,14 +1070,20 @@ class ScalableGPModel(GPModelBase):
             bounds.append((-20.7, -11.5))
         
         elif kern_type == "sum_lin_rbf_rbf_only":
-            # RBF factor: [1e-5, 1e5]
-            bounds.append((-11.5, 11.5))
+            # RBF factor: [1e-5, 1e4]
+            bounds.append((-11.5, 9.2))
+            # if dim_idx==0:
+            #     # RBF exponential decay rates: [1e4, 1e6]
+            #     bounds.append((9.2, 13.8))
+            # else:
+            #     # RBF exponential decay rates: [1e-5, 1e6]
+            #     bounds.append((-11.5, 13.8))
             # RBF exponential decay rates: [1e2, 1e4]
-            if dim_idx==0:
-                bounds.extend([(4.6, 9.2), (2.3, 9.2), (2.3, 9.2)])
-            else:
-                bounds.extend([(3.0, 9.2),(-4.6, 9.2), (-4.6, 9.2)])
-            # bounds.extend([(4.6, 9.2)] * self.input_dim)
+            # if dim_idx==0:
+            #     bounds.extend([(5.7, 9.2), (2.3, 9.2), (2.3, 9.2)])
+            # else:
+            #     bounds.extend([(5.0, 9.2),(2.3, 9.2), (2.3, 9.2)])
+            bounds.extend([(4.6, 9.2)] * self.input_dim)
             # Noise: [1e-9, 1e-5]
             bounds.append((-20.7, -11.5))
         
@@ -1341,8 +1347,6 @@ class ScalableGPModel(GPModelBase):
             return r_min
         
         tolerance = 1e-9
-        print(tail_integral_target)
-        print(tolerance * tail_integral_target)
         max_iterations = 50
         for iteration in range(max_iterations):
             r_mid = (r_min + r_max) / 2.0
