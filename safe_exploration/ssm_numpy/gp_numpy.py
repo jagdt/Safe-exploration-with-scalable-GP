@@ -323,11 +323,17 @@ class NumpyGPModel(KernelGPModel):
             K = self.compute_kernel(X, X, self.kern_types[i], self.hyp[i])
             K += self.noise_var[i] * np.eye(n_beta)
             
+            # Add extra jitter
+            casadi_jitter = 1e-5 * np.trace(K) / len(K)
+            K += casadi_jitter * np.eye(n_beta)
+            
             try:
                 L = np.linalg.cholesky(K)
             except np.linalg.LinAlgError:
-                warnings.warn(f"Cholesky failed for dimension {i}, adding jitter")
-                K += 1e-6 * np.eye(n_beta)
+                warnings.warn(f"Cholesky failed for dimension {i}, adding adaptive jitter")
+                # Add jitter proportional to trace for better conditioning
+                jitter = 1e-6 * np.trace(K) / len(K)
+                K += jitter * np.eye(n_beta)
                 L = np.linalg.cholesky(K)
             
             inv_K[i] = np.linalg.solve(L.T, np.linalg.solve(L, np.eye(n_beta)))
@@ -363,7 +369,7 @@ class NumpyGPModel(KernelGPModel):
         max_iter : int, optional
             Maximum number of optimization iterations
         """
-        if self.kern_types[dim_idx] == "sum_lin_rbf":
+        if self.kern_types[dim_idx] == "block_sum_lin_rbf":
             # Stage 1: Optimize linear component first
             print(f"[Dim {dim_idx}] Stage 1: Optimizing linear component...")
             initial_params = self._pack_hyperparameters(self.hyp[dim_idx], "sum_lin_rbf_linear_only", dim_idx)
@@ -580,21 +586,24 @@ class NumpyGPModel(KernelGPModel):
         K += noise_var * np.eye(X.shape[0])
         
         try:
-            with warnings.catch_warnings():
-                warnings.filterwarnings('error')
+            L = np.linalg.cholesky(K)
+        except np.linalg.LinAlgError:
+            warnings.warn(f"Cholesky failed for dimension {dim_idx}, adding adaptive jitter")
+            # Add jitter proportional to trace for better conditioning
+            jitter = 1e-6 * np.trace(K) / len(K)
+            K += jitter * np.eye(X.shape[0])
+            try:
                 L = np.linalg.cholesky(K)
-            
-            # Compute log marginal likelihood
-            # log p(y|X,θ) = -0.5*y^T*K^{-1}*y - sum(log(diag(L))) - n/2*log(2π)
-            alpha = np.linalg.solve(L.T, np.linalg.solve(L, y))
-            log_likelihood = -0.5 * y.T @ alpha - np.sum(np.log(np.diag(L))) - 0.5 * len(y) * np.log(2 * np.pi)
-            
-            return -log_likelihood
+            except np.linalg.LinAlgError:
+                return 1e10
         
-        except (np.linalg.LinAlgError, ValueError, RuntimeWarning):
-            warnings.warn("Cholesky decomposition failed during NLL computation; returning large NLL value.")
-            return 1e10
-
+        # Compute log marginal likelihood
+        # log p(y|X,θ) = -0.5*y^T*K^{-1}*y - sum(log(diag(L))) - n/2*log(2π)
+        alpha = np.linalg.solve(L.T, np.linalg.solve(L, y))
+        log_likelihood = -0.5 * y.T @ alpha - np.sum(np.log(np.diag(L))) - 0.5 * len(y) * np.log(2 * np.pi)
+        
+        return -log_likelihood
+        
     def _pack_hyperparameters(self, hyp_dict, kern_type, dim_idx):
         """Pack hyperparameter dict into 1D array for optimization
         
@@ -681,28 +690,28 @@ class NumpyGPModel(KernelGPModel):
             bounds.append((-23.0, 0.0))
         
         elif kern_type == 'sum_lin_rbf':
-            # RBF lengthscales: [1e-3, 1e3]
-            bounds.extend([(-6.9, 6.9)] * self.input_dim)
+            # RBF lengthscales: [1e-4, 1e2]
+            bounds.extend([(-9.2, 4.6)] * self.input_dim)
             # RBF variance: [1e-6, 1e2]
             bounds.append((-13.8, 4.6))
             # Linear variances: [1e-6, 1e1]
             bounds.extend([(-13.8, 2.3)] * self.input_dim)
-            # Noise: [1e-10, 1e0]
-            bounds.append((-23.0, 0.0))
+            # Noise: [1e-14, 1e0]
+            bounds.append((-32.2, 0.0))
         
         elif kern_type == 'sum_lin_rbf_linear_only':
-            # Linear variances: [1e-6, 1e1]
-            bounds.extend([(-13.8, 2.3)] * self.input_dim)
-            # Noise: [1e-10, 1e0]
-            bounds.append((-23.0, 0.0))
+            # Linear variances: [1e-8, 1e0]
+            bounds.extend([(-18.4, 0.0)] * self.input_dim)
+            # Noise: [1e-14, 1e0]
+            bounds.append((-32.2, 0.0))
         
         elif kern_type == 'sum_lin_rbf_rbf_only':
-            # RBF lengthscales: [1e-3, 1e3]
-            bounds.extend([(-6.9, 6.9)] * self.input_dim)
-            # RBF variance: [1e-5, 1e4]
-            bounds.append((-11.5, 9.2))
-            # Noise: [1e-9, 1e-5]
-            bounds.append((-20.7, -11.5))
+            # RBF lengthscales: [1e-4, 1e4]
+            bounds.extend([(-9.2, 9.2)] * self.input_dim)
+            # RBF variance: [1e-6, 1e4]
+            bounds.append((-13.8, 9.2))
+            # Noise: [1e-14, 1e-3]
+            bounds.append((-32.2, -6.9))
         
         elif kern_type == 'prod_lin_rbf' or kern_type == 'lin_mat52':
             # Lengthscales: [1e-3, 1e3]
