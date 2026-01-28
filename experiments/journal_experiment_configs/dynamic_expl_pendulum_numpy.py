@@ -22,7 +22,7 @@ class Config(DefaultConfigExploration):
     # Number of frequencies to use per dimension.
     n_frequencies = 5
     # Domain lengths for each dimension.
-    domain_lengths = [8.0, 2.5, 2.0] # [dθ, θ, u]
+    domain_lengths = [4.0, 2.5, 2.0] # [dθ, θ, u]
     # Periods for each dimension.
     periods = list(1.2 * np.array(domain_lengths))
     # Lengthscale multiple for the scalable GP to compute periods.
@@ -30,7 +30,7 @@ class Config(DefaultConfigExploration):
     # Truncation radius for the scalable GP features
     truncation_radius = [13.0, 14.0]
     # Target projection error for adaptive truncation
-    truncation_target = 1e-6
+    truncation_target = 5e-5
 
     # -- GP Bounds parameters
     # Whether to compute GP bounds. Otherwise uses constant ß.

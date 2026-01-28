@@ -337,7 +337,10 @@ class SimpleSafeMPC(SafeMPC):
                              'acceptable_tol': 1e-4, "acceptable_constr_viol_tol": 1e-5,
                              "bound_frac": 0.5, "start_with_resto": "no",
                              "required_infeasibility_reduction": 0.85,
-                             "acceptable_iter": 8}}  # ipopt
+                             "acceptable_iter": 8}}
+                    # 'jit': True,  # Enable just-in-time compilation
+                    # 'compiler': 'shell',
+                    # 'jit_options': {'flags': ['-O1']}}  # ipopt
 
             # opt = {'max_iter':120,'hessian_approximation':'limited-memory'}#,"c1":5e-4} #sqpmethod #,
         # opt = {'max_iter':120,'qpsol':'qpoases'}

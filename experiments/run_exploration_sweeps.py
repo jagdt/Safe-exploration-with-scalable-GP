@@ -343,7 +343,7 @@ def main():
     # Common overrides for all experiments
     base_overrides = {
         'verbose': 1,
-        'n_iterations': 200,
+        'n_iterations': 20,
         'save_results': True,
         'save_vis': True,
         'visualize': False,
@@ -359,7 +359,7 @@ def main():
     
     # n_values = [400, 600]
     n_values = [500, 700]
-    n_values = [600]
+    n_values = [1000]
     overrides_samples = base_overrides.copy()
     overrides_samples['n_frequencies'] = 5  # Fixed for scalable GP in this sweep
     

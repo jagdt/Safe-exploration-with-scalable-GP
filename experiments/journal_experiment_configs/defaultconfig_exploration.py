@@ -26,7 +26,7 @@ class DefaultConfigExploration(DefaultConfig):
     env_options = dict()
     init_std = np.array([0.5, 0.2]) # standard deviation of random initial states for static exploration
     env_options["init_std"] = init_std
-    env_options["plant_noise"] = np.array([0.002, 0.0002]) ** 2
+    env_options["plant_noise"] = np.array([0.00001, 0.000000000001]) ** 2
     env_options["max_deg"] = 20
     env_options["max_dtheta"] = 1.2
     env_options["max_dtheta_theta_0"] = 0.8
@@ -41,7 +41,7 @@ class DefaultConfigExploration(DefaultConfig):
 
     # Initial samples
     init_mode = "safe_samples"
-    n_safe_samples = 600
+    n_safe_samples = 1000
     init_randomized_safe_policy = True
     init_safe_policy_margin = 0.0
     init_safe_policy_exploration = 1.0
@@ -67,7 +67,7 @@ class DefaultConfigExploration(DefaultConfig):
     # can be different from the true model (!)
     lin_prior = True
     prior_model = dict()
-    prior_m = .149
+    prior_m = .145
     prior_b = 0.0
     prior_model["m"] = prior_m
     prior_model["b"] = prior_b
@@ -90,7 +90,7 @@ class DefaultConfigExploration(DefaultConfig):
     # exploration
     n_experiments = 1
     n_iterations = 10
-    n_restarts_optimizer = 10
+    n_restarts_optimizer = 20
 
     # general options
     verify_safety = False

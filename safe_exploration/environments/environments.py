@@ -414,7 +414,7 @@ class InvertedPendulum(Environment):
     TODO: Need to define a safety/fail criterion
     """
 
-    def __init__(self, name="InvertedPendulum", l=.5, m=.15, g=9.82, b=0.2, dt=.05, init_m=0., init_std=.01,
+    def __init__(self, name="InvertedPendulum", l=.5, m=.15, g=9.82, b=0.005, dt=.05, init_m=0., init_std=.01,
                  plant_noise=np.array([0.001, 0.0001]) ** 2, u_min=np.array([-1.]), u_max=np.array([1.]),
                  target=np.array([0.0, 0.0]), verbosity=1, norm_x=None, norm_u=None,
                  max_deg=20, max_dtheta=1.2, max_dtheta_theta_0=0.8,

@@ -162,6 +162,10 @@ class StaticSafeMPCExploration(ExplorationModule):
                         "required_infeasibility_reduction": 0.85,
                         "acceptable_iter": 8,
                         "print_level": 2}}
+                # 'jit': True,  # Enable just-in-time compilation
+                # 'compiler': 'shell',
+                # 'jit_options': {'flags': ['-O1']}}  # ipopt
+        
         # opt = {'qpsol':'qpoases','max_iter':120,'hessian_approximation':'exact'}#,"c1":5e-4} #sqpmethod #,'hessian_approximation':'limited-memory'
         # opt = {'max_iter':120,'qpsol':'qpoases'}
 
