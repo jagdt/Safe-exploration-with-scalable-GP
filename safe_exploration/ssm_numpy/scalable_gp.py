@@ -708,9 +708,6 @@ class ScalableGPModel(GPModelBase):
         best_nll : float
             Best negative log-likelihood found
         """
-        best_params = None
-        best_nll = np.inf
-        
         initial_params = self._pack_hyperparameters(self.hyp[dim_idx], kern_type, dim_idx)
         initial_params_log = np.log(initial_params)
                 
