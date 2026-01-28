@@ -14,9 +14,9 @@ class Config(DefaultConfigExploration):
     """
 
     # -- GP model
-    gp_type = 'scalable'  # one of 'gpy', 'numpy', 'scalable'
+    gp_type = 'numpy'  # one of 'gpy', 'numpy', 'scalable'
     # Whether to use global hyperparameter optimization first
-    use_global_opt_first = False
+    use_global_opt_first = True
 
     # -- Scalable GP specific parameters
     # Number of frequencies to use per dimension.
@@ -30,7 +30,7 @@ class Config(DefaultConfigExploration):
     # Truncation radius for the scalable GP features
     truncation_radius = [13.0, 14.0]
     # Target projection error for adaptive truncation
-    truncation_target = 5e-5
+    truncation_target = [5e-6, 5e-7]
 
     # -- GP Bounds parameters
     # Whether to compute GP bounds. Otherwise uses constant ß.
@@ -42,7 +42,7 @@ class Config(DefaultConfigExploration):
     # Assumed RKHS norm of the true function
     rkhs_norm = [20.0, 10.0]
     # Subgaussian noise bound
-    R_subgaussian = [0.001, 0.0001] # Match the noise of the environment
+    R_subgaussian = [1e-4, 1e-5] # Match the noise of the environment
     # Model mismatch offset
     projection_error = None # None to compute automatically
 

@@ -350,7 +350,7 @@ def main():
     }
     
     # Random seeds for statistical robustness
-    seeds = list(range(1))
+    seeds = [1] 
     
     # Sweep 1: Vary initial samples, compare GP types
     print("\n" + "="*80)
@@ -358,8 +358,7 @@ def main():
     print("="*80)
     
     # n_values = [400, 600]
-    n_values = [500, 700]
-    n_values = [1000]
+    n_values = [600, 800]
     overrides_samples = base_overrides.copy()
     overrides_samples['n_frequencies'] = 5  # Fixed for scalable GP in this sweep
     
