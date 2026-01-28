@@ -571,23 +571,16 @@ class ScalableGPModel(GPModelBase):
             initial_params = np.log(initial_params)
             bounds = self._get_parameter_bounds("sum_lin_rbf_linear_only", dim_idx)
             
-            result = minimize(
-                self._neg_log_marginal_likelihood,
-                initial_params,
-                args=(X, y, dim_idx, "sum_lin_rbf_linear_only", cache),
-                method='L-BFGS-B',
-                bounds=bounds,
-                options={'maxiter': max_iter, 'disp': False}
-            )
+            best_params, best_nll = self._multi_start_optimize(X, y, dim_idx, bounds, "sum_lin_rbf_linear_only", max_iter, cache)
             
-            if result.success or result.status == 1:
-                optimized_params = np.exp(result.x)
+            if best_params is not None:
+                optimized_params = np.exp(best_params)
                 partial_hyp = self._unpack_hyperparameters(optimized_params[:-1], "sum_lin_rbf_linear_only")
                 self.hyp[dim_idx].update(partial_hyp)
                 self.noise_var[dim_idx] = optimized_params[-1]
-                print(f"[Dim {dim_idx}] Stage 1 succeeded, NLL: {result.fun:.4f}, Reason: {result.message}")
+                print(f"[Dim {dim_idx}] Stage 1 succeeded, NLL: {best_nll:.4f}")
             else:
-                warnings.warn(f"[Dim {dim_idx}] Linear optimization failed: {result.message}. Using initial values.")
+                warnings.warn(f"[Dim {dim_idx}] Linear optimization failed. Using initial values.")
             
             # Stage 2: Optimize RBF component with global opt and restarts
             print(f"[Dim {dim_idx}] Stage 2: Optimizing RBF component...")
@@ -720,9 +713,7 @@ class ScalableGPModel(GPModelBase):
         
         initial_params = self._pack_hyperparameters(self.hyp[dim_idx], kern_type, dim_idx)
         initial_params_log = np.log(initial_params)
-        
-        results = []
-        
+                
         result = minimize(
             self._neg_log_marginal_likelihood,
             initial_params_log,
@@ -733,13 +724,13 @@ class ScalableGPModel(GPModelBase):
         )
         if result.success or result.status == 1:
             print(f"[Dim {dim_idx}] Multi-start 0: {result.message}, NLL: {result.fun:.4f}")
-            results.append((result.x, result.fun))
+            return result.x, result.fun
         
         bounds_array = np.array(bounds)
         attempt = 0
         max_attempts = 100
         
-        while len(results) == 0 and attempt < max_attempts:
+        while attempt < max_attempts:
             random_params = self.rng.uniform(bounds_array[:, 0], bounds_array[:, 1])
             
             result = minimize(
@@ -753,16 +744,9 @@ class ScalableGPModel(GPModelBase):
             attempt += 1
             if result.success or result.status == 1:
                 print(f"[Dim {dim_idx}] Multi-start {attempt}: {result.message}, NLL: {result.fun:.4f}")
-                results.append((result.x, result.fun))
+                return result.x, result.fun
         
-        if results:
-            best_idx = np.argmin([r[1] for r in results])
-            best_params, best_nll = results[best_idx]
-            print(f"[Dim {dim_idx}] Multi-start: {len(results)} successful, best NLL: {best_nll:.4f}")
-        else:
-            print(f"[Dim {dim_idx}] WARNING: All {attempt} optimization attempts failed!")
-        
-        return best_params, best_nll
+        return None
     
     def _global_optimize(self, X, y, dim_idx, bounds, kern_type, max_iter, cache=None):
         """Global optimization using differential evolution
