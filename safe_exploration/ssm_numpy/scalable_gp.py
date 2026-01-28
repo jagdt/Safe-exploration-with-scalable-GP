@@ -74,15 +74,15 @@ class ScalableGPModel(GPModelBase):
 
         # Scalable GP specific attributes
         self.n_frequencies = n_frequencies
-        self.truncation_radius = self._init_truncation_radius(truncation_radius)
+        self.truncation_radius = self._normalize_to_per_dim_list(truncation_radius)
         self.periods = self._init_periods(periods)
         self.domain_lengths = domain_lengths
         self.lengthscale_multiple = lengthscale_multiple
         self.hyp_optimized = False
         
         # Adaptive truncation control
-        self._truncation_target = truncation_target
-        self.rkhs_norms = self._init_truncation_radius(rkhs_norm)
+        self._truncation_target = self._normalize_to_per_dim_list(truncation_target)
+        self.rkhs_norms = self._normalize_to_per_dim_list(rkhs_norm)
 
         # Optimization settings
         self.use_global_opt_first = use_global_opt_first
@@ -139,16 +139,16 @@ class ScalableGPModel(GPModelBase):
             "(n_s_out × input_dim) array"
         )
     
-    def _init_truncation_radius(self, truncation_radius):
-        if truncation_radius is None:
+    def _normalize_to_per_dim_list(self, param):
+        if param is None:
             return [None] * self.n_s_out
 
-        if np.isscalar(truncation_radius):
-            return [truncation_radius] * self.n_s_out
+        if np.isscalar(param):
+            return [param] * self.n_s_out
         else:
-            if len(truncation_radius) != self.n_s_out:
-                raise ValueError("truncation_radius must be scalar or list of length n_s_out")
-            return truncation_radius
+            if len(param) != self.n_s_out:
+                raise ValueError("Parameter must be scalar or list of length n_s_out")
+            return param
     
     def _set_periods_based_on_domain_and_lengthscales(self, max_period_multiple=10.0, dampening_alpha=0.05):
         """Set periods based on domain lengths and lengthscale multiples.
@@ -322,7 +322,7 @@ class ScalableGPModel(GPModelBase):
         
         if self._truncation_target is not None:
             self.truncation_radius[dim_idx] = self.compute_truncation_radius_from_target_error(
-                dim_idx, self._truncation_target
+                dim_idx, self._truncation_target[dim_idx]
             )
 
         self.omegas[dim_idx] = self._create_ellipsoidal_frequencies(
@@ -564,7 +564,7 @@ class ScalableGPModel(GPModelBase):
             warnings.warn(f"[Dim {dim_idx}] Not enough memory for caching. Falling back to stanard optimization.")
             cache = None
 
-        if self.kern_types[dim_idx] == "sum_lin_rbf":
+        if self.kern_types[dim_idx] == "block_sum_lin_rbf":
             # Stage 1: Optimize linear component first
             print(f"[Dim {dim_idx}] Stage 1: Optimizing linear component...")
             initial_params = self._pack_hyperparameters(self.hyp[dim_idx], "sum_lin_rbf_linear_only", dim_idx)
@@ -1039,24 +1039,24 @@ class ScalableGPModel(GPModelBase):
             bounds.append((-9.2, 9.2))
             # RBF exponential decay rates: [1e-4, 1e4]
             bounds.extend([(-9.2, 9.2)] * self.input_dim)
-            # Linear variances: [1e-6, 1e-1]
-            bounds.extend([(-13.8, -2.3)] * self.input_dim)
-            # Noise: [1e-9, 1e-5]
-            bounds.append((-20.7, -11.5))
+            # Linear variances: [1e-6, 1e1]
+            bounds.extend([(-13.8, 2.3)] * self.input_dim)
+            # Noise: [1e-14, 1e0]
+            bounds.append((-32.2, 0.0))
         
         elif kern_type == "sum_lin_rbf_linear_only":
-            # Linear variances: [1e-6, 1e-1]
-            bounds.extend([(-13.8, -2.3)] * self.input_dim)
-            # Noise: [1e-9, 1e-5]
-            bounds.append((-20.7, -11.5))
+            # Linear variances: [1e-6, 1e1]
+            bounds.extend([(-13.8, 2.3)] * self.input_dim)
+            # Noise: [1e-9, 1e-3]
+            bounds.append((-20.7, -6.9))
         
         elif kern_type == "sum_lin_rbf_rbf_only":
-            # RBF factor: [1e-5, 1e4]
-            bounds.append((-11.5, 9.2))
-            # RBF exponential decay rates: [1e-4, 1e4]
-            bounds.extend([(-9.2, 9.2)] * self.input_dim)
-            # Noise: [1e-9, 1e-5]
-            bounds.append((-20.7, -11.5))
+            # RBF factor: [1e-6, 1e6]
+            bounds.append((-13.8, 13.8))
+            # RBF exponential decay rates: [1e-6, 1e6]
+            bounds.extend([(-13.8, 13.8)] * self.input_dim)
+            # Noise: [1e-14, 1e-3]
+            bounds.append((-32.2, -6.9))
         
         elif kern_type == "individual":
             # Individual lambdas: [1e-6, 1e2]
