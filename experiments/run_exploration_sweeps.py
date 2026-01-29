@@ -168,8 +168,8 @@ def sweep_initial_samples(n_values, seeds, base_overrides, output_dir):
         for n in n_values:
             for seed in seeds:
                 # Create fresh config instance
-                from journal_experiment_configs.dynamic_expl_pendulum_numpy import Config
-                exp_config = Config()
+                from journal_experiment_configs.dynamic_expl_pendulum_numpy import NumpyConfigExploration
+                exp_config = NumpyConfigExploration()
                 exp_config.gp_type = gp_type
                 exp_config.n_safe_samples = n
                 exp_config.seed = seed
@@ -229,7 +229,7 @@ def main():
     # Common overrides for all experiments
     base_overrides = {
         'verbose': 1,
-        'n_iterations': 200,
+        'n_iterations': 50,
         'save_results': True,
         'save_vis': True,
         'visualize': False,
