@@ -357,8 +357,7 @@ def main():
     print("SWEEP 1: INITIAL SAMPLES (Standard GP vs Scalable GP)")
     print("="*80)
     
-    # n_values = [400, 600]
-    n_values = [600, 800]
+    n_values = [400, 600]
     overrides_samples = base_overrides.copy()
     overrides_samples['n_frequencies'] = 5  # Fixed for scalable GP in this sweep
     

@@ -14,15 +14,15 @@ class Config(DefaultConfigExploration):
     """
 
     # -- GP model
-    gp_type = 'numpy'  # one of 'gpy', 'numpy', 'scalable'
+    gp_type = 'scalable'  # one of 'gpy', 'numpy', 'scalable'
     # Whether to use global hyperparameter optimization first
-    use_global_opt_first = True
+    use_global_opt_first = False
 
     # -- Scalable GP specific parameters
     # Number of frequencies to use per dimension.
-    n_frequencies = 5
+    n_frequencies = 4
     # Domain lengths for each dimension.
-    domain_lengths = [4.0, 2.5, 2.0] # [dθ, θ, u]
+    domain_lengths = [6.0, 2.5, 2.0] # [dθ, θ, u]
     # Periods for each dimension.
     periods = list(1.2 * np.array(domain_lengths))
     # Lengthscale multiple for the scalable GP to compute periods.

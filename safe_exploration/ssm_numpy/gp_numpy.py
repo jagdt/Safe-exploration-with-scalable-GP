@@ -25,7 +25,7 @@ class NumpyGPModel(KernelGPModel):
     """
 
     def __init__(self, n_s_out, n_s_in, n_u, X=None, y=None, kern_types=None,
-                 hyp=None, train=False, use_global_opt_first=False, seed=None):
+                 hyp=None, domain_lengths=None, train=False, use_global_opt_first=False, seed=None):
         """ Initialize GP Model (possibly without training set)
 
         Parameters
@@ -44,6 +44,7 @@ class NumpyGPModel(KernelGPModel):
         self.input_dim = n_s_in + n_u
         self.gp_trained = False
         self.rng = np.random.default_rng(seed)
+        self.domain_lengths = domain_lengths
         
         # Optimization settings
         self.use_global_opt_first = use_global_opt_first
@@ -423,9 +424,10 @@ class NumpyGPModel(KernelGPModel):
                 warnings.warn(f"Hyperparameter optimization failed for dimension {dim_idx}. Using initial values.")
     
     def _multi_start_optimize(self, X, y, dim_idx, bounds, kern_type, max_iter):
-        """Multi-start L-BFGS-B optimization from random starting points
+        """Local-then-global optimization strategy
         
-        Runs optimization from multiple random starting points until one succeeds.
+        First attempts local L-BFGS-B optimization from current hyperparameters.
+        If that fails, falls back to global differential evolution optimization.
         
         Parameters
         ----------
@@ -461,32 +463,12 @@ class NumpyGPModel(KernelGPModel):
             options={'maxiter': max_iter, 'disp': False}
         )
         if result.success or result.status == 1:
-            print(f"[Dim {dim_idx}] Multi-start 0: {result.message}, NLL: {result.fun:.4f}")
+            print(f"[Dim {dim_idx}] Local optimization succeeded: {result.message}, NLL: {result.fun:.4f}")
             return result.x, result.fun
         
-        bounds_array = np.array(bounds)
-        attempt = 0
-        max_attempts = 10
+        print(f"[Dim {dim_idx}] Local optimization failed, trying global optimization...")
+        return self._global_optimize(X, y, dim_idx, bounds, kern_type, max_iter)
         
-        while attempt < max_attempts:
-            print(f"[Dim {dim_idx}] Multi-start {attempt + 1}: trying random start...")
-            random_params = self.rng.uniform(bounds_array[:, 0], bounds_array[:, 1])
-            
-            result = minimize(
-                self._neg_log_marginal_likelihood,
-                random_params,
-                args=(X, y, dim_idx, kern_type),
-                method='L-BFGS-B',
-                bounds=bounds,
-                options={'maxiter': max_iter, 'disp': False}
-            )
-            attempt += 1
-            if result.success or result.status == 1:
-                print(f"[Dim {dim_idx}] Multi-start {attempt}: {result.message}, NLL: {result.fun:.4f}")
-                return result.x, result.fun
-        
-        return None
-    
     def _global_optimize(self, X, y, dim_idx, bounds, kern_type, max_iter):
         """Global optimization using differential evolution
         
@@ -525,7 +507,7 @@ class NumpyGPModel(KernelGPModel):
             maxiter=200,
             tol=1e-4,
             seed=42 + dim_idx,
-            polish=False,  # We'll do our own polishing
+            polish=False,
             workers=1,
             disp=False
         )
@@ -546,7 +528,6 @@ class NumpyGPModel(KernelGPModel):
             print(f"[Dim {dim_idx}] Refined NLL: {result.fun:.4f}")
             return result.x, result.fun
         else:
-            # Fall back to DE result
             return result_de.x, result_de.fun
 
     def _neg_log_marginal_likelihood(self, hyp_array_log, X, y, dim_idx, kern_type_override=None):
@@ -690,9 +671,9 @@ class NumpyGPModel(KernelGPModel):
             bounds.append((-23.0, 0.0))
         
         elif kern_type == 'sum_lin_rbf':
-            # RBF lengthscales: [1e-4, 1e2]
+            # RBF lengthscales: [1e-4, 1e4]
             bounds.extend([(-9.2, 4.6)] * self.input_dim)
-            # RBF variance: [1e-6, 1e2]
+            # RBF variance: [1e-6, 1e4]
             bounds.append((-13.8, 4.6))
             # Linear variances: [1e-6, 1e1]
             bounds.extend([(-13.8, 2.3)] * self.input_dim)

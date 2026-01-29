@@ -41,7 +41,7 @@ class DefaultConfigExploration(DefaultConfig):
 
     # Initial samples
     init_mode = "safe_samples"
-    n_safe_samples = 600
+    n_safe_samples = 400
     init_randomized_safe_policy = True
     init_safe_policy_margin = 0.0
     init_safe_policy_exploration = 1.0
@@ -89,8 +89,8 @@ class DefaultConfigExploration(DefaultConfig):
     gp_hyp = None
     # exploration
     n_experiments = 1
-    n_iterations = 1
-    n_restarts_optimizer = 20
+    n_iterations = 20
+    n_restarts_optimizer = 30
 
     # general options
     verify_safety = False

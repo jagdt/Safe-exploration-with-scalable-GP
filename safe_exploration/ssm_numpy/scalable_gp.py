@@ -680,9 +680,10 @@ class ScalableGPModel(GPModelBase):
         return L_vec
 
     def _multi_start_optimize(self, X, y, dim_idx, bounds, kern_type, max_iter, cache=None):
-        """Multi-start L-BFGS-B optimization from random starting points
+        """Local-then-global optimization strategy
         
-        Runs optimization from multiple random starting points until one succeeds.
+        First attempts local L-BFGS-B optimization from current hyperparameters.
+        If that fails, falls back to global differential evolution optimization.
         
         Parameters
         ----------
@@ -720,30 +721,11 @@ class ScalableGPModel(GPModelBase):
             options={'maxiter': max_iter, 'disp': False}
         )
         if result.success or result.status == 1:
-            print(f"[Dim {dim_idx}] Multi-start 0: {result.message}, NLL: {result.fun:.4f}")
+            print(f"[Dim {dim_idx}] Local optimization succeeded: {result.message}, NLL: {result.fun:.4f}")
             return result.x, result.fun
         
-        bounds_array = np.array(bounds)
-        attempt = 0
-        max_attempts = 100
-        
-        while attempt < max_attempts:
-            random_params = self.rng.uniform(bounds_array[:, 0], bounds_array[:, 1])
-            
-            result = minimize(
-                self._neg_log_marginal_likelihood,
-                random_params,
-                args=(X, y, dim_idx, kern_type, cache),
-                method='L-BFGS-B',
-                bounds=bounds,
-                options={'maxiter': max_iter, 'disp': False}
-            )
-            attempt += 1
-            if result.success or result.status == 1:
-                print(f"[Dim {dim_idx}] Multi-start {attempt}: {result.message}, NLL: {result.fun:.4f}")
-                return result.x, result.fun
-        
-        return None
+        print(f"[Dim {dim_idx}] Local optimization failed, trying global optimization...")
+        return self._global_optimize(X, y, dim_idx, bounds, kern_type, max_iter, cache)
     
     def _global_optimize(self, X, y, dim_idx, bounds, kern_type, max_iter, cache=None):
         """Global optimization using differential evolution

@@ -62,7 +62,8 @@ def _create_gp(conf, env):
                          kern_types=conf.kern_types, Z=conf.Z)
     elif conf.gp_type == "numpy":
         return NumpyGPModel(conf.gp_ns_out, conf.gp_ns_in, env.n_u,
-                         kern_types=conf.kern_types, 
+                         kern_types=conf.kern_types,
+                         domain_lengths=conf.domain_lengths,
                          use_global_opt_first=conf.use_global_opt_first,
                          seed=conf.seed)
     elif conf.gp_type == "scalable":

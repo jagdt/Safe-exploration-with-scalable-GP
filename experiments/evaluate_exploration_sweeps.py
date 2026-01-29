@@ -838,7 +838,7 @@ def main():
     """Main evaluation function"""
     
     # Specify result directories
-    timestamp = "20260127_123613"
+    timestamp = "20260129_134917"
     
     initial_samples_dir = f"experiments/results_exploration/initial_samples_sweep_{timestamp}"
     frequencies_dir = f"experiments/results_exploration/frequencies_sweep_{timestamp}"
