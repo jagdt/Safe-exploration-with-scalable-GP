@@ -12,11 +12,50 @@ Uses actual trained GP and environment from MPC framework to compare:
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import cm
-from matplotlib.colors import Normalize
+from matplotlib.colors import Normalize, LinearSegmentedColormap
 from mpl_toolkits.mplot3d import Axes3D
 import warnings
 import os
 import pickle
+
+# Configure matplotlib for publication-quality plots
+plt.rcParams.update({
+    'font.family': 'serif',
+    'font.serif': ['Computer Modern Roman', 'Times New Roman', 'DejaVu Serif'],
+    'font.size': 12,
+    'axes.labelsize': 14,
+    'axes.titlesize': 16,
+    'xtick.labelsize': 12,
+    'ytick.labelsize': 12,
+    'legend.fontsize': 11,
+    'lines.linewidth': 2.0,
+    'lines.markersize': 6,
+    'text.usetex': False,
+    'mathtext.fontset': 'cm',
+    'figure.figsize': (8, 6),
+    'axes.grid': True,
+    'grid.alpha': 0.3,
+    'grid.linestyle': '--',
+    'grid.linewidth': 0.5,
+})
+
+# RWTH Aachen University corporate colors
+RWTH_BLUE = '#00549F'
+RWTH_BLACK = '#000000'
+RWTH_MAGENTA = '#E30066'
+RWTH_TURQUOISE = '#0098A1'
+RWTH_GREEN = '#57AB27'
+RWTH_ORANGE = '#F6A800'
+RWTH_RED = '#CC071E'
+RWTH_BORDEAUX = '#A11035'
+RWTH_PURPLE = '#612158'
+RWTH_LIGHT_BLUE = '#8EBAE5'
+RWTH_GRAY = '#9C9E9F'
+
+# Create RWTH trajectory colormap (same as in exploration_runner.py)
+colors_list = [RWTH_LIGHT_BLUE, RWTH_BLUE, RWTH_MAGENTA]
+n_bins = 256
+RWTH_CMAP = LinearSegmentedColormap.from_list('rwth_trajectory', colors_list, N=n_bins)
 
 
 def compute_true_model_error(safempc, env, states, actions):
@@ -380,7 +419,7 @@ def plot_1d_comparison(states, actions, true_error, gp_mean, gp_std,
                        beta=2.0, proj_error=0.0, plot_bounds=False):
     """Plot 1D comparison of true vs predicted model error"""
     
-    fig, ax = plt.subplots(1, 1, figsize=(10, 6))
+    fig, ax = plt.subplots(1, 1, figsize=(10, 7))
     
     # Get x-axis data
     if vary_dim < states.shape[1]:
@@ -396,41 +435,61 @@ def plot_1d_comparison(states, actions, true_error, gp_mean, gp_std,
     gp_std_sorted = gp_std[sort_idx, state_dim]
     
     # Plot: True vs GP prediction
-    ax.plot(x_sorted, true_sorted, 'b-', linewidth=2.5, label='True model error', alpha=0.8)
-    ax.plot(x_sorted, gp_sorted, 'r--', linewidth=2, label='GP prediction', alpha=0.8)
+    ax.plot(x_sorted, true_sorted, color=RWTH_BLUE, linewidth=2.5, 
+            label='True model error', alpha=0.9, zorder=3)
+    ax.plot(x_sorted, gp_sorted, color=RWTH_MAGENTA, linestyle='--', linewidth=2.5, 
+            label='GP prediction', alpha=0.9, zorder=3)
     ax.fill_between(x_sorted,
                     gp_sorted - 2*gp_std_sorted,
                     gp_sorted + 2*gp_std_sorted,
-                    color='red', alpha=0.1, label='GP ±2σ')
+                    color=RWTH_MAGENTA, alpha=0.15, label=r'GP $\pm 2\sigma$', zorder=2)
     
     # Plot Confidence Bound (Safety Bound)
     if plot_bounds:
         bound = beta * gp_std_sorted + proj_error
-        ax.plot(x_sorted, gp_sorted + bound, 'k--', linewidth=1.5, label='Safety Bound', alpha=0.7)
-        ax.plot(x_sorted, gp_sorted - bound, 'k--', linewidth=1.5, alpha=0.7)
-        ax.fill_between(x_sorted,
-                        gp_sorted - bound,
-                    gp_sorted + bound,
-                    color='gray', alpha=0.2, label='Confidence Region')
+        ax.plot(x_sorted, gp_sorted + bound, color=RWTH_BLACK, linestyle='-.', 
+                linewidth=1.5, label='Safety bound', alpha=0.7, zorder=3)
+        ax.plot(x_sorted, gp_sorted - bound, color=RWTH_BLACK, linestyle='-.', 
+                linewidth=1.5, alpha=0.7, zorder=3)
+        ax.fill_between(x_sorted, gp_sorted - bound, gp_sorted + bound,
+                        color=RWTH_GRAY, alpha=0.2, label='Safety region', zorder=1)
     
-    # Plot training points if provided
+    # Plot training points with time-ordered colorbar
     if x_train is not None and y_train is not None:
         train_x = x_train[:, vary_dim]
         train_y = y_train[:, state_dim]
-        ax.scatter(train_x, train_y, c='green', s=50, alpha=0.6, 
-                  edgecolors='darkgreen', linewidth=1, label='Training data', zorder=5)
+        n_train = len(train_x)
+        
+        # Color by time order (early samples = light, late samples = dark)
+        time_colors = np.arange(n_train)
+        scatter = ax.scatter(train_x, train_y, c=time_colors, cmap=RWTH_CMAP, 
+                           s=60, alpha=0.7, edgecolors=RWTH_BLACK, linewidth=0.8, 
+                           label='Training data', zorder=5)
+        
+        # Add colorbar
+        cbar = plt.colorbar(scatter, ax=ax, pad=0.02, aspect=30)
+        cbar.set_label('Sample order', fontsize=12, rotation=270, labelpad=20)
+        cbar.ax.tick_params(labelsize=10)
     
-    ax.axhline(0, color='k', linestyle=':', linewidth=1, alpha=0.5)
-    ax.set_xlabel(f'{dim_names[vary_dim]}', fontsize=12)
-    ax.set_ylabel(f'Model error: {error_names[state_dim]}', fontsize=12)
-    ax.set_title(f'True vs GP Model Error', fontsize=13, fontweight='bold')
-    ax.legend(fontsize=10, loc='best')
-    ax.grid(True, alpha=0.3)
+    ax.axhline(0, color=RWTH_BLACK, linestyle=':', linewidth=1.5, alpha=0.5)
+    
+    # Improved axis labels with LaTeX
+    xlabel_map = {'dθ': r'$\dot{\theta}$ [rad/s]', 'θ': r'$\theta$ [rad]', 'u': r'$u$ [Nm]'}
+    ylabel_map = {'Δ(dθ)': r'$\Delta \dot{\theta}$ [rad/s]', 'Δ(θ)': r'$\Delta \theta$ [rad]'}
+    
+    ax.set_xlabel(xlabel_map.get(dim_names[vary_dim], dim_names[vary_dim]), fontsize=14)
+    ax.set_ylabel(ylabel_map.get(error_names[state_dim], error_names[state_dim]), fontsize=14)
+    ax.set_title(f'Model Error Comparison', fontsize=16, fontweight='bold', pad=15)
+    ax.legend(fontsize=11, loc='best', framealpha=0.95)
+    ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
     
     plt.tight_layout()
     
     if save_path is not None:
-        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        plt.savefig(save_path, dpi=300, bbox_inches='tight', facecolor='white')
+        # Also save as PDF
+        pdf_path = save_path.replace('.png', '.pdf')
+        plt.savefig(pdf_path, bbox_inches='tight', facecolor='white')
         print(f"  Saved: {error_names[state_dim]} (1D) -> {save_path}")
         plt.close(fig)
     else:
@@ -442,7 +501,7 @@ def plot_2d_comparison(states, actions, true_error, gp_mean, gp_std,
                        state_dim, vary_dims, n_points, dim_names, error_names, save_path, x_train=None, y_train=None):
     """Plot 2D heatmaps comparing true vs predicted model error"""
     
-    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+    fig, axes = plt.subplots(1, 3, figsize=(20, 6))
     
     # Get x, y data
     x_dim, y_dim = vary_dims
@@ -470,52 +529,78 @@ def plot_2d_comparison(states, actions, true_error, gp_mean, gp_std,
     norm = Normalize(vmin=vmin, vmax=vmax)
     levels = np.linspace(vmin, vmax, 21)
     
+    # Axis label mappings
+    label_map = {'dθ': r'$\dot{\theta}$ [rad/s]', 'θ': r'$\theta$ [rad]', 'u': r'$u$ [Nm]'}
+    error_label_map = {'Δ(dθ)': r'$\Delta \dot{\theta}$', 'Δ(θ)': r'$\Delta \theta$'}
+    
     # Plot 1: True model error
     im1 = axes[0].contourf(X, Y, Z_true, levels=levels, cmap='RdBu_r', norm=norm)
+    axes[0].contour(X, Y, Z_true, levels=levels, colors='black', linewidths=0.3, alpha=0.3)
+    
     if x_train is not None and y_train is not None:
         train_x = x_train[:, x_dim]
         train_y = x_train[:, y_dim]
-        axes[0].scatter(train_x, train_y, c='green', s=30, alpha=0.7, 
-                       edgecolors='darkgreen', linewidth=0.5, label='Training data', zorder=5)
-    axes[0].set_xlabel(dim_names[x_dim], fontsize=12)
-    axes[0].set_ylabel(dim_names[y_dim], fontsize=12)
-    axes[0].set_title(f'True Error: {error_names[state_dim]}', fontsize=13, fontweight='bold')
+        n_train = len(train_x)
+        time_colors = np.arange(n_train)
+        scatter1 = axes[0].scatter(train_x, train_y, c=time_colors, cmap=RWTH_CMAP, 
+                                  s=40, alpha=0.8, edgecolors=RWTH_BLACK, linewidth=0.8, zorder=5)
+    
+    axes[0].set_xlabel(label_map.get(dim_names[x_dim], dim_names[x_dim]), fontsize=14)
+    axes[0].set_ylabel(label_map.get(dim_names[y_dim], dim_names[y_dim]), fontsize=14)
+    axes[0].set_title(f'True Error: {error_label_map.get(error_names[state_dim], error_names[state_dim])}', 
+                     fontsize=15, fontweight='bold', pad=10)
+    axes[0].grid(True, alpha=0.2, linestyle='--', linewidth=0.5)
     
     # Plot 2: GP predicted error
     im2 = axes[1].contourf(X, Y, Z_gp, levels=levels, cmap='RdBu_r', norm=norm)
+    axes[1].contour(X, Y, Z_gp, levels=levels, colors='black', linewidths=0.3, alpha=0.3)
+    
     if x_train is not None and y_train is not None:
-        train_x = x_train[:, x_dim]
-        train_y = x_train[:, y_dim]
-        axes[1].scatter(train_x, train_y, c='green', s=30, alpha=0.7, 
-                       edgecolors='darkgreen', linewidth=0.5, label='Training data', zorder=5)
-    axes[1].set_xlabel(dim_names[x_dim], fontsize=12)
-    axes[1].set_ylabel(dim_names[y_dim], fontsize=12)
-    axes[1].set_title(f'GP Predicted: {error_names[state_dim]}', fontsize=13, fontweight='bold')
+        scatter2 = axes[1].scatter(train_x, train_y, c=time_colors, cmap=RWTH_CMAP, 
+                                  s=40, alpha=0.8, edgecolors=RWTH_BLACK, linewidth=0.8, zorder=5)
+    
+    axes[1].set_xlabel(label_map.get(dim_names[x_dim], dim_names[x_dim]), fontsize=14)
+    axes[1].set_ylabel(label_map.get(dim_names[y_dim], dim_names[y_dim]), fontsize=14)
+    axes[1].set_title(f'GP Prediction: {error_label_map.get(error_names[state_dim], error_names[state_dim])}', 
+                     fontsize=15, fontweight='bold', pad=10)
+    axes[1].grid(True, alpha=0.2, linestyle='--', linewidth=0.5)
     
     # Plot 3: GP uncertainty
     im3 = axes[2].contourf(X, Y, Z_std, levels=20, cmap='viridis')
+    axes[2].contour(X, Y, Z_std, levels=10, colors='black', linewidths=0.3, alpha=0.3)
+    
     if x_train is not None and y_train is not None:
-        train_x = x_train[:, x_dim]
-        train_y = x_train[:, y_dim]
-        axes[2].scatter(train_x, train_y, c='green', s=30, alpha=0.7, 
-                       edgecolors='darkgreen', linewidth=0.5, label='Training data', zorder=5)
-    axes[2].set_xlabel(dim_names[x_dim], fontsize=12)
-    axes[2].set_ylabel(dim_names[y_dim], fontsize=12)
-    axes[2].set_title(f'GP Uncertainty (σ): {error_names[state_dim]}', fontsize=13, fontweight='bold')
+        scatter3 = axes[2].scatter(train_x, train_y, c=time_colors, cmap=RWTH_CMAP, 
+                                  s=40, alpha=0.8, edgecolors=RWTH_BLACK, linewidth=0.8, zorder=5)
+        # Add colorbar for sample order on the uncertainty plot
+        cbar_samples = plt.colorbar(scatter3, ax=axes[2], pad=0.12, aspect=20)
+        cbar_samples.set_label('Sample order', fontsize=12, rotation=270, labelpad=20)
+        cbar_samples.ax.tick_params(labelsize=10)
+    
+    axes[2].set_xlabel(label_map.get(dim_names[x_dim], dim_names[x_dim]), fontsize=14)
+    axes[2].set_ylabel(label_map.get(dim_names[y_dim], dim_names[y_dim]), fontsize=14)
+    axes[2].set_title(r'GP Uncertainty ($\sigma$): ' + error_label_map.get(error_names[state_dim], error_names[state_dim]), 
+                     fontsize=15, fontweight='bold', pad=10)
+    axes[2].grid(True, alpha=0.2, linestyle='--', linewidth=0.5)
     
     # Add colorbars after tight_layout
     plt.tight_layout()
     
-    # Shared colorbar for first two plots on the left side (use im1 or im2, they have same scale)
-    cbar1 = fig.colorbar(im2, ax=axes[:2], location='left', pad=0.15)
-    cbar1.set_label('Error', fontsize=10)
+    # Shared colorbar for first two plots
+    cbar1 = fig.colorbar(im2, ax=axes[:2], location='left', pad=0.08, aspect=30)
+    cbar1.set_label('Model error', fontsize=12)
+    cbar1.ax.tick_params(labelsize=10)
     
     # Colorbar for uncertainty plot
-    cbar3 = plt.colorbar(im3, ax=axes[2])
-    cbar3.set_label('Std Dev', fontsize=10)
+    cbar3 = fig.colorbar(im3, ax=axes[2], pad=0.02, aspect=30)
+    cbar3.set_label('Std deviation', fontsize=12)
+    cbar3.ax.tick_params(labelsize=10)
     
     if save_path is not None:
-        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        plt.savefig(save_path, dpi=300, bbox_inches='tight', facecolor='white')
+        # Also save as PDF
+        pdf_path = save_path.replace('.png', '.pdf')
+        plt.savefig(pdf_path, bbox_inches='tight', facecolor='white')
         print(f"  Saved: {error_names[state_dim]} (2D) -> {save_path}")
         plt.close(fig)
     else:
@@ -570,22 +655,37 @@ def plot_training_error_scatter(states, actions, true_error, gp_mean, dim_names,
 
     residual_mismatch = np.linalg.norm(true_error - gp_mean, axis=1)
 
-    fig = plt.figure(figsize=(9, 7))
+    fig = plt.figure(figsize=(11, 8))
     ax = fig.add_subplot(111, projection='3d')
-    scatter = ax.scatter(dtheta, theta, u, c=residual_mismatch, cmap='viridis', s=35, depthshade=True)
+    
+    # Use improved colormap and styling
+    scatter = ax.scatter(dtheta, theta, u, c=residual_mismatch, cmap='plasma', 
+                        s=45, alpha=0.8, edgecolors=RWTH_BLACK, linewidth=0.5, depthshade=True)
 
-    ax.set_xlabel(dim_names[0])
-    ax.set_ylabel(dim_names[1])
-    ax.set_zlabel(dim_names[2])
-    ax.set_title('Training Samples: |True Error − GP|', fontweight='bold')
+    # Improved axis labels
+    label_map = {'dθ': r'$\dot{\theta}$ [rad/s]', 'θ': r'$\theta$ [rad]', 'u': r'$u$ [Nm]'}
+    ax.set_xlabel(label_map.get(dim_names[0], dim_names[0]), fontsize=14, labelpad=10)
+    ax.set_ylabel(label_map.get(dim_names[1], dim_names[1]), fontsize=14, labelpad=10)
+    ax.set_zlabel(label_map.get(dim_names[2], dim_names[2]), fontsize=14, labelpad=10)
+    ax.set_title('Training Data: Model Error Residuals', fontweight='bold', fontsize=16, pad=20)
 
-    cbar = fig.colorbar(scatter, ax=ax, pad=0.1)
-    cbar.set_label('Residual mismatch (norm)', fontsize=10)
+    # Improved colorbar
+    cbar = fig.colorbar(scatter, ax=ax, pad=0.1, shrink=0.8, aspect=20)
+    cbar.set_label(r'Residual mismatch $\|\Delta_{\mathrm{true}} - \Delta_{\mathrm{GP}}\|$', 
+                  fontsize=12, rotation=270, labelpad=25)
+    cbar.ax.tick_params(labelsize=10)
+    
+    # Improve viewing angle
+    ax.view_init(elev=20, azim=45)
+    ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
 
     plt.tight_layout()
     
     if save_path is not None:
-        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        plt.savefig(save_path, dpi=300, bbox_inches='tight', facecolor='white')
+        # Also save as PDF
+        pdf_path = save_path.replace('.png', '.pdf')
+        plt.savefig(pdf_path, bbox_inches='tight', facecolor='white')
         print(f"  Saved: training error mismatch (3D scatter) -> {save_path}")
         
         # Also save as pickle for interactive viewing
