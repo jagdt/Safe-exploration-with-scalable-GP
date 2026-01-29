@@ -144,6 +144,14 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_b
         ])
         actions_2d_dtheta_u = u_grid_2.ravel()[:, np.newaxis]
         
+        # 2D grid 3: vary dtheta and theta, fix u=0
+        dtheta_theta_grid, theta_dtheta_grid = np.meshgrid(dtheta_2d, theta_2d)
+        states_2d_dtheta_theta = np.column_stack([
+            dtheta_theta_grid.ravel(),
+            theta_dtheta_grid.ravel()
+        ])
+        actions_2d_dtheta_theta = np.zeros((n_points * n_points, 1))
+        
         dim_names = ['dθ', 'θ', 'u']
         error_names = ['Δ(dθ)', 'Δ(θ)']
         
@@ -157,6 +165,7 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_b
 
     true_error_2d_theta_u = compute_true_model_error(safempc, env, states_2d_theta_u, actions_2d_theta_u)
     true_error_2d_dtheta_u = compute_true_model_error(safempc, env, states_2d_dtheta_u, actions_2d_dtheta_u)
+    true_error_2d_dtheta_theta = compute_true_model_error(safempc, env, states_2d_dtheta_theta, actions_2d_dtheta_theta)
 
     print("Getting GP predictions...")
     
@@ -173,8 +182,10 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_b
         
         states_2d_theta_u_trafo = mtimes(states_2d_theta_u, safempc.lin_trafo_gp_input.T)
         states_2d_dtheta_u_trafo = mtimes(states_2d_dtheta_u, safempc.lin_trafo_gp_input.T)
+        states_2d_dtheta_theta_trafo = mtimes(states_2d_dtheta_theta, safempc.lin_trafo_gp_input.T)
         test_inputs_2d_theta_u = np.hstack([states_2d_theta_u_trafo, actions_2d_theta_u])
         test_inputs_2d_dtheta_u = np.hstack([states_2d_dtheta_u_trafo, actions_2d_dtheta_u])
+        test_inputs_2d_dtheta_theta = np.hstack([states_2d_dtheta_theta_trafo, actions_2d_dtheta_theta])
     else:
         test_inputs_1d_u = np.hstack([states_1d_u, actions_1d_u])
         test_inputs_1d_theta = np.hstack([states_1d_theta, actions_1d_theta])
@@ -182,6 +193,7 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_b
     
         test_inputs_2d_theta_u = np.hstack([states_2d_theta_u, actions_2d_theta_u])
         test_inputs_2d_dtheta_u = np.hstack([states_2d_dtheta_u, actions_2d_dtheta_u])
+        test_inputs_2d_dtheta_theta = np.hstack([states_2d_dtheta_theta, actions_2d_dtheta_theta])
     
     gp_mean_1d_u, gp_std_1d_u = safempc.ssm.predict(test_inputs_1d_u)
     gp_mean_1d_theta, gp_std_1d_theta = safempc.ssm.predict(test_inputs_1d_theta)
@@ -189,6 +201,7 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_b
 
     gp_mean_2d_theta_u, gp_std_2d_theta_u = safempc.ssm.predict(test_inputs_2d_theta_u)
     gp_mean_2d_dtheta_u, gp_std_2d_dtheta_u = safempc.ssm.predict(test_inputs_2d_dtheta_u)
+    gp_mean_2d_dtheta_theta, gp_std_2d_dtheta_theta = safempc.ssm.predict(test_inputs_2d_dtheta_theta)
     
     print("Generating plots...")
     
@@ -315,6 +328,21 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_b
             gp_mean_2d_dtheta_u, gp_std_2d_dtheta_u,
             state_dim=dim, 
             vary_dims=(0, safempc.n_s),
+            n_points=n_points,
+            dim_names=dim_names, error_names=error_names,
+            save_path=save_path,
+            x_train=x_train, y_train=y_train
+        )
+    
+    # Plot dtheta vs theta
+    for dim in range(safempc.n_s):
+        if save_dir is not None:
+            save_path = os.path.join(save_dir, f'model_error_2d_dtheta_theta_dim{dim}.png')
+        plot_2d_comparison(
+            states_2d_dtheta_theta, actions_2d_dtheta_theta, true_error_2d_dtheta_theta, 
+            gp_mean_2d_dtheta_theta, gp_std_2d_dtheta_theta,
+            state_dim=dim, 
+            vary_dims=(0, 1),
             n_points=n_points,
             dim_names=dim_names, error_names=error_names,
             save_path=save_path,
