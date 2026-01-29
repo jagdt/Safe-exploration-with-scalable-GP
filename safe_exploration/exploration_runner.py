@@ -17,9 +17,50 @@ from .visualization import plot_model_error_comparison
 
 try:
     import matplotlib.pyplot as plt
+    import matplotlib as mpl
+    from matplotlib.colors import LinearSegmentedColormap
     _has_matplotlib = True
 except:
     _has_matplotlib = False
+
+# Configure matplotlib for publication-quality plots
+if _has_matplotlib:
+    plt.rcParams.update({
+        'font.family': 'serif',
+        'font.serif': ['Computer Modern Roman', 'Times New Roman', 'DejaVu Serif'],
+        'font.size': 12,
+        'axes.labelsize': 14,
+        'axes.titlesize': 16,
+        'xtick.labelsize': 12,
+        'ytick.labelsize': 12,
+        'legend.fontsize': 11,
+        'lines.linewidth': 2.0,
+        'lines.markersize': 6,
+        'text.usetex': False,
+        'mathtext.fontset': 'cm',
+        'figure.figsize': (8, 6),
+        'axes.grid': True,
+        'grid.alpha': 0.3,
+        'grid.linestyle': '--',
+        'grid.linewidth': 0.5,
+    })
+
+# RWTH Aachen University corporate colors
+RWTH_BLUE = '#00549F'
+RWTH_BLACK = '#000000'
+RWTH_MAGENTA = '#E30066'
+RWTH_YELLOW = '#FFED00'
+RWTH_PETROL = '#006165'
+RWTH_TURQUOISE = '#0098A1'
+RWTH_GREEN = '#57AB27'
+RWTH_MAYGREEN = '#BDCD00'
+RWTH_ORANGE = '#F6A800'
+RWTH_RED = '#CC071E'
+RWTH_BORDEAUX = '#A11035'
+RWTH_PURPLE = '#612158'
+RWTH_VIOLET = '#7A6FAC'
+RWTH_LIGHT_BLUE = '#8EBAE5'
+RWTH_GRAY = '#9C9E9F'
 
 
 @unavailable(not _has_matplotlib, "matplotlib", conditionals=["visualize, save_vis"])
@@ -120,22 +161,35 @@ def run_exploration(conf, visualize=False):
             'total': np.empty(n_iterations),
         }
 
-        # initialize color code for plotting the states
-        # d_blue = np.linspace(1.0,0.0,n_iterations)
-        d_red = np.linspace(0.0, 1.0, n_iterations)
-        c_sample = lambda it: (d_red[it], 0.0,
-                               0.0)  # d_blue[it]) #use color code which transitions from green to blue
+        # Initialize color code for plotting the states using RWTH colors
+        # Create a colormap from RWTH Light Blue to RWTH Blue to RWTH Magenta
+        if _has_matplotlib and n_iterations > 1:
+            # Create custom colormap: Light Blue -> Blue -> Magenta
+            colors_list = [RWTH_LIGHT_BLUE, RWTH_BLUE, RWTH_MAGENTA]
+            n_bins = 256
+            cmap = LinearSegmentedColormap.from_list('rwth_trajectory', colors_list, N=n_bins)
+            # Generate colors for each iteration
+            iter_colors = [cmap(i / max(n_iterations - 1, 1)) for i in range(n_iterations)]
+            c_sample = lambda it: iter_colors[it] if it < len(iter_colors) else RWTH_BLUE
+        else:
+            c_sample = lambda it: RWTH_BLUE
 
         if visualize or conf.save_vis:
-            fig, ax = env.plot_safety_bounds(color="b")
+            fig, ax = env.plot_safety_bounds(color=RWTH_BLACK)
+            
+            # Configure axes for thesis-quality appearance
+            ax.set_xlabel(r'Angular velocity $\dot{\theta}$ [rad/s]', fontsize=14)
+            ax.set_ylabel(r'Angle $\theta$ [rad]', fontsize=14)
+            ax.set_title('Safe Exploration Trajectory', fontsize=16, fontweight='bold', pad=15)
+            ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
 
             # plot the initial train set
             x_train_init = exploration_module.x_train
             if conf.visualize_initial_samples:            
-                c_black = (0., 0., 0.)
+                c_gray = RWTH_GRAY
                 n_train, _ = np.shape(x_train_init)
                 for i in range(n_train):
-                    ax = env.plot_state(ax, x_train_init[i, :env.n_s], color=c_black)
+                    ax = env.plot_state(ax, x_train_init[i, :env.n_s], color=c_gray, alpha=0.3)
 
             ell = None
 
@@ -244,9 +298,34 @@ def run_exploration(conf, visualize=False):
             x_i = x_next
 
         if save_vis and save_path is not None:
+            # Add colorbar to show iteration progression
+            if n_iterations > 1:
+                sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=0, vmax=n_iterations-1))
+                sm.set_array([])
+                cbar = fig.colorbar(sm, ax=ax, pad=0.02, aspect=30)
+                cbar.set_label('Iteration', fontsize=12, rotation=270, labelpad=20)
+                cbar.ax.tick_params(labelsize=10)
+            
+            # Add legend for initial samples if visualized
+            if conf.visualize_initial_samples:
+                from matplotlib.patches import Patch
+                legend_elements = [
+                    Patch(facecolor=RWTH_GRAY, alpha=0.3, label='Initial samples'),
+                    Patch(facecolor=RWTH_LIGHT_BLUE, label='Early exploration'),
+                    Patch(facecolor=RWTH_MAGENTA, label='Late exploration'),
+                ]
+                ax.legend(handles=legend_elements, loc='best', framealpha=0.9, fontsize=11)
+            
+            # Save with high quality
             final_traj_plot_path = "{}/trajectory_final.png".format(save_path)
-            fig.savefig(final_traj_plot_path, dpi=150, bbox_inches='tight')
+            fig.savefig(final_traj_plot_path, dpi=300, bbox_inches='tight', facecolor='white')
             print(f"Saved final trajectory plot: {final_traj_plot_path}")
+            
+            # Also save as PDF for LaTeX inclusion
+            final_traj_plot_path_pdf = "{}/trajectory_final.pdf".format(save_path)
+            fig.savefig(final_traj_plot_path_pdf, bbox_inches='tight', facecolor='white')
+            print(f"Saved final trajectory plot (PDF): {final_traj_plot_path_pdf}")
+            
             plt.close(fig)
 
         l_inf_gain += [inf_gain]

@@ -14,7 +14,7 @@ class Config(DefaultConfigExploration):
     """
 
     # -- GP model
-    gp_type = 'numpy'  # one of 'gpy', 'numpy', 'scalable'
+    gp_type = 'scalable'  # one of 'gpy', 'numpy', 'scalable'
     # Whether to use global hyperparameter optimization first
     use_global_opt_first = False
     # Domain lengths for each dimension.
@@ -40,7 +40,7 @@ class Config(DefaultConfigExploration):
     # Confidence level for the GP bounds
     delta = 0.05
     # Assumed RKHS norm of the true function
-    rkhs_norm = [20.0, 10.0]
+    rkhs_norm = [20.0, 20.0]
     # Subgaussian noise bound
     R_subgaussian = [1e-4, 1e-5] # Match the noise of the environment
     # Model mismatch offset
