@@ -463,9 +463,9 @@ class InvertedPendulum(Environment):
         self._current_achieved_objective_states = []
         self._achieved_objectives = []
 
-        # max_deg = 30
+        deg_norm = 20.0
         if norm_x is None:
-            norm_x = np.array([1.0, np.deg2rad(max_deg)])
+            norm_x = np.array([1.0, np.deg2rad(deg_norm)])
 
         if norm_u is None:
             norm_u = np.array([1.0])

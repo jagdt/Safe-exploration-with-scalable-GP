@@ -8,7 +8,7 @@ import numpy as np
 from .defaultconfig_exploration import DefaultConfigExploration
 
 
-class Config(DefaultConfigExploration):
+class NumpyConfigExploration(DefaultConfigExploration):
     """
     Options class for the exploration setting
     """
@@ -17,12 +17,12 @@ class Config(DefaultConfigExploration):
     gp_type = 'scalable'  # one of 'gpy', 'numpy', 'scalable'
     # Whether to use global hyperparameter optimization first
     use_global_opt_first = False
+    # Domain lengths for each dimension.
+    domain_lengths = [6.0, 2.5, 2.0] # [dθ, θ, u]
 
     # -- Scalable GP specific parameters
     # Number of frequencies to use per dimension.
     n_frequencies = 4
-    # Domain lengths for each dimension.
-    domain_lengths = [6.0, 2.5, 2.0] # [dθ, θ, u]
     # Periods for each dimension.
     periods = list(1.2 * np.array(domain_lengths))
     # Lengthscale multiple for the scalable GP to compute periods.
@@ -67,6 +67,9 @@ class Config(DefaultConfigExploration):
     # Noise variances for the reference GP
     reference_noise_var = np.array([0.001, 0.0001]) ** 2
 
-    def __init__(self):
+    def __init__(self, file=None):
         """ """
-        super(Config, self).__init__(__file__)
+        if file is not None:
+            super(NumpyConfigExploration, self).__init__(file)
+        else:
+            super(NumpyConfigExploration, self).__init__(__file__)
