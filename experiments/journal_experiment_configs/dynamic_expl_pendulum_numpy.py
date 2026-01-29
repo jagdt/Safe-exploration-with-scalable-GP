@@ -8,13 +8,13 @@ import numpy as np
 from .defaultconfig_exploration import DefaultConfigExploration
 
 
-class NumpyConfigExploration(DefaultConfigExploration):
+class Config(DefaultConfigExploration):
     """
     Options class for the exploration setting
     """
 
     # -- GP model
-    gp_type = 'scalable'  # one of 'gpy', 'numpy', 'scalable'
+    gp_type = 'numpy'  # one of 'gpy', 'numpy', 'scalable'
     # Whether to use global hyperparameter optimization first
     use_global_opt_first = False
     # Domain lengths for each dimension.
@@ -70,6 +70,6 @@ class NumpyConfigExploration(DefaultConfigExploration):
     def __init__(self, file=None):
         """ """
         if file is not None:
-            super(NumpyConfigExploration, self).__init__(file)
+            super(Config, self).__init__(file)
         else:
-            super(NumpyConfigExploration, self).__init__(__file__)
+            super(Config, self).__init__(__file__)

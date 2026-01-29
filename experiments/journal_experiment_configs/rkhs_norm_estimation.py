@@ -6,10 +6,10 @@ Created on Tue Dec 15 13:54:37 2025
 """
 import numpy as np
 
-from .dynamic_expl_pendulum_numpy import NumpyConfigExploration
+from .dynamic_expl_pendulum_numpy import Config as ParentConfig
 
 
-class Config(NumpyConfigExploration):
+class Config(ParentConfig):
     """
     Options class for the exploration setting
     """
