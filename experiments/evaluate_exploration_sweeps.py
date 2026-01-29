@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Evaluation script for MPC exploration parameter sweeps
+Evaluation script for MPC exploration initial samples sweep
 Aggregates results across multiple seeds and creates comparison plots
 """
 
@@ -20,17 +20,15 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 plt.rcParams.update({
     'font.family': 'serif',
     'font.serif': ['Computer Modern Roman', 'Times New Roman', 'DejaVu Serif'],
-    'font.size': 14,
-    'axes.labelsize': 16,
-    'axes.titlesize': 18,
-    'xtick.labelsize': 14,
-    'ytick.labelsize': 14,
-    'legend.fontsize': 13,
-    'lines.linewidth': 2.5,
-    'lines.markersize': 8,
+    'font.size': 18,
+    'axes.labelsize': 22,
+    'axes.titlesize': 24,
+    'xtick.labelsize': 18,
+    'ytick.labelsize': 18,
+    'legend.fontsize': 16,
+    'lines.linewidth': 3.5,
     'text.usetex': False,
-    'mathtext.fontset': 'cm',
-    'figure.figsize': (10, 7),
+    'mathtext.fontset': 'cm'
 })
 
 # RWTH colors
@@ -105,7 +103,7 @@ def aggregate_by_parameters(results_list, param_names):
 
 def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, output_dir=None):
     """
-    Create stacked bar chart showing timing breakdown by component
+    Create grouped stacked bar chart showing timing breakdown by component
     
     Parameters
     ----------
@@ -120,19 +118,14 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
     output_dir : str, optional
         Directory to save plots
     """
-    fig, axes = plt.subplots(1, len(gp_types), figsize=(8 * len(gp_types), 6))
-    if len(gp_types) == 1:
-        axes = [axes]
+    fig, ax = plt.subplots(figsize=(12, 8))
     
     # Timing components to visualize
-    components = ['mpc_optimization', 'gp_training', 'total']
-    component_labels = ['MPC Optimization', 'GP Training', 'Other']
-    component_colors = [RWTH_BLUE, RWTH_ORANGE, RWTH_GREEN]
+    components = ['gp_training', 'mpc_optimization', 'total']
     
-    for ax_idx, gp_type in enumerate(gp_types):
-        ax = axes[ax_idx]
-        
-        # Collect timing data
+    # Collect timing data for all GP types
+    all_timing_data = {}
+    for gp_type in gp_types:
         timing_means = {comp: [] for comp in components}
         
         for param_val in param_values:
@@ -164,54 +157,73 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
             total = timing_means['total'][i]
             mpc = timing_means['mpc_optimization'][i]
             gp = timing_means['gp_training'][i]
-            other = max(0.0, total - mpc - gp)  # Ensure non-negative
+            other = max(0.0, total - mpc - gp)
             other_time.append(other)
         
-        # Build list of components to plot (exclude 'total', add 'other')
-        plot_components = ['mpc_optimization', 'gp_training', 'other']
-        plot_labels = ['MPC Optimization', 'GP Training', 'Other']
-        plot_colors = [RWTH_BLUE, RWTH_ORANGE, RWTH_GREEN]
-        plot_values = {
-            'mpc_optimization': timing_means['mpc_optimization'],
-            'gp_training': timing_means['gp_training'],
-            'other': other_time
-        }
+        timing_means['other'] = other_time
+        all_timing_data[gp_type] = timing_means
+    
+    # Plot grouped stacked bars
+    x = np.arange(len(param_values))
+    width = 0.35
+    
+    # Plot Standard GP (numpy)
+    if 'numpy' in gp_types and 'numpy' in all_timing_data:
+        bottom_numpy = np.zeros(len(param_values))
         
-        # Filter out components with all zeros (for cleaner visualization)
-        active_components = []
-        active_labels = []
-        active_colors = []
-        for comp, label, color in zip(plot_components, plot_labels, plot_colors):
-            if np.sum(plot_values[comp]) > 1e-6:
-                active_components.append(comp)
-                active_labels.append(label)
-                active_colors.append(color)
+        # GP Training - solid, alpha=0.8
+        values = np.array(all_timing_data['numpy']['gp_training'])
+        ax.bar(x - width/2, values, width, label='Standard GP (Training)', 
+               bottom=bottom_numpy, color=RWTH_GREEN, alpha=0.8)
+        bottom_numpy += values
         
-        # Create stacked bar chart
-        x = np.arange(len(param_values))
-        width = 0.6
-        bottom = np.zeros(len(param_values))
+        # MPC Optimization - hatch, alpha=0.6
+        values = np.array(all_timing_data['numpy']['mpc_optimization'])
+        ax.bar(x - width/2, values, width, label='Standard GP (MPC)', 
+               bottom=bottom_numpy, color=RWTH_GREEN, alpha=0.6, hatch='//')
+        bottom_numpy += values
         
-        for comp, label, color in zip(active_components, active_labels, active_colors):
-            values = np.array(plot_values[comp])
-            ax.bar(x, values, width, label=label, bottom=bottom, color=color, alpha=0.8)
-            bottom += values
+        # Other - alpha=0.4
+        values = np.array(all_timing_data['numpy']['other'])
+        ax.bar(x - width/2, values, width, label='Standard GP (Other)', 
+               bottom=bottom_numpy, color=RWTH_GREEN, alpha=0.4)
+    
+    # Plot Scalable GP
+    if 'scalable' in gp_types and 'scalable' in all_timing_data:
+        bottom_scalable = np.zeros(len(param_values))
         
-        ax.set_xlabel(param_name.replace('_', ' ').title())
-        ax.set_ylabel('Average Time per Iteration (s)')
-        gp_label = 'Standard GP' if gp_type == 'numpy' else 'Scalable GP'
-        ax.set_xticks(x)
-        ax.set_xticklabels([str(p) for p in param_values])
-        ax.legend(loc='upper left')
-        ax.grid(True, alpha=0.3, axis='y')
+        # GP Training - solid, alpha=0.8
+        values = np.array(all_timing_data['scalable']['gp_training'])
+        ax.bar(x + width/2, values, width, label='Scalable GP (Training)',
+               bottom=bottom_scalable, color=RWTH_BLUE, alpha=0.8)
+        bottom_scalable += values
+        
+        # MPC Optimization - hatch, alpha=0.6
+        values = np.array(all_timing_data['scalable']['mpc_optimization'])
+        ax.bar(x + width/2, values, width, label='Scalable GP (MPC)',
+               bottom=bottom_scalable, color=RWTH_BLUE, alpha=0.6, hatch='//')
+        bottom_scalable += values
+        
+        # Other - alpha=0.4
+        values = np.array(all_timing_data['scalable']['other'])
+        ax.bar(x + width/2, values, width, label='Scalable GP (Other)',
+               bottom=bottom_scalable, color=RWTH_BLUE, alpha=0.4)
+    
+    ax.set_xlabel('Number of Training Points')
+    ax.set_ylabel('Time (s)')
+    ax.set_title('Computational Time vs Data Points')
+    ax.set_xticks(x)
+    ax.set_xticklabels([str(p) for p in param_values])
+    ax.legend()
+    # ax.grid(True, alpha=0.3, axis='y')
     
     plt.tight_layout()
     
     if output_dir:
-        save_path = Path(output_dir) / f"timing_breakdown_{param_name}.png"
-        save_path.parent.mkdir(parents=True, exist_ok=True)
-        plt.savefig(save_path, dpi=150, bbox_inches='tight')
-        print(f"Saved: {save_path}")
+        os.makedirs(output_dir, exist_ok=True)
+        filepath = os.path.join(output_dir, f"timing_breakdown_{param_name}.png")
+        plt.savefig(filepath, dpi=300, bbox_inches='tight')
+        print(f"\nFigure saved to: {filepath}")
     
     plt.show()
 
@@ -233,12 +245,29 @@ def plot_info_gain_trajectories(results_by_type, gp_types, param_name, param_val
     output_dir : str, optional
         Directory to save plots
     """
-    fig, axes = plt.subplots(1, len(gp_types), figsize=(8 * len(gp_types), 6))
+    fig, axes = plt.subplots(1, len(gp_types), figsize=(12 * len(gp_types), 8))
+
     if len(gp_types) == 1:
         axes = [axes]
     
-    # Color palette for different parameter values
-    colors = plt.cm.viridis(np.linspace(0, 0.9, len(param_values)))
+    # RWTH color palette for different parameter values
+    rwth_colors = [
+        RWTH_BLUE,      # #00549F
+        RWTH_GREEN,     # #57AB27
+        RWTH_ORANGE,    # #F6A800
+        RWTH_RED,       # #A11035
+        RWTH_PURPLE,    # #612158
+        RWTH_TURQUOISE, # #0098A1
+    ]
+    
+    # Extend if needed
+    if len(param_values) > len(rwth_colors):
+        # Use colormap for additional colors
+        print("Extending color palette for additional parameter values")
+        extra_colors = plt.cm.Set2(np.linspace(0, 1, len(param_values) - len(rwth_colors)))
+        colors = rwth_colors + [tuple(c) for c in extra_colors]
+    else:
+        colors = rwth_colors[:len(param_values)]
     
     for ax_idx, gp_type in enumerate(gp_types):
         ax = axes[ax_idx]
@@ -293,23 +322,23 @@ def plot_info_gain_trajectories(results_by_type, gp_types, param_name, param_val
             
             # Plot with shaded error region
             label = f'{param_name.replace("_", " ").replace("n ", "N=").replace("N=safe samples", "N=")}{param_val}'
-            ax.plot(iterations, mean_traj, color=colors[param_idx], label=label, linewidth=2.5)
+            ax.plot(iterations, mean_traj, color=colors[param_idx], label=label)
             ax.fill_between(iterations, mean_traj - std_traj, mean_traj + std_traj, 
                           color=colors[param_idx], alpha=0.2)
         
         ax.set_xlabel('Iteration')
         ax.set_ylabel('Information Gain')
         gp_label = 'Standard GP' if gp_type == 'numpy' else 'Scalable GP'
-        ax.legend(loc='best')
-        ax.grid(True, alpha=0.3)
+        ax.set_title(gp_label)
+        ax.legend()
+        # ax.grid(True, alpha=0.3)
     
     plt.tight_layout()
     
     if output_dir:
-        save_path = Path(output_dir) / f"info_gain_trajectory_{param_name}.png"
-        save_path.parent.mkdir(parents=True, exist_ok=True)
-        plt.savefig(save_path, dpi=150, bbox_inches='tight')
-        print(f"Saved: {save_path}")
+        filepath = os.path.join(output_dir, f"info_gain_trajectory_{param_name}.png")
+        plt.savefig(filepath, dpi=300, bbox_inches='tight')
+        print(f"Figure saved to: {filepath}")
     
     plt.show()
 
@@ -506,61 +535,6 @@ def plot_initial_samples_comparison(results_dir, output_dir=None):
     scalable_feasible_mean = np.array(scalable_feasible_mean)
     scalable_feasible_std = np.array(scalable_feasible_std)
     
-    # Plot 1: Timing comparison
-    fig1, ax1 = plt.subplots(figsize=(10, 7))
-    valid_numpy = ~np.isnan(numpy_time_mean)
-    valid_scalable = ~np.isnan(scalable_time_mean)
-    
-    if np.any(valid_numpy):
-        ax1.errorbar(n_samples_values[valid_numpy], numpy_time_mean[valid_numpy], 
-                   yerr=numpy_time_std[valid_numpy],
-                   label='Standard GP', marker='o', capsize=5, color=RWTH_GREEN)
-    if np.any(valid_scalable):
-        ax1.errorbar(n_samples_values[valid_scalable], scalable_time_mean[valid_scalable],
-                   yerr=scalable_time_std[valid_scalable],
-                   label='Scalable GP', marker='s', capsize=5, color=RWTH_BLUE)
-    ax1.set_xlabel('Number of Initial Samples')
-    ax1.set_ylabel('Avg. Time per Iteration (s)')
-    ax1.legend()
-    ax1.grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    
-    # Save figure 1
-    if output_dir:
-        os.makedirs(output_dir, exist_ok=True)
-        filepath1 = os.path.join(output_dir, "initial_samples_timing.png")
-        plt.savefig(filepath1, dpi=300, bbox_inches='tight')
-        print(f"\nFigure saved to: {filepath1}")
-    
-    plt.show()
-    
-    # Plot 2: Information gain
-    fig2, ax2 = plt.subplots(figsize=(10, 7))
-    
-    if np.any(valid_numpy):
-        ax2.errorbar(n_samples_values[valid_numpy], numpy_info_gain_mean[valid_numpy],
-                   yerr=numpy_info_gain_std[valid_numpy],
-                   label='Standard GP', marker='o', capsize=5, color=RWTH_GREEN)
-    if np.any(valid_scalable):
-        ax2.errorbar(n_samples_values[valid_scalable], scalable_info_gain_mean[valid_scalable],
-                   yerr=scalable_info_gain_std[valid_scalable],
-                   label='Scalable GP', marker='s', capsize=5, color=RWTH_BLUE)
-    ax2.set_xlabel('Number of Initial Samples')
-    ax2.set_ylabel('Final Information Gain')
-    ax2.legend()
-    ax2.grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    
-    # Save figure 2
-    if output_dir:
-        filepath2 = os.path.join(output_dir, "initial_samples_info_gain.png")
-        plt.savefig(filepath2, dpi=300, bbox_inches='tight')
-        print(f"Figure saved to: {filepath2}")
-    
-    plt.show()
-    
     # Create timing breakdown visualization
     print("\nCreating timing breakdown visualization...")
     results_by_type = {
@@ -595,253 +569,13 @@ def plot_initial_samples_comparison(results_dir, output_dir=None):
                 print(f"    Speedup: {speedup:.2f}x")
 
 
-def plot_frequency_sweep(results_dir, output_dir=None):
-    """
-    Plot projection error and information gain vs number of frequencies
-    """
-    print("\n" + "="*80)
-    print("EVALUATING FREQUENCY SWEEP")
-    print("="*80 + "\n")
-    
-    # Load results
-    results_list = load_results_from_directory(results_dir)
-    if not results_list:
-        print("No results found!")
-        return
-    
-    # Separate standard GP baseline from scalable GP results
-    numpy_baseline = [r for r in results_list if r.get('config', {}).get('gp_type') == 'numpy']
-    scalable_results = [r for r in results_list if r.get('config', {}).get('gp_type') == 'scalable']
-    
-    # Group scalable results by n_frequencies
-    grouped = aggregate_by_parameters(scalable_results, ['n_frequencies'])
-    
-    # Sort by parameter value
-    freq_values = sorted(grouped.keys())
-    freq_values = [f[0] for f in freq_values]  # Extract from tuple
-    
-    # Calculate standard GP baseline statistics
-    numpy_info_gain_mean, numpy_info_gain_std = np.nan, np.nan
-    if numpy_baseline:
-        print(f"\nStandard GP baseline: {len(numpy_baseline)} runs")
-        numpy_info_gains = []
-        for r in numpy_baseline:
-            # Prefer reference information gain (ground truth hyperparameters)
-            info_gain_key = 'information_gain_reference' if 'information_gain_reference' in r else 'information_gain'
-            
-            if info_gain_key in r:
-                if isinstance(r[info_gain_key], dict) and 'final' in r[info_gain_key]:
-                    numpy_info_gains.append(r[info_gain_key]['final'])
-                elif isinstance(r[info_gain_key], (list, np.ndarray)) and len(r[info_gain_key]) > 0:
-                    numpy_info_gains.append(r[info_gain_key][-1])
-        
-        if numpy_info_gains:
-            numpy_info_gain_mean = np.mean(numpy_info_gains)
-            numpy_info_gain_std = np.std(numpy_info_gains)
-            print(f"  Info gain: {numpy_info_gain_mean:.3f} ± {numpy_info_gain_std:.3f}")
-    
-    # Initialize arrays for scalable GP results
-    projection_error_mean, projection_error_std = [], []
-    info_gain_mean, info_gain_std = [], []
-    time_mean, time_std = [], []
-    feasible_mean, feasible_std = [], []
-    
-    print("Aggregating results across seeds...")
-    for n_freq in freq_values:
-        results = grouped[(n_freq,)]
-        print(f"\nM = {n_freq}: {len(results)} runs")
-        
-        # Projection error
-        proj_errors = [r.get('projection_error', np.nan) for r in results]
-        proj_errors = [e for e in proj_errors if not np.isnan(e)]
-        if proj_errors:
-            projection_error_mean.append(np.mean(proj_errors))
-            projection_error_std.append(np.std(proj_errors))
-        else:
-            projection_error_mean.append(np.nan)
-            projection_error_std.append(np.nan)
-        
-        # Information gain
-        # Prefer reference information gain (ground truth hyperparameters) if available
-        info_gains = []
-        for r in results:
-            info_gain_key = 'information_gain_reference' if 'information_gain_reference' in r else 'information_gain'
-            
-            if info_gain_key in r:
-                # New format: dict with 'final'
-                if isinstance(r[info_gain_key], dict) and 'final' in r[info_gain_key]:
-                    info_gains.append(r[info_gain_key]['final'])
-                # Legacy format: array
-                elif isinstance(r[info_gain_key], (list, np.ndarray)) and len(r[info_gain_key]) > 0:
-                    info_gains.append(r[info_gain_key][-1])
-        
-        if info_gains:
-            info_gain_mean.append(np.mean(info_gains))
-            info_gain_std.append(np.std(info_gains))
-        else:
-            info_gain_mean.append(np.nan)
-            info_gain_std.append(np.nan)
-        
-        # Timing
-        times = []
-        for r in results:
-            if 'timing' in r and r['timing']:
-                # Check if it's the new format (dict with 'total')
-                if isinstance(r['timing'], dict) and 'total' in r['timing']:
-                    times.append(r['timing']['total']['mean'])
-                # Legacy format
-                elif 'avg_iteration_time' in r['timing']:
-                    times.append(r['timing']['avg_iteration_time'])
-        
-        if times:
-            time_mean.append(np.mean(times))
-            time_std.append(np.std(times))
-        else:
-            time_mean.append(np.nan)
-            time_std.append(np.nan)
-        
-        # Feasibility
-        feasible = []
-        for r in results:
-            if 'n_feasible_iterations' in r:
-                n_iters = r['config'].get('n_iterations', 20)
-                feasible.append(r['n_feasible_iterations'] / n_iters * 100)
-        
-        if feasible:
-            feasible_mean.append(np.mean(feasible))
-            feasible_std.append(np.std(feasible))
-        else:
-            feasible_mean.append(np.nan)
-            feasible_std.append(np.nan)
-    
-    # Convert to numpy arrays
-    freq_values = np.array(freq_values)
-    projection_error_mean = np.array(projection_error_mean)
-    projection_error_std = np.array(projection_error_std)
-    info_gain_mean = np.array(info_gain_mean)
-    info_gain_std = np.array(info_gain_std)
-    time_mean = np.array(time_mean)
-    time_std = np.array(time_std)
-    feasible_mean = np.array(feasible_mean)
-    feasible_std = np.array(feasible_std)
-    
-    # Plot 1: Projection error
-    fig1, ax1 = plt.subplots(figsize=(10, 7))
-    valid = ~np.isnan(projection_error_mean)
-    if np.any(valid):
-        ax1.errorbar(freq_values[valid], projection_error_mean[valid],
-                   yerr=projection_error_std[valid],
-                   marker='o', capsize=5, color=RWTH_RED)
-        ax1.set_xlabel('Number of Frequencies')
-        ax1.set_ylabel('Projection Error')
-        ax1.grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    
-    # Save figure 1
-    if output_dir:
-        os.makedirs(output_dir, exist_ok=True)
-        filepath1 = os.path.join(output_dir, "frequency_projection_error.png")
-        plt.savefig(filepath1, dpi=300, bbox_inches='tight')
-        print(f"\nFigure saved to: {filepath1}")
-    
-    plt.show()
-    
-    # Plot 2: Information gain
-    fig2, ax2 = plt.subplots(figsize=(10, 7))
-    valid = ~np.isnan(info_gain_mean)
-    if np.any(valid):
-        ax2.errorbar(freq_values[valid], info_gain_mean[valid],
-                   yerr=info_gain_std[valid],
-                   marker='s', capsize=5, color=RWTH_BLUE, label='Scalable GP')
-    
-    # Add standard GP baseline as horizontal line
-    if not np.isnan(numpy_info_gain_mean):
-        ax2.axhline(y=numpy_info_gain_mean, color=RWTH_GREEN, linestyle='--', 
-                   linewidth=2.5, label='Standard GP')
-        # Add shaded region for standard deviation
-        if not np.isnan(numpy_info_gain_std) and numpy_info_gain_std > 0:
-            ax2.fill_between([min(freq_values), max(freq_values)],
-                           numpy_info_gain_mean - numpy_info_gain_std,
-                           numpy_info_gain_mean + numpy_info_gain_std,
-                           color=RWTH_GREEN, alpha=0.2)
-    
-    ax2.set_xlabel('Number of Frequencies')
-    ax2.set_ylabel('Final Information Gain')
-    ax2.legend()
-    ax2.grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    
-    # Save figure 2
-    if output_dir:
-        filepath2 = os.path.join(output_dir, "frequency_info_gain.png")
-        plt.savefig(filepath2, dpi=300, bbox_inches='tight')
-        print(f"Figure saved to: {filepath2}")
-    
-    plt.show()
-    
-    # Plot 3: Timing
-    fig3, ax3 = plt.subplots(figsize=(10, 7))
-    valid = ~np.isnan(time_mean)
-    if np.any(valid):
-        ax3.errorbar(freq_values[valid], time_mean[valid],
-                   yerr=time_std[valid],
-                   marker='D', capsize=5, color=RWTH_ORANGE)
-        ax3.set_xlabel('Number of Frequencies')
-        ax3.set_ylabel('Avg. Time per Iteration (s)')
-        ax3.set_title('Computational Time vs Frequencies')
-        ax3.grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    
-    # Save figure 3
-    if output_dir:
-        filepath3 = os.path.join(output_dir, "frequency_timing.png")
-        plt.savefig(filepath3, dpi=300, bbox_inches='tight')
-        print(f"Figure saved to: {filepath3}")
-    
-    plt.show()
-    
-    # Create timing breakdown visualization
-    print("\nCreating timing breakdown visualization...")
-    scalable_results_dict = {}
-    for (n_freq,), results in grouped.items():
-        scalable_results_dict[n_freq] = results
-    results_by_type = {'scalable': scalable_results_dict}
-    plot_timing_breakdown(results_by_type, ['scalable'], 'n_frequencies', freq_values.tolist(), output_dir)
-    
-    # Create information gain trajectory plot
-    print("\nCreating information gain trajectory plots...")
-    plot_info_gain_trajectories(results_by_type, ['scalable'], 'n_frequencies', freq_values.tolist(), output_dir)
-    
-    # Print summary
-    print("\n" + "="*80)
-    print("SUMMARY: FREQUENCY SWEEP")
-    print("="*80)
-    
-    if not np.isnan(numpy_info_gain_mean):
-        print(f"\nStandard GP (baseline):")
-        print(f"  Info gain: {numpy_info_gain_mean:.3f} ± {numpy_info_gain_std:.3f}")
-    
-    print(f"\nScalable GP:")
-    for i, freq in enumerate(freq_values):
-        if not np.isnan(projection_error_mean[i]):
-            print(f"\nM = {freq}:")
-            print(f"  Projection error: {projection_error_mean[i]:.6f} ± {projection_error_std[i]:.6f}")
-            print(f"  Info gain: {info_gain_mean[i]:.3f} ± {info_gain_std[i]:.3f}")
-            print(f"  Time: {time_mean[i]:.3f} ± {time_std[i]:.3f} s")
-            print(f"  Feasibility: {feasible_mean[i]:.1f} ± {feasible_std[i]:.1f} %")
-
-
 def main():
     """Main evaluation function"""
     
     # Specify result directories
-    timestamp = "20260129_134917"
+    timestamp = "20260129_144508"
     
     initial_samples_dir = f"experiments/results_exploration/initial_samples_sweep_{timestamp}"
-    frequencies_dir = f"experiments/results_exploration/frequencies_sweep_{timestamp}"
     
     # Output directory for evaluation plots
     output_dir = f"experiments/results_exploration/evaluation_plots_{timestamp}"
@@ -852,13 +586,6 @@ def main():
         plot_initial_samples_comparison(initial_samples_dir, output_dir)
     else:
         print(f"Initial samples results not found: {initial_samples_dir}")
-        print("Please update the timestamp or run the sweep first.")
-    
-    if os.path.exists(frequencies_dir):
-        print("\nEvaluating frequency sweep...")
-        plot_frequency_sweep(frequencies_dir, output_dir)
-    else:
-        print(f"\nFrequency results not found: {frequencies_dir}")
         print("Please update the timestamp or run the sweep first.")
 
 

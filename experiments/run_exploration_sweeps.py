@@ -2,9 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Parameter sweeps for MPC exploration experiments
-Compare standard GP vs scalable GP with varying:
-- Number of initial safe samples
-- Number of frequencies
+Compare standard GP vs scalable GP with varying number of initial safe samples
 """
 
 import sys
@@ -222,118 +220,6 @@ def sweep_initial_samples(n_values, seeds, base_overrides, output_dir):
     print(f"{'='*80}\n")
 
 
-def sweep_frequencies(n_frequencies_list, seeds, base_overrides, output_dir):
-    """
-    Run experiments with varying number of frequencies (scalable GP)
-    Also run standard GP once for comparison
-    Evaluate projection error and information gain
-    
-    Parameters
-    ----------
-    n_frequencies_list : list
-        List of frequency counts to test
-    seeds : list
-        List of random seeds for reproducibility
-    base_overrides : dict
-        Configuration overrides to apply on top of default Config
-    output_dir : str
-        Directory to save results
-    """
-    print(f"\n{'='*80}")
-    print(f"SWEEPING FREQUENCIES: {n_frequencies_list}")
-    print(f"GP TYPES: Scalable GP + Standard GP (baseline)")
-    print(f"RANDOM SEEDS: {seeds}")
-    print(f"{'='*80}\n")
-    
-    all_results = []
-    
-    # First, run standard GP once as baseline (doesn't use frequencies)
-    print(f"\nRunning Standard GP baseline...")
-    for seed in seeds:
-        from journal_experiment_configs.dynamic_expl_pendulum_numpy import Config
-        exp_config = Config()
-        exp_config.gp_type = 'numpy'
-        exp_config.seed = seed
-        
-        # Apply base config overrides
-        if base_overrides:
-            for key, value in base_overrides.items():
-                if key not in ['gp_type', 'n_frequencies', 'seed']:
-                    setattr(exp_config, key, value)
-        
-        exp_name = f"numpy_baseline_seed{seed}"
-        exp_config.save_dir = f"{output_dir}/{exp_name}"
-        exp_config.save_path_base = "."
-
-        # Run experiment
-        results = run_exploration_experiment(exp_config, exp_name)
-        all_results.append(results)
-        
-        # Save intermediate results
-        save_path = Path(output_dir) / f"{exp_name}.json"
-        save_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(save_path, 'w') as f:
-            results_serializable = make_json_serializable(results)
-            json.dump(results_serializable, f, indent=2)
-        
-        print(f"Saved results to: {save_path}")
-    
-    # Now run scalable GP with varying frequencies
-    print(f"\nRunning Scalable GP with varying frequencies...")
-    for n_freq in n_frequencies_list:
-        for seed in seeds:
-            # Create fresh config instance
-            from journal_experiment_configs.dynamic_expl_pendulum_numpy import Config
-            exp_config = Config()
-            exp_config.gp_type = 'scalable'
-            exp_config.n_frequencies = n_freq
-            exp_config.seed = seed
-            
-            # Apply any additional base config overrides
-            if base_overrides:
-                for key, value in base_overrides.items():
-                    if key not in ['gp_type', 'n_frequencies', 'seed']:
-                        setattr(exp_config, key, value)
-            
-            exp_name = f"scalable_freq{n_freq}_seed{seed}"
-            exp_config.save_dir = f"{output_dir}/{exp_name}"
-            exp_config.save_path_base = "."
-            
-            # Run experiment
-            results = run_exploration_experiment(exp_config, exp_name)
-            all_results.append(results)
-            
-            # Save intermediate results
-            save_path = Path(output_dir) / f"{exp_name}.json"
-            save_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(save_path, 'w') as f:
-                results_serializable = make_json_serializable(results)
-                json.dump(results_serializable, f, indent=2)
-            
-            print(f"Saved results to: {save_path}")
-    
-    # Save summary
-    summary_path = Path(output_dir) / "summary.json"
-    with open(summary_path, 'w') as f:
-        summary = {
-            'sweep_type': 'frequencies',
-            'gp_types': ['numpy', 'scalable'],
-            'n_frequencies_list': n_frequencies_list,
-            'seeds': seeds,
-            'n_experiments': len(all_results),
-            'n_successful': sum(1 for r in all_results if r['success']),
-        }
-        json.dump(summary, f, indent=2)
-    
-    print(f"\n{'='*80}")
-    print(f"FREQUENCY SWEEP COMPLETE")
-    print(f"Total experiments: {len(all_results)}")
-    print(f"Successful: {sum(1 for r in all_results if r['success'])}")
-    print(f"Failed: {sum(1 for r in all_results if not r['success'])}")
-    print(f"Results saved to: {output_dir}")
-    print(f"{'='*80}\n")
-
-
 def main():
     """Main sweep execution"""
     
@@ -343,7 +229,7 @@ def main():
     # Common overrides for all experiments
     base_overrides = {
         'verbose': 1,
-        'n_iterations': 20,
+        'n_iterations': 200,
         'save_results': True,
         'save_vis': True,
         'visualize': False,
@@ -352,9 +238,9 @@ def main():
     # Random seeds for statistical robustness
     seeds = [1] 
     
-    # Sweep 1: Vary initial samples, compare GP types
+    # Sweep: Vary initial samples, compare GP types
     print("\n" + "="*80)
-    print("SWEEP 1: INITIAL SAMPLES (Standard GP vs Scalable GP)")
+    print("SWEEP: INITIAL SAMPLES (Standard GP vs Scalable GP)")
     print("="*80)
     
     n_values = [400, 600]
@@ -364,25 +250,10 @@ def main():
     output_dir_samples = f"results_exploration/initial_samples_sweep_{timestamp}"
     sweep_initial_samples(n_values, seeds, overrides_samples, output_dir_samples)
     
-    # Sweep 2: Vary frequencies (scalable GP only)
     print("\n" + "="*80)
-    print("SWEEP 2: FREQUENCIES (Scalable GP)")
+    print("SWEEP COMPLETE")
     print("="*80)
-    
-    n_frequencies_list = [5]
-    # n_frequencies_list = [6]
-    overrides_freq = base_overrides.copy()
-    overrides_freq['n_safe_samples'] = 400  # Fixed number of initial safe samples
-    
-    output_dir_freq = f"results_exploration/frequencies_sweep_{timestamp}"
-    # sweep_frequencies(n_frequencies_list, seeds, overrides_freq, output_dir_freq)
-    
-    print("\n" + "="*80)
-    print("ALL SWEEPS COMPLETE")
-    print("="*80)
-    print(f"\nResults saved to:")
-    print(f"  - {output_dir_samples}")
-    print(f"  - {output_dir_freq}")
+    print(f"\nResults saved to: {output_dir_samples}")
     print(f"\nRun evaluate_exploration_sweeps.py to generate plots and analysis.")
 
 
