@@ -91,7 +91,7 @@ def compute_true_model_error(safempc, env, states, actions):
     return true_error
 
 
-def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_bounds=False):
+def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_bounds=False, n_initial_samples=0):
     """Create comprehensive model error comparison plots
     
     Parameters
@@ -104,6 +104,8 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_b
         Number of points per dimension for grid
     plot_bounds : bool
         Whether to plot confidence bounds
+    n_initial_samples : int
+        Number of initial samples (will be plotted in gray, rest with RWTH colormap)
     """
     
     if save_dir is not None:
@@ -306,7 +308,8 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_b
             save_path=save_path,
             x_train=x_train, y_train=y_train,
             beta=beta_dim, proj_error=proj_dim,
-            plot_bounds=plot_bounds
+            plot_bounds=plot_bounds,
+            n_initial_samples=n_initial_samples
         )
     
     # Plot 1D slice varying theta
@@ -323,7 +326,8 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_b
             save_path=save_path,
             x_train=x_train, y_train=y_train,
             beta=beta_dim, proj_error=proj_dim,
-            plot_bounds=plot_bounds
+            plot_bounds=plot_bounds,
+            n_initial_samples=n_initial_samples
         )
     
     # Plot 1D slice varying dtheta
@@ -340,7 +344,8 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_b
             save_path=save_path,
             x_train=x_train, y_train=y_train,
             beta=beta_dim, proj_error=proj_dim,
-            plot_bounds=plot_bounds
+            plot_bounds=plot_bounds,
+            n_initial_samples=n_initial_samples
         )
     
     # Plot theta vs u
@@ -355,7 +360,8 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_b
             n_points=n_points,
             dim_names=dim_names, error_names=error_names,
             save_path=save_path,
-            x_train=x_train, y_train=y_train
+            x_train=x_train, y_train=y_train,
+            n_initial_samples=n_initial_samples
         )
     
     # Plot dtheta vs u
@@ -370,7 +376,8 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_b
             n_points=n_points,
             dim_names=dim_names, error_names=error_names,
             save_path=save_path,
-            x_train=x_train, y_train=y_train
+            x_train=x_train, y_train=y_train,
+            n_initial_samples=n_initial_samples
         )
     
     # Plot dtheta vs theta
@@ -385,7 +392,8 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_b
             n_points=n_points,
             dim_names=dim_names, error_names=error_names,
             save_path=save_path,
-            x_train=x_train, y_train=y_train
+            x_train=x_train, y_train=y_train,
+            n_initial_samples=n_initial_samples
         )
 
     # 3D scatter of training data highlighting residual mismatch
@@ -416,7 +424,7 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_b
 
 def plot_1d_comparison(states, actions, true_error, gp_mean, gp_std,
                        state_dim, vary_dim, dim_names, error_names, save_path, x_train=None, y_train=None,
-                       beta=2.0, proj_error=0.0, plot_bounds=False):
+                       beta=2.0, proj_error=0.0, plot_bounds=False, n_initial_samples=0):
     """Plot 1D comparison of true vs predicted model error"""
     
     fig, ax = plt.subplots(1, 1, figsize=(10, 7))
@@ -460,16 +468,36 @@ def plot_1d_comparison(states, actions, true_error, gp_mean, gp_std,
         train_y = y_train[:, state_dim]
         n_train = len(train_x)
         
-        # Color by time order (early samples = light, late samples = dark)
-        time_colors = np.arange(n_train)
-        scatter = ax.scatter(train_x, train_y, c=time_colors, cmap=RWTH_CMAP, 
-                           s=60, alpha=0.7, edgecolors=RWTH_BLACK, linewidth=0.8, 
-                           label='Training data', zorder=5)
-        
-        # Add colorbar
-        cbar = plt.colorbar(scatter, ax=ax, pad=0.02, aspect=30)
-        cbar.set_label('Sample order', fontsize=12, rotation=270, labelpad=20)
-        cbar.ax.tick_params(labelsize=10)
+        # Separate initial samples from exploration samples
+        if n_initial_samples > 0 and n_initial_samples < n_train:
+            # Plot initial samples in gray
+            ax.scatter(train_x[:n_initial_samples], train_y[:n_initial_samples], 
+                      c=RWTH_GRAY, s=60, alpha=0.3, edgecolors=RWTH_BLACK, linewidth=0.8, 
+                      label='Initial samples', zorder=4)
+            
+            # Plot exploration samples with RWTH colormap
+            n_exploration = n_train - n_initial_samples
+            time_colors = np.arange(n_exploration)
+            scatter = ax.scatter(train_x[n_initial_samples:], train_y[n_initial_samples:], 
+                               c=time_colors, cmap=RWTH_CMAP, 
+                               s=60, alpha=0.7, edgecolors=RWTH_BLACK, linewidth=0.8, 
+                               label='Exploration samples', zorder=5)
+            
+            # Add colorbar for exploration samples
+            cbar = plt.colorbar(scatter, ax=ax, pad=0.02, aspect=30)
+            cbar.set_label('Exploration step', fontsize=12, rotation=270, labelpad=20)
+            cbar.ax.tick_params(labelsize=10)
+        else:
+            # All samples with colormap (no distinction)
+            time_colors = np.arange(n_train)
+            scatter = ax.scatter(train_x, train_y, c=time_colors, cmap=RWTH_CMAP, 
+                               s=60, alpha=0.7, edgecolors=RWTH_BLACK, linewidth=0.8, 
+                               label='Training data', zorder=5)
+            
+            # Add colorbar
+            cbar = plt.colorbar(scatter, ax=ax, pad=0.02, aspect=30)
+            cbar.set_label('Sample order', fontsize=12, rotation=270, labelpad=20)
+            cbar.ax.tick_params(labelsize=10)
     
     ax.axhline(0, color=RWTH_BLACK, linestyle=':', linewidth=1.5, alpha=0.5)
     
@@ -498,7 +526,7 @@ def plot_1d_comparison(states, actions, true_error, gp_mean, gp_std,
 
 
 def plot_2d_comparison(states, actions, true_error, gp_mean, gp_std,
-                       state_dim, vary_dims, n_points, dim_names, error_names, save_path, x_train=None, y_train=None):
+                       state_dim, vary_dims, n_points, dim_names, error_names, save_path, x_train=None, y_train=None, n_initial_samples=0):
     """Plot 2D heatmaps comparing true vs predicted model error"""
     
     fig, axes = plt.subplots(1, 3, figsize=(20, 6))
@@ -541,9 +569,24 @@ def plot_2d_comparison(states, actions, true_error, gp_mean, gp_std,
         train_x = x_train[:, x_dim]
         train_y = x_train[:, y_dim]
         n_train = len(train_x)
-        time_colors = np.arange(n_train)
-        scatter1 = axes[0].scatter(train_x, train_y, c=time_colors, cmap=RWTH_CMAP, 
-                                  s=40, alpha=0.8, edgecolors=RWTH_BLACK, linewidth=0.8, zorder=5)
+        
+        # Separate initial samples from exploration samples
+        if n_initial_samples > 0 and n_initial_samples < n_train:
+            # Plot initial samples in gray
+            axes[0].scatter(train_x[:n_initial_samples], train_y[:n_initial_samples], 
+                          c=RWTH_GRAY, s=40, alpha=0.3, edgecolors=RWTH_BLACK, linewidth=0.8, zorder=4)
+            
+            # Plot exploration samples with RWTH colormap
+            n_exploration = n_train - n_initial_samples
+            time_colors = np.arange(n_exploration)
+            scatter1 = axes[0].scatter(train_x[n_initial_samples:], train_y[n_initial_samples:], 
+                                      c=time_colors, cmap=RWTH_CMAP, 
+                                      s=40, alpha=0.8, edgecolors=RWTH_BLACK, linewidth=0.8, zorder=5)
+        else:
+            # All samples with colormap
+            time_colors = np.arange(n_train)
+            scatter1 = axes[0].scatter(train_x, train_y, c=time_colors, cmap=RWTH_CMAP, 
+                                      s=40, alpha=0.8, edgecolors=RWTH_BLACK, linewidth=0.8, zorder=5)
     
     axes[0].set_xlabel(label_map.get(dim_names[x_dim], dim_names[x_dim]), fontsize=14)
     axes[0].set_ylabel(label_map.get(dim_names[y_dim], dim_names[y_dim]), fontsize=14)
@@ -556,8 +599,18 @@ def plot_2d_comparison(states, actions, true_error, gp_mean, gp_std,
     axes[1].contour(X, Y, Z_gp, levels=levels, colors='black', linewidths=0.3, alpha=0.3)
     
     if x_train is not None and y_train is not None:
-        scatter2 = axes[1].scatter(train_x, train_y, c=time_colors, cmap=RWTH_CMAP, 
-                                  s=40, alpha=0.8, edgecolors=RWTH_BLACK, linewidth=0.8, zorder=5)
+        if n_initial_samples > 0 and n_initial_samples < n_train:
+            # Plot initial samples in gray
+            axes[1].scatter(train_x[:n_initial_samples], train_y[:n_initial_samples], 
+                          c=RWTH_GRAY, s=40, alpha=0.3, edgecolors=RWTH_BLACK, linewidth=0.8, zorder=4)
+            
+            # Plot exploration samples with RWTH colormap
+            scatter2 = axes[1].scatter(train_x[n_initial_samples:], train_y[n_initial_samples:], 
+                                      c=time_colors, cmap=RWTH_CMAP, 
+                                      s=40, alpha=0.8, edgecolors=RWTH_BLACK, linewidth=0.8, zorder=5)
+        else:
+            scatter2 = axes[1].scatter(train_x, train_y, c=time_colors, cmap=RWTH_CMAP, 
+                                      s=40, alpha=0.8, edgecolors=RWTH_BLACK, linewidth=0.8, zorder=5)
     
     axes[1].set_xlabel(label_map.get(dim_names[x_dim], dim_names[x_dim]), fontsize=14)
     axes[1].set_ylabel(label_map.get(dim_names[y_dim], dim_names[y_dim]), fontsize=14)
@@ -570,12 +623,28 @@ def plot_2d_comparison(states, actions, true_error, gp_mean, gp_std,
     axes[2].contour(X, Y, Z_std, levels=10, colors='black', linewidths=0.3, alpha=0.3)
     
     if x_train is not None and y_train is not None:
-        scatter3 = axes[2].scatter(train_x, train_y, c=time_colors, cmap=RWTH_CMAP, 
-                                  s=40, alpha=0.8, edgecolors=RWTH_BLACK, linewidth=0.8, zorder=5)
-        # Add colorbar for sample order on the uncertainty plot
-        cbar_samples = plt.colorbar(scatter3, ax=axes[2], pad=0.12, aspect=20)
-        cbar_samples.set_label('Sample order', fontsize=12, rotation=270, labelpad=20)
-        cbar_samples.ax.tick_params(labelsize=10)
+        if n_initial_samples > 0 and n_initial_samples < n_train:
+            # Plot initial samples in gray
+            axes[2].scatter(train_x[:n_initial_samples], train_y[:n_initial_samples], 
+                          c=RWTH_GRAY, s=40, alpha=0.3, edgecolors=RWTH_BLACK, linewidth=0.8, zorder=4)
+            
+            # Plot exploration samples with RWTH colormap
+            scatter3 = axes[2].scatter(train_x[n_initial_samples:], train_y[n_initial_samples:], 
+                                      c=time_colors, cmap=RWTH_CMAP, 
+                                      s=40, alpha=0.8, edgecolors=RWTH_BLACK, linewidth=0.8, zorder=5)
+            
+            # Add colorbar for exploration samples
+            cbar_samples = plt.colorbar(scatter3, ax=axes[2], pad=0.12, aspect=20)
+            cbar_samples.set_label('Exploration step', fontsize=12, rotation=270, labelpad=20)
+            cbar_samples.ax.tick_params(labelsize=10)
+        else:
+            scatter3 = axes[2].scatter(train_x, train_y, c=time_colors, cmap=RWTH_CMAP, 
+                                      s=40, alpha=0.8, edgecolors=RWTH_BLACK, linewidth=0.8, zorder=5)
+            
+            # Add colorbar for sample order
+            cbar_samples = plt.colorbar(scatter3, ax=axes[2], pad=0.12, aspect=20)
+            cbar_samples.set_label('Sample order', fontsize=12, rotation=270, labelpad=20)
+            cbar_samples.ax.tick_params(labelsize=10)
     
     axes[2].set_xlabel(label_map.get(dim_names[x_dim], dim_names[x_dim]), fontsize=14)
     axes[2].set_ylabel(label_map.get(dim_names[y_dim], dim_names[y_dim]), fontsize=14)

@@ -369,7 +369,9 @@ def run_exploration(conf, visualize=False):
             save_results(save_path, l_sigm_sum, l_sigm, l_inf_gain, l_z_all, l_x_next_obs_all, l_x_next_pred,
                          x_next_prior, exploration_module.safempc.ssm, x_train_init, l_timing, safety_all=safety_all)
         if visualize or save_vis:
-            plot_model_error_comparison(exploration_module.safempc, exploration_module.env, save_dir=save_path, n_points=50, plot_bounds=conf.plot_bounds)
+            plot_model_error_comparison(exploration_module.safempc, exploration_module.env, 
+                                       save_dir=save_path, n_points=50, plot_bounds=conf.plot_bounds,
+                                       n_initial_samples=x_train_init.shape[0])
     
     # Return aggregated results
     results = {
