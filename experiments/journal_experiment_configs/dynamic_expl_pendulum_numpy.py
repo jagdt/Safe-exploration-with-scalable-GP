@@ -54,18 +54,18 @@ class NumpyConfigExploration(DefaultConfigExploration):
     # Hyperparameters of the reference GP
     reference_hyp = [
         {
-            'rbf.lengthscale': np.array([0.53, 0.71, 0.61]),
-            'rbf.variance': 0.0068,
-            'linear.variances': np.array([0.94, 0.07, 0.0014])
+            'rbf.lengthscale': np.array([7.8, 1.8, 6.2]),
+            'rbf.variance': 0.00021,
+            'linear.variances': np.array([0.0053, 0.0053, 0.011])
         },
         {
-            'rbf.lengthscale': np.array([0.52, 0.96, 1.08]),
-            'rbf.variance': 1.05e-05,
-            'linear.variances': np.array([0.01, 0.01, 0.01])
+            'rbf.lengthscale': np.array([5.7, 6.3, 6.5]),
+            'rbf.variance': 0.00075,
+            'linear.variances': np.array([0.0068, 0.007, 0.011])
         }
     ]
     # Noise variances for the reference GP
-    reference_noise_var = np.array([0.001, 0.0001]) ** 2
+    reference_noise_var = np.array([1e-4, 1e-5]) ** 2
 
     def __init__(self, file=None):
         """ """
