@@ -294,7 +294,7 @@ class SimpleSafeMPC(SafeMPC):
                                               [p_all, q_all])
 
         g_safe, lbg_safe, ubg_safe, g_names_safe = self._generate_safety_constraints(
-            p_all, q_all, u_0, k_fb_0, k_ff_all)
+            p_0, p_all, q_all, u_0, k_fb_0, k_ff_all)
         g = vertcat(g, g_safe)
         lbg += lbg_safe
         ubg += ubg_safe
@@ -387,11 +387,13 @@ class SimpleSafeMPC(SafeMPC):
 
         return cost
 
-    def _generate_safety_constraints(self, p_all, q_all, u_0, k_fb_0, k_ff_all):
+    def _generate_safety_constraints(self, p_0, p_all, q_all, u_0, k_fb_0, k_ff_all):
         """ Generate all safety constraints
 
         Parameters
         ----------
+        p_0: n_s x 1 casadi.SX
+            The initial state
         p_all: n_safe x n_s casadi.SX
             The centers of the safe trajctory ellipsoids
         q_all: n_safe x n_s x n_s ndarray[float]
@@ -419,6 +421,18 @@ class SimpleSafeMPC(SafeMPC):
         
         # Domain constraints for scalable GP
         if self.domain_bounds is not None:
+            # Constrain initial state p_0
+            for j in range(self.n_s):
+                g = vertcat(g, p_0[j])
+                lbg += [self.domain_bounds[j, 0]]
+                ubg += [cas.inf]
+                g_name += [f"domain_lower_state_{j}_initial"]
+                g = vertcat(g, p_0[j])
+                lbg += [-cas.inf]
+                ubg += [self.domain_bounds[j, 1]]
+                g_name += [f"domain_upper_state_{j}_initial"]
+            
+            # Constrain trajectory states p_all
             for i in range(H):
                 p_i = p_all[i, :].T
                 for j in range(self.n_s):

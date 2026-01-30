@@ -209,8 +209,8 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
         ax.bar(x + width/2, values, width, label='Scalable GP (Other)',
                bottom=bottom_scalable, color=RWTH_BLUE, alpha=0.4)
     
-    ax.set_xlabel('Number of Training Points')
-    ax.set_ylabel('Time (s)')
+    ax.set_xlabel('Number of initial training points')
+    ax.set_ylabel('Average time per iteration (s)')
     ax.set_title('Computational Time vs Data Points')
     ax.set_xticks(x)
     ax.set_xticklabels([str(p) for p in param_values])
@@ -573,7 +573,7 @@ def main():
     """Main evaluation function"""
     
     # Specify result directories
-    timestamp = "20260129_144508"
+    timestamp = "20260130_094704"
     
     initial_samples_dir = f"experiments/results_exploration/initial_samples_sweep_{timestamp}"
     

@@ -236,7 +236,7 @@ def main():
     }
     
     # Random seeds for statistical robustness
-    seeds = [1] 
+    seeds = [1,2]
     
     # Sweep: Vary initial samples, compare GP types
     print("\n" + "="*80)

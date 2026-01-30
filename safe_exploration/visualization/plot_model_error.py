@@ -516,8 +516,8 @@ def plot_1d_comparison(states, actions, true_error, gp_mean, gp_std,
     if save_path is not None:
         plt.savefig(save_path, dpi=300, bbox_inches='tight', facecolor='white')
         # Also save as PDF
-        pdf_path = save_path.replace('.png', '.pdf')
-        plt.savefig(pdf_path, bbox_inches='tight', facecolor='white')
+        # pdf_path = save_path.replace('.png', '.pdf')
+        # plt.savefig(pdf_path, bbox_inches='tight', facecolor='white')
         print(f"  Saved: {error_names[state_dim]} (1D) -> {save_path}")
         plt.close(fig)
     else:
@@ -668,8 +668,8 @@ def plot_2d_comparison(states, actions, true_error, gp_mean, gp_std,
     if save_path is not None:
         plt.savefig(save_path, dpi=300, bbox_inches='tight', facecolor='white')
         # Also save as PDF
-        pdf_path = save_path.replace('.png', '.pdf')
-        plt.savefig(pdf_path, bbox_inches='tight', facecolor='white')
+        # pdf_path = save_path.replace('.png', '.pdf')
+        # plt.savefig(pdf_path, bbox_inches='tight', facecolor='white')
         print(f"  Saved: {error_names[state_dim]} (2D) -> {save_path}")
         plt.close(fig)
     else:
@@ -753,8 +753,8 @@ def plot_training_error_scatter(states, actions, true_error, gp_mean, dim_names,
     if save_path is not None:
         plt.savefig(save_path, dpi=300, bbox_inches='tight', facecolor='white')
         # Also save as PDF
-        pdf_path = save_path.replace('.png', '.pdf')
-        plt.savefig(pdf_path, bbox_inches='tight', facecolor='white')
+        # pdf_path = save_path.replace('.png', '.pdf')
+        # plt.savefig(pdf_path, bbox_inches='tight', facecolor='white')
         print(f"  Saved: training error mismatch (3D scatter) -> {save_path}")
         
         # Also save as pickle for interactive viewing

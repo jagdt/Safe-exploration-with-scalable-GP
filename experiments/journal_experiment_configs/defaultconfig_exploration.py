@@ -24,7 +24,7 @@ class DefaultConfigExploration(DefaultConfig):
     # environment
     env_name = "InvertedPendulum"
     env_options = dict()
-    init_std = np.array([0.5, 0.2]) # standard deviation of random initial states for static exploration
+    init_std = np.array([1.0, 0.2]) # standard deviation of random initial states for static exploration
     env_options["init_std"] = init_std
     env_options["plant_noise"] = np.array([1e-4, 1e-5]) ** 2
     env_options["max_deg"] = 20
@@ -48,9 +48,9 @@ class DefaultConfigExploration(DefaultConfig):
     init_safe_policy_min_width = 0.05
     c_max_probing_init = 3
     c_max_probing_next_state = 2
-    init_std_initial_data = np.array([0.5, 0.2]) # standard deviation of initial safe samples
+    init_std_initial_data = np.array([1.0, 0.2]) # standard deviation of initial safe samples
     init_m_initial_data = np.array([0., 0.])
-    visualize_initial_samples = False
+    visualize_initial_samples = True
 
     lqr_wx_cost = np.diag([1., 2.])
     lqr_wu_cost = 25 * np.eye(1)

@@ -189,7 +189,7 @@ def run_exploration(conf, visualize=False):
                 c_gray = RWTH_GRAY
                 n_train, _ = np.shape(x_train_init)
                 for i in range(n_train):
-                    ax = env.plot_state(ax, x_train_init[i, :env.n_s], color=c_gray, alpha=0.3)
+                    ax = env.plot_state(ax, x_train_init[i, :env.n_s], color=c_gray)
 
             ell = None
 
@@ -321,10 +321,10 @@ def run_exploration(conf, visualize=False):
             fig.savefig(final_traj_plot_path, dpi=300, bbox_inches='tight', facecolor='white')
             print(f"Saved final trajectory plot: {final_traj_plot_path}")
             
-            # Also save as PDF for LaTeX inclusion
-            final_traj_plot_path_pdf = "{}/trajectory_final.pdf".format(save_path)
-            fig.savefig(final_traj_plot_path_pdf, bbox_inches='tight', facecolor='white')
-            print(f"Saved final trajectory plot (PDF): {final_traj_plot_path_pdf}")
+            # # Also save as PDF for LaTeX inclusion
+            # final_traj_plot_path_pdf = "{}/trajectory_final.pdf".format(save_path)
+            # fig.savefig(final_traj_plot_path_pdf, bbox_inches='tight', facecolor='white')
+            # print(f"Saved final trajectory plot (PDF): {final_traj_plot_path_pdf}")
             
             plt.close(fig)
 
