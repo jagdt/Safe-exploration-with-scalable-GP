@@ -502,8 +502,8 @@ def plot_1d_comparison(states, actions, true_error, gp_mean, gp_std,
     ax.axhline(0, color=RWTH_BLACK, linestyle=':', linewidth=1.5, alpha=0.5)
     
     # Improved axis labels with LaTeX
-    xlabel_map = {'dθ': r'$\dot{\theta}$ [rad/s]', 'θ': r'$\theta$ [rad]', 'u': r'$u$ [Nm]'}
-    ylabel_map = {'Δ(dθ)': r'$\Delta \dot{\theta}$ [rad/s]', 'Δ(θ)': r'$\Delta \theta$ [rad]'}
+    xlabel_map = {'dθ': r'$\dot{\vartheta}$ [rad/s]', 'θ': r'$\vartheta$ [rad]', 'u': r'$u$ [Nm]'}
+    ylabel_map = {'Δ(dθ)': r'$\Delta \dot{\vartheta}$ [rad/s]', 'Δ(θ)': r'$\Delta \vartheta$ [rad]'}
     
     ax.set_xlabel(xlabel_map.get(dim_names[vary_dim], dim_names[vary_dim]), fontsize=14)
     ax.set_ylabel(ylabel_map.get(error_names[state_dim], error_names[state_dim]), fontsize=14)
@@ -558,8 +558,8 @@ def plot_2d_comparison(states, actions, true_error, gp_mean, gp_std,
     levels = np.linspace(vmin, vmax, 21)
     
     # Axis label mappings
-    label_map = {'dθ': r'$\dot{\theta}$ [rad/s]', 'θ': r'$\theta$ [rad]', 'u': r'$u$ [Nm]'}
-    error_label_map = {'Δ(dθ)': r'$\Delta \dot{\theta}$', 'Δ(θ)': r'$\Delta \theta$'}
+    label_map = {'dθ': r'$\dot{\vartheta}$ [rad/s]', 'θ': r'$\vartheta$ [rad]', 'u': r'$u$ [Nm]'}
+    error_label_map = {'Δ(dθ)': r'$\Delta \dot{\vartheta}$', 'Δ(θ)': r'$\Delta \vartheta$'}
     
     # Plot 1: True model error
     im1 = axes[0].contourf(X, Y, Z_true, levels=levels, cmap='RdBu_r', norm=norm)
@@ -732,7 +732,7 @@ def plot_training_error_scatter(states, actions, true_error, gp_mean, dim_names,
                         s=45, alpha=0.8, edgecolors=RWTH_BLACK, linewidth=0.5, depthshade=True)
 
     # Improved axis labels
-    label_map = {'dθ': r'$\dot{\theta}$ [rad/s]', 'θ': r'$\theta$ [rad]', 'u': r'$u$ [Nm]'}
+    label_map = {'dθ': r'$\dot{\vartheta}$ [rad/s]', 'θ': r'$\vartheta$ [rad]', 'u': r'$u$ [Nm]'}
     ax.set_xlabel(label_map.get(dim_names[0], dim_names[0]), fontsize=14, labelpad=10)
     ax.set_ylabel(label_map.get(dim_names[1], dim_names[1]), fontsize=14, labelpad=10)
     ax.set_zlabel(label_map.get(dim_names[2], dim_names[2]), fontsize=14, labelpad=10)

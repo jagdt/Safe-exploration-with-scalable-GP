@@ -177,9 +177,8 @@ def run_exploration(conf, visualize=False):
         if visualize or conf.save_vis:
             fig, ax = env.plot_safety_bounds(color=RWTH_BLACK)
             
-            # Configure axes for thesis-quality appearance
-            ax.set_xlabel(r'Angular velocity $\dot{\theta}$ [rad/s]', fontsize=14)
-            ax.set_ylabel(r'Angle $\theta$ [rad]', fontsize=14)
+            ax.set_xlabel(r'Angular velocity $\dot{\vartheta}$ [rad/s]', fontsize=14)
+            ax.set_ylabel(r'Angle $\vartheta$ [rad]', fontsize=14)
             ax.set_title('Safe Exploration Trajectory', fontsize=16, fontweight='bold', pad=15)
             ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
 
