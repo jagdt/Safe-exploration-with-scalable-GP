@@ -654,7 +654,7 @@ class InvertedPendulum(Environment):
         return True
 
     @unavailable(not _has_matplotlib, "matplotlib")
-    def plot_state(self, ax, x=None, color="b", normalize=True):
+    def plot_state(self, ax, x=None, color="b", normalize=False, unnormalize=False):
         """ Plot the current state or a given state vector
 
         Parameters:
@@ -672,13 +672,15 @@ class InvertedPendulum(Environment):
             x = self.current_state
             if normalize:
                 x, _ = self.normalize(x)
+        if unnormalize:
+            x, _ = self.unnormalize(x.squeeze())
         assert len(x) == self.n_s, "x needs to have the same number of states as the dynamics"
         plt.sca(ax)
         ax.plot(x[0], x[1], color=color, marker="o", mew=1.2)
         return ax
 
     @unavailable(not _has_matplotlib, "matplotlib")
-    def plot_ellipsoid_trajectory(self, p, q, vis_safety_bounds=True, ax=None, color="r"):
+    def plot_ellipsoid_trajectory(self, p, q, vis_safety_bounds=True, ax=None, unnormalize=False, color="r"):
         """ Plot the reachability ellipsoids given in observation space
 
         TODO: Need more principled way to transform ellipsoid to internal states
@@ -691,6 +693,8 @@ class InvertedPendulum(Environment):
             The shape matrices of the trajectory
         vis_safety_bounds: bool, optional
             Visualize the safety bounds of the system
+        unnormalize: bool, optional
+            If True, transform ellipsoids from normalized to unnormalized space
 
         """
         new_ax = False
@@ -703,10 +707,22 @@ class InvertedPendulum(Environment):
         plt.sca(ax)
         n, n_s = np.shape(p)
         handles = [None] * n
+        
+        if unnormalize:
+            m_x = np.diag(self.norm[0])
+        
         for i in range(n):
-            p_i = cas_reshape(p[i, :], (n_s, 1)) + self.p_origin.reshape((n_s, 1))
+            p_i = cas_reshape(p[i, :], (n_s, 1))
             q_i = cas_reshape(q[i, :], (self.n_s, self.n_s))
-            ax, handles[i] = plot_ellipsoid_2D(p_i, q_i, ax, color=color, linewidth=1.0)
+            
+            if unnormalize:
+                p_i = np.dot(m_x, p_i)
+                q_i = np.linalg.multi_dot((m_x, q_i, m_x.T))
+            
+            p_i = p_i + self.p_origin.reshape((n_s, 1))
+            label = 'Propagated uncertainty' if i == 0 else None
+            linewidth = plt.rcParams.get('lines.linewidth', 2.0)
+            ax, handles[i] = plot_ellipsoid_2D(p_i, q_i, ax, color=color, linewidth=linewidth, label=label)
 
         if vis_safety_bounds:
             ax = self.plot_safety_bounds(ax)
@@ -746,16 +762,21 @@ class InvertedPendulum(Environment):
             x_polygon = np.dot(x_polygon, m_x.T)
 
         if plot_safe_bounds:
+            linewidth = plt.rcParams.get('lines.linewidth', 2.0)
             for i, simplex in enumerate(self.ch_safety_bounds.simplices):
                 label = 'Safe region' if i == 0 else None
-                ax.plot(x_polygon[simplex, 0], x_polygon[simplex, 1], 'k-', label=label)
+                ax.plot(x_polygon[simplex, 0], x_polygon[simplex, 1], 'k-', label=label, linewidth=linewidth)
 
             # ax.add_patch(mpatch.Polygon(x_polygon,fill = False))
         if new_fig:
-            dtheta_norm = self.max_dtheta * self.inv_norm[0][0]
-            theta_norm = self.max_rad * self.inv_norm[0][1]
-            ax.set_xlim(-dtheta_norm*4.0, dtheta_norm*4.0)
-            ax.set_ylim(-theta_norm*2.0, theta_norm*2.0)
+            if normalize:
+                max_dtheta = self.max_dtheta * self.inv_norm[0][0]
+                max_theta = np.deg2rad(self.max_deg) * self.inv_norm[0][1]
+            else:
+                max_dtheta = self.max_dtheta
+                max_theta = self.max_rad
+            ax.set_xlim(-max_dtheta*3.0, max_dtheta*3.0)
+            ax.set_ylim(-max_theta*1.5, max_theta*1.5)
             ax.set_xlabel('dθ (angular velocity)')
             ax.set_ylabel('θ (angle)')
             ax.legend()

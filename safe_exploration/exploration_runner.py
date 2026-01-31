@@ -34,7 +34,7 @@ if _has_matplotlib:
         'xtick.labelsize': 12,
         'ytick.labelsize': 12,
         'legend.fontsize': 11,
-        'lines.linewidth': 2.0,
+        'lines.linewidth': 2.5,
         'lines.markersize': 6,
         'text.usetex': False,
         'mathtext.fontset': 'cm',
@@ -175,12 +175,39 @@ def run_exploration(conf, visualize=False):
             c_sample = lambda it: RWTH_BLUE
 
         if visualize or conf.save_vis:
-            fig, ax = env.plot_safety_bounds(color=RWTH_BLACK)
+            fig, ax = env.plot_safety_bounds(color=RWTH_BLACK, normalize=False)
             
             ax.set_xlabel(r'Angular velocity $\dot{\vartheta}$ [rad/s]', fontsize=14)
             ax.set_ylabel(r'Angle $\vartheta$ [rad]', fontsize=14)
             ax.set_title('Safe Exploration Trajectory', fontsize=16, fontweight='bold', pad=15)
-            ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+
+            # Plot domain bounds if available
+            if hasattr(exploration_module.safempc.ssm, 'domain_lengths') and exploration_module.safempc.ssm.domain_lengths is not None:
+                domain_lengths = np.array(exploration_module.safempc.ssm.domain_lengths)
+                
+                domain_bounds_norm = np.zeros((len(domain_lengths), 2))
+                domain_bounds_norm[:, 0] = -domain_lengths / 2
+                domain_bounds_norm[:, 1] = domain_lengths / 2
+                
+                if len(domain_bounds_norm) >= env.n_s:
+                    state_domain_bounds_norm = domain_bounds_norm[:env.n_s, :]
+                    state_norm_factors = env.norm[0]
+                    
+                    # Unnormalize
+                    state_domain_bounds_phys = state_domain_bounds_norm * state_norm_factors[:, np.newaxis]
+                    
+                    # For 2D state space (e.g., inverted pendulum: [dθ, θ])
+                    if env.n_s == 2:
+                        x_min, x_max = state_domain_bounds_phys[0, :]
+                        y_min, y_max = state_domain_bounds_phys[1, :]  
+                        
+                        # Plot rectangle showing domain bounds
+                        from matplotlib.patches import Rectangle
+                        rect = Rectangle((x_min, y_min), x_max - x_min, y_max - y_min,
+                                       linewidth=1.5, edgecolor=RWTH_PETROL, 
+                                       facecolor='none', linestyle='--', 
+                                       label='Domain bounds')
+                        ax.add_patch(rect)
 
             # plot the initial train set
             x_train_init = exploration_module.x_train
@@ -188,9 +215,45 @@ def run_exploration(conf, visualize=False):
                 c_gray = RWTH_GRAY
                 n_train, _ = np.shape(x_train_init)
                 for i in range(n_train):
-                    ax = env.plot_state(ax, x_train_init[i, :env.n_s], color=c_gray)
+                    ax = env.plot_state(ax, x_train_init[i, :env.n_s], color=c_gray, normalize=False, unnormalize=True)
 
             ell = None
+
+
+        # Add colorbar and legend
+        if (visualize or save_vis) and n_iterations > 1:
+            sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=0, vmax=n_iterations-1))
+            sm.set_array([])
+            cbar = fig.colorbar(sm, ax=ax, pad=0.02, aspect=30)
+            cbar.set_label('Iteration', fontsize=12, rotation=270, labelpad=20)
+            cbar.ax.tick_params(labelsize=10)
+            
+            if conf.visualize_initial_samples or (hasattr(exploration_module.safempc.ssm, 'domain_lengths') and exploration_module.safempc.ssm.domain_lengths is not None):
+                from matplotlib.patches import Patch
+                from matplotlib.lines import Line2D
+                legend_elements = []
+                
+                if conf.visualize_initial_samples:
+                    legend_elements.extend([
+                        Patch(facecolor=RWTH_GRAY, alpha=0.3, label='Initial samples'),
+                        Patch(facecolor=RWTH_LIGHT_BLUE, label='Early exploration'),
+                        Patch(facecolor=RWTH_MAGENTA, label='Late exploration'),
+                    ])
+                
+                # Add domain bounds to legend if they were plotted
+                if hasattr(exploration_module.safempc.ssm, 'domain_lengths') and exploration_module.safempc.ssm.domain_lengths is not None:
+                    domain_lengths = np.array(exploration_module.safempc.ssm.domain_lengths)
+                    if len(domain_lengths) >= env.n_s and env.n_s == 2:
+                        legend_elements.append(
+                            Line2D([0], [0], color=RWTH_PETROL, linewidth=1.5, 
+                                   linestyle='--', label='Domain bounds')
+                        )
+                
+                ax.legend(handles=legend_elements, loc='best', framealpha=0.9, fontsize=11)
+            
+            if visualize:
+                plt.show(block=False)
+                plt.pause(0.5)
 
         safety_all = None
         if verify_safety:
@@ -234,8 +297,8 @@ def run_exploration(conf, visualize=False):
                         if not ell is None:
                             for j in range(len(ell)):
                                 ell[j].remove()
-                        ax, ell = env.plot_ellipsoid_trajectory(p_ctrl, q_all, ax=ax,
-                                                                color="r")
+                        ax, ell = env.plot_ellipsoid_trajectory(p_ctrl, q_all, vis_safety_bounds=False, ax=ax,
+                                                                unnormalize=True, color=RWTH_ORANGE)
                         fig.canvas.draw()
 
                         if visualize:
@@ -249,7 +312,7 @@ def run_exploration(conf, visualize=False):
             timing_per_iteration['mpc_optimization'][i] = t_mpc_end - t_mpc_start
 
             if visualize or save_vis:
-                ax = env.plot_state(ax, x=x_i, color=c_sample(i), normalize=False)
+                ax = env.plot_state(ax, x=x_i, color=c_sample(i), normalize=False, unnormalize=True)
                 fig.canvas.draw()
                 if visualize:
                     plt.show(block=False)
@@ -297,24 +360,6 @@ def run_exploration(conf, visualize=False):
             x_i = x_next
 
         if save_vis and save_path is not None:
-            # Add colorbar to show iteration progression
-            if n_iterations > 1:
-                sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=0, vmax=n_iterations-1))
-                sm.set_array([])
-                cbar = fig.colorbar(sm, ax=ax, pad=0.02, aspect=30)
-                cbar.set_label('Iteration', fontsize=12, rotation=270, labelpad=20)
-                cbar.ax.tick_params(labelsize=10)
-            
-            # Add legend for initial samples if visualized
-            if conf.visualize_initial_samples:
-                from matplotlib.patches import Patch
-                legend_elements = [
-                    Patch(facecolor=RWTH_GRAY, alpha=0.3, label='Initial samples'),
-                    Patch(facecolor=RWTH_LIGHT_BLUE, label='Early exploration'),
-                    Patch(facecolor=RWTH_MAGENTA, label='Late exploration'),
-                ]
-                ax.legend(handles=legend_elements, loc='best', framealpha=0.9, fontsize=11)
-            
             # Save with high quality
             final_traj_plot_path = "{}/trajectory_final.png".format(save_path)
             fig.savefig(final_traj_plot_path, dpi=300, bbox_inches='tight', facecolor='white')
