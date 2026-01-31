@@ -228,7 +228,7 @@ def run_exploration(conf, visualize=False):
             cbar.set_label('Iteration', fontsize=12, rotation=270, labelpad=20)
             cbar.ax.tick_params(labelsize=10)
             
-            if conf.visualize_initial_samples or (hasattr(exploration_module.safempc.ssm, 'domain_lengths') and exploration_module.safempc.ssm.domain_lengths is not None):
+            if conf.visualize_initial_samples or verify_safety or (hasattr(exploration_module.safempc.ssm, 'domain_lengths') and exploration_module.safempc.ssm.domain_lengths is not None):
                 from matplotlib.patches import Patch
                 from matplotlib.lines import Line2D
                 legend_elements = []
@@ -239,6 +239,13 @@ def run_exploration(conf, visualize=False):
                         Patch(facecolor=RWTH_LIGHT_BLUE, label='Early exploration'),
                         Patch(facecolor=RWTH_MAGENTA, label='Late exploration'),
                     ])
+                
+                # Add propagated uncertainty (ellipsoids) to legend if they were plotted
+                if verify_safety:
+                    legend_elements.append(
+                        Line2D([0], [0], color=RWTH_ORANGE, linewidth=2.0, 
+                               label='Propagated uncertainty')
+                    )
                 
                 # Add domain bounds to legend if they were plotted
                 if hasattr(exploration_module.safempc.ssm, 'domain_lengths') and exploration_module.safempc.ssm.domain_lengths is not None:

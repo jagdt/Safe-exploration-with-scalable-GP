@@ -91,20 +91,35 @@ class Environment(metaclass=abc.ABCMeta):
         self.current_episode_trajectory = []
         self.rng = np.random.default_rng(seed)
 
-    def reset(self, mean=None, std=None):
-        """ Reset the system and sample a new start state inside the safe region."""
+    def reset(self, state=None, mean=None, std=None):
+        """ Reset the system and sample a new start state inside the safe region.
+        
+        Parameters
+        ----------
+        state: np.ndarray, optional
+            If provided, reset to this specific state without random sampling.
+            If None, sample a random state inside the safe region.
+        mean: np.ndarray, optional
+            Mean for random state sampling (only used if state is None)
+        std: np.ndarray, optional
+            Standard deviation for random state sampling (only used if state is None)
+        """
         self.is_initialized = True
         self.iteration = 0
         
-        # Sample states until we get one inside the safe region
-        max_attempts = 1000
-        for attempt in range(max_attempts):
-            self.current_state = self._sample_start_state(mean=mean, std=std)
-            unsafe, _ = self._check_current_state()
-            if not unsafe:
-                break
-            if attempt == max_attempts - 1:
-                warnings.warn(f"Could not sample safe initial state after {max_attempts} attempts. Using last sample.")
+        if state is not None:
+            # Use the provided state directly
+            self.current_state = np.array(state).flatten()
+        else:
+            # Sample states until we get one inside the safe region
+            max_attempts = 1000
+            for attempt in range(max_attempts):
+                self.current_state = self._sample_start_state(mean=mean, std=std)
+                unsafe, _ = self._check_current_state()
+                if not unsafe:
+                    break
+                if attempt == max_attempts - 1:
+                    warnings.warn(f"Could not sample safe initial state after {max_attempts} attempts. Using last sample.")
         
         self.current_episode_trajectory = [self.current_state]
 
