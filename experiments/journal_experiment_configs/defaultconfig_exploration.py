@@ -15,11 +15,11 @@ class DefaultConfigExploration(DefaultConfig):
     Options class for the exploration setting
     """
     seed = 1
-    verbose = 2
+    verbose = 0
 
     # task options
     task = "exploration"  # don't change this
-    static_exploration = True
+    static_exploration = False
 
     # environment
     env_name = "InvertedPendulum"
@@ -36,7 +36,7 @@ class DefaultConfigExploration(DefaultConfig):
 
     # safempc
     beta_safety = 2.0
-    n_safe = 2
+    n_safe = 8
     l_mu = None
 
     # Initial samples
@@ -78,7 +78,7 @@ class DefaultConfigExploration(DefaultConfig):
     m = None  # subset of data of size m for training
     kern_types = ["sum_lin_rbf", "sum_lin_rbf"]
     train_gp = True  # train the gp initially?
-    retrain_gp_interval = 10 # retrain the gp every n-th iteration, None to disable
+    retrain_gp_interval = None # retrain the gp every n-th iteration, None to disable
     gp_hyp = None
     Z = None
     lin_trafo_gp_input = None
@@ -89,11 +89,11 @@ class DefaultConfigExploration(DefaultConfig):
     gp_hyp = None
     # exploration
     n_experiments = 1
-    n_iterations = 10
+    n_iterations = 20
     n_restarts_optimizer = 30
 
     # general options
-    verify_safety = False
+    verify_safety = True
     visualize = True
     save_results = True
     save_vis = True

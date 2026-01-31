@@ -337,7 +337,8 @@ class SimpleSafeMPC(SafeMPC):
                              'acceptable_tol': 1e-4, "acceptable_constr_viol_tol": 1e-5,
                              "bound_frac": 0.5, "start_with_resto": "no",
                              "required_infeasibility_reduction": 0.85,
-                             "acceptable_iter": 8}}
+                             "acceptable_iter": 8,
+                             "print_level": 1}}
                     # 'jit': True,  # Enable just-in-time compilation
                     # 'compiler': 'shell',
                     # 'jit_options': {'flags': ['-O1']}}  # ipopt
@@ -755,8 +756,8 @@ class SimpleSafeMPC(SafeMPC):
         return u_apply.reshape(self.n_u, ), success
 
     def get_action_verbose(self, x0_mu: ndarray):
-        u_apply, feasible, success, k_fb_apply, k_ff_all, p_all, q_all = self.solve(x0_mu[:, None], sol_verbose=True)
-        return u_apply.reshape(self.n_u, ), feasible, success, k_fb_apply, k_ff_all, p_all, q_all
+        u_apply, feasible, success, k_fb_apply, k_ff_all, p_all, q_all, sol = self.solve(x0_mu[:, None], sol_verbose=True)
+        return u_apply.reshape(self.n_u, ), feasible, success, k_fb_apply, k_ff_all, p_all, q_all, sol
 
     def solve(self, p_0, u_0=None, k_ff_all_0=None, k_fb_0=None, u_perf_0=None,
               k_fb_perf_0=None, sol_verbose=False):

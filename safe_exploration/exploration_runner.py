@@ -39,7 +39,7 @@ if _has_matplotlib:
         'text.usetex': False,
         'mathtext.fontset': 'cm',
         'figure.figsize': (8, 6),
-        'axes.grid': True,
+        'axes.grid': False,
         'grid.alpha': 0.3,
         'grid.linestyle': '--',
         'grid.linewidth': 0.5,
@@ -194,7 +194,7 @@ def run_exploration(conf, visualize=False):
 
         safety_all = None
         if verify_safety:
-            safety_all = np.zeros((n_iterations,), dtype=np.bool)
+            safety_all = np.zeros((n_iterations,), dtype=bool)
             inside_ellipsoid = np.zeros((n_iterations, safempc.n_safe))
 
         if static_exploration:

@@ -366,7 +366,7 @@ def trajectory_inside_ellipsoid(env, p_0, p_all, q_all, k_fb, k_ff):
 
     x_all = simulate_trajectory(env, p_0, k_fb, k_ff, p_all)[1:, :]
 
-    inside_ellipsoid = np.zeros((n,), dtype=np.bool)
+    inside_ellipsoid = np.zeros((n,), dtype=bool)
     for i in range(n):
         inside_ellipsoid[i] = sample_inside_ellipsoid(x_all[None, i, :],
                                                       p_all[i, :, None],

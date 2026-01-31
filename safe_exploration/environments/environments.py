@@ -92,10 +92,20 @@ class Environment(metaclass=abc.ABCMeta):
         self.rng = np.random.default_rng(seed)
 
     def reset(self, mean=None, std=None):
-        """ Reset the system and sample a new start state."""
+        """ Reset the system and sample a new start state inside the safe region."""
         self.is_initialized = True
         self.iteration = 0
-        self.current_state = self._sample_start_state(mean=mean, std=std)
+        
+        # Sample states until we get one inside the safe region
+        max_attempts = 1000
+        for attempt in range(max_attempts):
+            self.current_state = self._sample_start_state(mean=mean, std=std)
+            unsafe, _ = self._check_current_state()
+            if not unsafe:
+                break
+            if attempt == max_attempts - 1:
+                warnings.warn(f"Could not sample safe initial state after {max_attempts} attempts. Using last sample.")
+        
         self.current_episode_trajectory = [self.current_state]
 
         self._reset()
@@ -696,7 +706,7 @@ class InvertedPendulum(Environment):
         for i in range(n):
             p_i = cas_reshape(p[i, :], (n_s, 1)) + self.p_origin.reshape((n_s, 1))
             q_i = cas_reshape(q[i, :], (self.n_s, self.n_s))
-            ax, handles[i] = plot_ellipsoid_2D(p_i, q_i, ax, color=color)
+            ax, handles[i] = plot_ellipsoid_2D(p_i, q_i, ax, color=color, linewidth=1.0)
 
         if vis_safety_bounds:
             ax = self.plot_safety_bounds(ax)

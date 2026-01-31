@@ -87,6 +87,9 @@ def plot_ellipsoid_2D(p, q, ax, n_points=100, **kwargs):
     ax: matplotlib.Axes object
         The Ax containing the ellipsoid
     """
+    p = np.array(p).reshape(2, 1)
+    q = np.array(q).reshape(2, 2)
+    
     assert_shape(p, (2, 1))
     assert_shape(q, (2, 2))
     plt.sca(ax)
@@ -94,6 +97,7 @@ def plot_ellipsoid_2D(p, q, ax, n_points=100, **kwargs):
     t = np.linspace(0, 2 * np.pi, n_points)
     z = [np.cos(t), np.sin(t)]
     ellipse = np.dot(r, z) + p
-    handle, = ax.plot(ellipse[0, :], ellipse[1, :], **kwargs)
+    handles = ax.plot(ellipse[0, :], ellipse[1, :], **kwargs)
+    handle = handles[0]
 
     return ax, handle
