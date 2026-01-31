@@ -412,7 +412,8 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_b
         gp_mean_train,
         dim_names,
         error_names,
-        save_path=scatter_save_path
+        save_path=scatter_save_path,
+        n_initial_samples=n_initial_samples
     )
     
     print_statistics(true_error_2d_theta_u, gp_mean_2d_theta_u, gp_std_2d_theta_u, error_names)
@@ -707,12 +708,12 @@ def print_statistics(true_error, gp_mean, gp_std, error_names):
         print(f"  95% Coverage:  {coverage_2sigma:.1f}% (within 2σ)")
 
 
-def plot_training_error_scatter(states, actions, true_error, gp_mean, dim_names, error_names, save_path=None):
-    """Render a 3D scatter of training inputs colored by model mismatch.
+def plot_training_error_scatter(states, actions, true_error, gp_mean, dim_names, error_names, save_path=None, n_initial_samples=0):
+    """Render a 3D scatter of training inputs colored by sample timing.
 
-    Each point corresponds to a training tuple (dθ, θ, u). Color encodes the
-    norm of `true_error - gp_mean`, so vivid hues highlight where the GP
-    deviates most from the ground-truth residuals.
+    Each point corresponds to a training tuple (dθ, θ, u). Initial samples are shown
+    in gray, while exploration samples are colored by the RWTH colormap to show
+    temporal progression.
     """
     if states.shape[1] != 2 or actions.shape[1] != 1:
         warnings.warn("3D scatter currently implemented for 2D state / 1D action setups.")
@@ -721,28 +722,48 @@ def plot_training_error_scatter(states, actions, true_error, gp_mean, dim_names,
     dtheta = states[:, 0]
     theta = states[:, 1]
     u = actions[:, 0]
-
-    residual_mismatch = np.linalg.norm(true_error - gp_mean, axis=1)
+    n_train = len(dtheta)
 
     fig = plt.figure(figsize=(11, 8))
     ax = fig.add_subplot(111, projection='3d')
     
-    # Use improved colormap and styling
-    scatter = ax.scatter(dtheta, theta, u, c=residual_mismatch, cmap='plasma', 
-                        s=45, alpha=0.8, edgecolors=RWTH_BLACK, linewidth=0.5, depthshade=True)
+    # Separate initial samples from exploration samples
+    if n_initial_samples > 0 and n_initial_samples < n_train:
+        # Plot initial samples in gray
+        ax.scatter(dtheta[:n_initial_samples], theta[:n_initial_samples], u[:n_initial_samples],
+                  c=RWTH_GRAY, s=60, alpha=0.3, edgecolors=RWTH_BLACK, linewidth=0.5, 
+                  depthshade=True, label='Initial samples')
+        
+        # Plot exploration samples with RWTH colormap
+        n_exploration = n_train - n_initial_samples
+        time_colors = np.arange(n_exploration)
+        scatter = ax.scatter(dtheta[n_initial_samples:], theta[n_initial_samples:], u[n_initial_samples:],
+                           c=time_colors, cmap=RWTH_CMAP, 
+                           s=60, alpha=0.8, edgecolors=RWTH_BLACK, linewidth=0.5, 
+                           depthshade=True, label='Exploration samples')
+        
+        # Add colorbar for exploration timing
+        cbar = fig.colorbar(scatter, ax=ax, pad=0.1, shrink=0.8, aspect=20)
+        cbar.set_label('Exploration step', fontsize=12, rotation=270, labelpad=25)
+        cbar.ax.tick_params(labelsize=10)
+    else:
+        # All samples with colormap (no distinction)
+        time_colors = np.arange(n_train)
+        scatter = ax.scatter(dtheta, theta, u, c=time_colors, cmap=RWTH_CMAP, 
+                           s=60, alpha=0.8, edgecolors=RWTH_BLACK, linewidth=0.5, 
+                           depthshade=True, label='Training data')
+        
+        # Add colorbar for sample timing
+        cbar = fig.colorbar(scatter, ax=ax, pad=0.1, shrink=0.8, aspect=20)
+        cbar.set_label('Sample order', fontsize=12, rotation=270, labelpad=25)
+        cbar.ax.tick_params(labelsize=10)
 
     # Improved axis labels
     label_map = {'dθ': r'$\dot{\vartheta}$ [rad/s]', 'θ': r'$\vartheta$ [rad]', 'u': r'$u$ [Nm]'}
     ax.set_xlabel(label_map.get(dim_names[0], dim_names[0]), fontsize=14, labelpad=10)
     ax.set_ylabel(label_map.get(dim_names[1], dim_names[1]), fontsize=14, labelpad=10)
     ax.set_zlabel(label_map.get(dim_names[2], dim_names[2]), fontsize=14, labelpad=10)
-    ax.set_title('Training Data: Model Error Residuals', fontweight='bold', fontsize=16, pad=20)
-
-    # Improved colorbar
-    cbar = fig.colorbar(scatter, ax=ax, pad=0.1, shrink=0.8, aspect=20)
-    cbar.set_label(r'Residual mismatch $\|\Delta_{\mathrm{true}} - \Delta_{\mathrm{GP}}\|$', 
-                  fontsize=12, rotation=270, labelpad=25)
-    cbar.ax.tick_params(labelsize=10)
+    ax.set_title('Training Data: Sample Acquisition Timeline', fontweight='bold', fontsize=16, pad=20)
     
     # Improve viewing angle
     ax.view_init(elev=20, azim=45)
