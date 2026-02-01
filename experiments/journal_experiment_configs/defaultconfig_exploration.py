@@ -90,7 +90,7 @@ class DefaultConfigExploration(DefaultConfig):
     # exploration
     n_experiments = 1
     n_iterations = 10
-    n_restarts_optimizer = 30
+    n_restarts_optimizer = 20
 
     # general options
     verify_safety = True
