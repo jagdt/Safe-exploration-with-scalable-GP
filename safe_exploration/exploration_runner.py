@@ -218,6 +218,7 @@ def run_exploration(conf, visualize=False):
                     ax = env.plot_state(ax, x_train_init[i, :env.n_s], color=c_gray, normalize=False, unnormalize=True)
 
             ell = None
+            traj = None
 
 
         # Add colorbar and legend
@@ -242,10 +243,12 @@ def run_exploration(conf, visualize=False):
                 
                 # Add propagated uncertainty (ellipsoids) to legend if they were plotted
                 if verify_safety:
-                    legend_elements.append(
+                    legend_elements.extend([
                         Line2D([0], [0], color=RWTH_ORANGE, linewidth=2.0, 
-                               label='Propagated uncertainty')
-                    )
+                               label='Propagated uncertainty'),
+                        Line2D([0], [0], color=RWTH_GREEN, linewidth=0, marker='o',
+                               markersize=6, label='Safe trajectory')
+                    ])
                 
                 # Add domain bounds to legend if they were plotted
                 if hasattr(exploration_module.safempc.ssm, 'domain_lengths') and exploration_module.safempc.ssm.domain_lengths is not None:
@@ -299,6 +302,8 @@ def run_exploration(conf, visualize=False):
                                                                          p_ctrl, q_all,
                                                                          k_fb_all,
                                                                          k_ff_all)
+                
+                    print(f"  Safety verification: {'SAFE' if inside_ellipsoid[i].all() else 'UNSAFE'}")
 
                     if visualize or save_vis:
                         if not ell is None:
@@ -306,6 +311,20 @@ def run_exploration(conf, visualize=False):
                                 ell[j].remove()
                         ax, ell = env.plot_ellipsoid_trajectory(p_ctrl, q_all, vis_safety_bounds=False, ax=ax,
                                                                 unnormalize=True, color=RWTH_ORANGE)
+                        
+                        if traj is not None:
+                            for t in traj:
+                                t.remove()
+                        
+                        # Plot the planned trajectory under optimized control law
+                        traj = []
+                        if x_traj_safe is not None and len(x_traj_safe) > 0:
+                            for j in range(len(x_traj_safe)):
+                                x_unnorm, _ = env.unnormalize(x_traj_safe[j].squeeze())
+                                line, = ax.plot(x_unnorm[0], x_unnorm[1], color=RWTH_GREEN, 
+                                              marker='o', markersize=2, linestyle='')
+                                traj.append(line)
+                        
                         fig.canvas.draw()
 
                         if visualize:
@@ -440,6 +459,11 @@ def run_exploration(conf, visualize=False):
     
     if l_inf_gain_reference:
         results['inf_gain_reference'] = l_inf_gain_reference
+
+    if safety_all is not None:
+        results['safety_all'] = safety_all
+    if inside_ellipsoid is not None:
+        results['inside_ellipsoid'] = inside_ellipsoid
     
     return results
 

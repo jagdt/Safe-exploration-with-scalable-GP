@@ -343,6 +343,80 @@ def plot_info_gain_trajectories(results_by_type, gp_types, param_name, param_val
     plt.show()
 
 
+def plot_safety_metrics(n_samples_values, 
+                       numpy_safety_mean, numpy_safety_std,
+                       scalable_safety_mean, scalable_safety_std,
+                       numpy_inside_mean, numpy_inside_std,
+                       scalable_inside_mean, scalable_inside_std,
+                       output_dir=None):
+    """
+    Plot safety metrics comparison between standard GP and scalable GP
+    
+    Parameters
+    ----------
+    n_samples_values : array
+        Number of initial samples for each experiment
+    numpy_safety_mean, numpy_safety_std : arrays
+        Mean and std of safety verification success rate for numpy GP
+    scalable_safety_mean, scalable_safety_std : arrays
+        Mean and std of safety verification success rate for scalable GP
+    numpy_inside_mean, numpy_inside_std : arrays
+        Mean and std of trajectory inside ellipsoid rate for numpy GP
+    scalable_inside_mean, scalable_inside_std : arrays
+        Mean and std of trajectory inside ellipsoid rate for scalable GP
+    output_dir : str, optional
+        Directory to save plots
+    """
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(18, 7))
+    
+    x = np.arange(len(n_samples_values))
+    width = 0.35
+    
+    # Plot 1: Safety verification success rate
+    ax1.bar(x - width/2, numpy_safety_mean, width, 
+            yerr=numpy_safety_std, label='Standard GP', 
+            color=RWTH_GREEN, alpha=0.8, capsize=5)
+    ax1.bar(x + width/2, scalable_safety_mean, width,
+            yerr=scalable_safety_std, label='Scalable GP',
+            color=RWTH_BLUE, alpha=0.8, capsize=5)
+    
+    ax1.set_xlabel('Number of initial training points')
+    ax1.set_ylabel('Safety verification success rate (%)')
+    ax1.set_title('Verified Safe Trajectories')
+    ax1.set_xticks(x)
+    ax1.set_xticklabels([str(int(n)) for n in n_samples_values])
+    ax1.legend()
+    ax1.set_ylim([0, 105])
+    # ax1.grid(True, alpha=0.3, axis='y')
+    
+    # Plot 2: Trajectory fully inside ellipsoid rate
+    ax2.bar(x - width/2, numpy_inside_mean, width,
+            yerr=numpy_inside_std, label='Standard GP',
+            color=RWTH_GREEN, alpha=0.8, capsize=5)
+    ax2.bar(x + width/2, scalable_inside_mean, width,
+            yerr=scalable_inside_std, label='Scalable GP',
+            color=RWTH_BLUE, alpha=0.8, capsize=5)
+    
+    ax2.set_xlabel('Number of initial training points')
+    ax2.set_ylabel('Trajectory inside ellipsoid rate (%)')
+    ax2.set_title('Trajectories Fully Within Uncertainty Bounds')
+    ax2.set_xticks(x)
+    ax2.set_xticklabels([str(int(n)) for n in n_samples_values])
+    ax2.legend()
+    ax2.set_ylim([0, 105])
+    # ax2.grid(True, alpha=0.3, axis='y')
+    
+    plt.tight_layout()
+    
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+        filepath = os.path.join(output_dir, "safety_metrics_comparison.png")
+        plt.savefig(filepath, dpi=300, bbox_inches='tight')
+        print(f"Figure saved to: {filepath}")
+    
+    plt.show()
+
+
 def plot_initial_samples_comparison(results_dir, output_dir=None):
     """
     Plot timing comparison between standard GP and scalable GP
@@ -383,6 +457,10 @@ def plot_initial_samples_comparison(results_dir, output_dir=None):
     scalable_info_gain_mean, scalable_info_gain_std = [], []
     numpy_feasible_mean, numpy_feasible_std = [], []
     scalable_feasible_mean, scalable_feasible_std = [], []
+    numpy_safety_mean, numpy_safety_std = [], []
+    scalable_safety_mean, scalable_safety_std = [], []
+    numpy_inside_ellipsoid_mean, numpy_inside_ellipsoid_std = [], []
+    scalable_inside_ellipsoid_mean, scalable_inside_ellipsoid_std = [], []
     
     print("Aggregating results across seeds...")
     for n_samples in n_samples_values:
@@ -446,6 +524,36 @@ def plot_initial_samples_comparison(results_dir, output_dir=None):
             else:
                 numpy_feasible_mean.append(np.nan)
                 numpy_feasible_std.append(np.nan)
+            
+            # Extract safety metrics
+            safety_rates = []
+            inside_ellipsoid_rates = []
+            for r in results:
+                if 'safety_all' in r and r['safety_all'] is not None:
+                    safety_all = np.array(r['safety_all'])
+                    if len(safety_all) > 0:
+                        safety_rates.append(np.mean(safety_all) * 100)  # Percentage
+                
+                if 'inside_ellipsoid' in r and r['inside_ellipsoid'] is not None:
+                    inside_ellipsoid = np.array(r['inside_ellipsoid'])
+                    if len(inside_ellipsoid) > 0:
+                        # Check if all timesteps are inside ellipsoid for each iteration
+                        all_inside = np.all(inside_ellipsoid, axis=1) if inside_ellipsoid.ndim > 1 else inside_ellipsoid
+                        inside_ellipsoid_rates.append(np.mean(all_inside) * 100)  # Percentage
+            
+            if safety_rates:
+                numpy_safety_mean.append(np.mean(safety_rates))
+                numpy_safety_std.append(np.std(safety_rates))
+            else:
+                numpy_safety_mean.append(np.nan)
+                numpy_safety_std.append(np.nan)
+            
+            if inside_ellipsoid_rates:
+                numpy_inside_ellipsoid_mean.append(np.mean(inside_ellipsoid_rates))
+                numpy_inside_ellipsoid_std.append(np.std(inside_ellipsoid_rates))
+            else:
+                numpy_inside_ellipsoid_mean.append(np.nan)
+                numpy_inside_ellipsoid_std.append(np.nan)
         else:
             numpy_time_mean.append(np.nan)
             numpy_time_std.append(np.nan)
@@ -453,6 +561,10 @@ def plot_initial_samples_comparison(results_dir, output_dir=None):
             numpy_info_gain_std.append(np.nan)
             numpy_feasible_mean.append(np.nan)
             numpy_feasible_std.append(np.nan)
+            numpy_safety_mean.append(np.nan)
+            numpy_safety_std.append(np.nan)
+            numpy_inside_ellipsoid_mean.append(np.nan)
+            numpy_inside_ellipsoid_std.append(np.nan)
         
         # Scalable GP
         if n_samples in scalable_results:
@@ -512,6 +624,36 @@ def plot_initial_samples_comparison(results_dir, output_dir=None):
             else:
                 scalable_feasible_mean.append(np.nan)
                 scalable_feasible_std.append(np.nan)
+            
+            # Extract safety metrics
+            safety_rates = []
+            inside_ellipsoid_rates = []
+            for r in results:
+                if 'safety_all' in r and r['safety_all'] is not None:
+                    safety_all = np.array(r['safety_all'])
+                    if len(safety_all) > 0:
+                        safety_rates.append(np.mean(safety_all) * 100)  # Percentage
+                
+                if 'inside_ellipsoid' in r and r['inside_ellipsoid'] is not None:
+                    inside_ellipsoid = np.array(r['inside_ellipsoid'])
+                    if len(inside_ellipsoid) > 0:
+                        # Check if all timesteps are inside ellipsoid for each iteration
+                        all_inside = np.all(inside_ellipsoid, axis=1) if inside_ellipsoid.ndim > 1 else inside_ellipsoid
+                        inside_ellipsoid_rates.append(np.mean(all_inside) * 100)  # Percentage
+            
+            if safety_rates:
+                scalable_safety_mean.append(np.mean(safety_rates))
+                scalable_safety_std.append(np.std(safety_rates))
+            else:
+                scalable_safety_mean.append(np.nan)
+                scalable_safety_std.append(np.nan)
+            
+            if inside_ellipsoid_rates:
+                scalable_inside_ellipsoid_mean.append(np.mean(inside_ellipsoid_rates))
+                scalable_inside_ellipsoid_std.append(np.std(inside_ellipsoid_rates))
+            else:
+                scalable_inside_ellipsoid_mean.append(np.nan)
+                scalable_inside_ellipsoid_std.append(np.nan)
         else:
             scalable_time_mean.append(np.nan)
             scalable_time_std.append(np.nan)
@@ -519,6 +661,10 @@ def plot_initial_samples_comparison(results_dir, output_dir=None):
             scalable_info_gain_std.append(np.nan)
             scalable_feasible_mean.append(np.nan)
             scalable_feasible_std.append(np.nan)
+            scalable_safety_mean.append(np.nan)
+            scalable_safety_std.append(np.nan)
+            scalable_inside_ellipsoid_mean.append(np.nan)
+            scalable_inside_ellipsoid_std.append(np.nan)
     
     # Convert to numpy arrays
     n_samples_values = np.array(n_samples_values)
@@ -534,6 +680,14 @@ def plot_initial_samples_comparison(results_dir, output_dir=None):
     numpy_feasible_std = np.array(numpy_feasible_std)
     scalable_feasible_mean = np.array(scalable_feasible_mean)
     scalable_feasible_std = np.array(scalable_feasible_std)
+    numpy_safety_mean = np.array(numpy_safety_mean)
+    numpy_safety_std = np.array(numpy_safety_std)
+    scalable_safety_mean = np.array(scalable_safety_mean)
+    scalable_safety_std = np.array(scalable_safety_std)
+    numpy_inside_ellipsoid_mean = np.array(numpy_inside_ellipsoid_mean)
+    numpy_inside_ellipsoid_std = np.array(numpy_inside_ellipsoid_std)
+    scalable_inside_ellipsoid_mean = np.array(scalable_inside_ellipsoid_mean)
+    scalable_inside_ellipsoid_std = np.array(scalable_inside_ellipsoid_std)
     
     # Create timing breakdown visualization
     print("\nCreating timing breakdown visualization...")
@@ -546,6 +700,15 @@ def plot_initial_samples_comparison(results_dir, output_dir=None):
     # Create information gain trajectory plot
     print("\nCreating information gain trajectory plots...")
     plot_info_gain_trajectories(results_by_type, ['numpy', 'scalable'], 'n_safe_samples', n_samples_values.tolist(), output_dir)
+    
+    # Create safety metrics plot
+    print("\nCreating safety metrics comparison...")
+    plot_safety_metrics(n_samples_values, 
+                       numpy_safety_mean, numpy_safety_std,
+                       scalable_safety_mean, scalable_safety_std,
+                       numpy_inside_ellipsoid_mean, numpy_inside_ellipsoid_std,
+                       scalable_inside_ellipsoid_mean, scalable_inside_ellipsoid_std,
+                       output_dir)
     
     # Print summary
     print("\n" + "="*80)
@@ -573,7 +736,7 @@ def main():
     """Main evaluation function"""
     
     # Specify result directories
-    timestamp = "20260130_094704"
+    timestamp = "20260201_231808"
     
     initial_samples_dir = f"experiments/results_exploration/initial_samples_sweep_{timestamp}"
     

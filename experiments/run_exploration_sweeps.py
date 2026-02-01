@@ -112,6 +112,17 @@ def run_exploration_experiment(config, experiment_name="experiment"):
             if proj_err is not None and not np.isnan(proj_err):
                 metrics['projection_error'] = float(proj_err)
         
+        # Extract safety metrics
+        if 'safety_all' in results and results['safety_all'] is not None:
+            safety_all = results['safety_all']
+            if isinstance(safety_all, (list, np.ndarray)) and len(safety_all) > 0:
+                metrics['safety_all'] = safety_all.tolist() if isinstance(safety_all, np.ndarray) else safety_all
+        
+        if 'inside_ellipsoid' in results and results['inside_ellipsoid'] is not None:
+            inside_ellipsoid = results['inside_ellipsoid']
+            if isinstance(inside_ellipsoid, (list, np.ndarray)) and len(inside_ellipsoid) > 0:
+                metrics['inside_ellipsoid'] = inside_ellipsoid.tolist() if isinstance(inside_ellipsoid, np.ndarray) else inside_ellipsoid
+        
         # Extract GP hyperparameters
         if 'gp_hyperparameters' in results and results['gp_hyperparameters'] is not None:
             metrics['gp_hyperparameters'] = results['gp_hyperparameters']
@@ -229,21 +240,21 @@ def main():
     # Common overrides for all experiments
     base_overrides = {
         'verbose': 1,
-        'n_iterations': 50,
+        'n_iterations': 10,
         'save_results': True,
         'save_vis': True,
         'visualize': False,
     }
     
     # Random seeds for statistical robustness
-    seeds = [1,2]
+    seeds = [1]
     
     # Sweep: Vary initial samples, compare GP types
     print("\n" + "="*80)
     print("SWEEP: INITIAL SAMPLES (Standard GP vs Scalable GP)")
     print("="*80)
     
-    n_values = [400, 600]
+    n_values = [400]
     overrides_samples = base_overrides.copy()
     overrides_samples['n_frequencies'] = 5  # Fixed for scalable GP in this sweep
     
