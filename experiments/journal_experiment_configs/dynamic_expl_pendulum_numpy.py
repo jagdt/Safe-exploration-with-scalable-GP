@@ -12,6 +12,9 @@ class Config(DefaultConfigExploration):
     """
     Options class for the exploration setting
     """
+    static_exploration = False
+    n_safe_samples = 600
+    n_safe = 8
 
     # -- GP model
     gp_type = 'scalable'  # one of 'gpy', 'numpy', 'scalable'
@@ -22,7 +25,7 @@ class Config(DefaultConfigExploration):
 
     # -- Scalable GP specific parameters
     # Number of frequencies to use per dimension.
-    n_frequencies = 4
+    n_frequencies = 5
     # Periods for each dimension.
     periods = list(1.2 * np.array(domain_lengths))
     # Lengthscale multiple for the scalable GP to compute periods.
