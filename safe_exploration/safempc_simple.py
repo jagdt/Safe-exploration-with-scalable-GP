@@ -338,7 +338,7 @@ class SimpleSafeMPC(SafeMPC):
                              "bound_frac": 0.5, "start_with_resto": "no",
                              "required_infeasibility_reduction": 0.85,
                              "acceptable_iter": 8,
-                             "print_level": 1}}
+                             "print_level": 0}}
                     # 'jit': True,  # Enable just-in-time compilation
                     # 'compiler': 'shell',
                     # 'jit_options': {'flags': ['-O1']}}  # ipopt
