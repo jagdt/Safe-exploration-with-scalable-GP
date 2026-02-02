@@ -18,6 +18,7 @@ from .visualization import plot_model_error_comparison
 try:
     import matplotlib.pyplot as plt
     import matplotlib as mpl
+    from matplotlib.lines import Line2D
     from matplotlib.ticker import MaxNLocator
     from matplotlib.colors import LinearSegmentedColormap
     _has_matplotlib = True
@@ -35,7 +36,7 @@ if _has_matplotlib:
         'xtick.labelsize': 12,
         'ytick.labelsize': 12,
         'legend.fontsize': 11,
-        'lines.linewidth': 2.5,
+        'lines.linewidth': 3.0,
         'lines.markersize': 6,
         'text.usetex': False,
         'mathtext.fontset': 'cm',
@@ -202,11 +203,34 @@ def run_exploration(conf, visualize=False):
                         x_min, x_max = state_domain_bounds_phys[0, :]
                         y_min, y_max = state_domain_bounds_phys[1, :]  
                         
-                        # Plot rectangle showing domain bounds
                         from matplotlib.patches import Rectangle
+                        
+                        # Get current axis limits to define outer boundary
+                        xlim = ax.get_xlim()
+                        ylim = ax.get_ylim()
+
+                        outer_x = [xlim[0], xlim[1], xlim[1], xlim[0], xlim[0]]
+                        outer_y = [ylim[0], ylim[0], ylim[1], ylim[1], ylim[0]]
+                        inner_x = [x_min, x_min, x_max, x_max, x_min]
+                        inner_y = [y_min, y_max, y_max, y_min, y_min]
+                        
+                        # Combine outer and inner to create polygon with hole
+                        verts = list(zip(outer_x + inner_x, outer_y + inner_y))
+                        
+                        # Fill outside region
+                        from matplotlib.path import Path
+                        codes = [Path.MOVETO] + [Path.LINETO]*3 + [Path.CLOSEPOLY] + \
+                                [Path.MOVETO] + [Path.LINETO]*3 + [Path.CLOSEPOLY]
+                        path = Path(verts, codes)
+                        from matplotlib.patches import PathPatch
+                        patch = PathPatch(path, facecolor=RWTH_PETROL, alpha=0.1, edgecolor='none')
+                        ax.add_patch(patch)
+                        
+                        # Draw domain bounds border
+                        linewidth = plt.rcParams.get('lines.linewidth', 2.5)
                         rect = Rectangle((x_min, y_min), x_max - x_min, y_max - y_min,
-                                       linewidth=1.5, edgecolor=RWTH_PETROL, 
-                                       facecolor='none', linestyle='--', 
+                                       linewidth=linewidth, edgecolor=RWTH_PETROL, 
+                                       facecolor='none', 
                                        label='Domain bounds')
                         ax.add_patch(rect)
 
@@ -232,37 +256,48 @@ def run_exploration(conf, visualize=False):
             cbar.ax.yaxis.set_major_locator(MaxNLocator(integer=True))
             
             if conf.visualize_initial_samples or verify_safety or (hasattr(exploration_module.safempc.ssm, 'domain_lengths') and exploration_module.safempc.ssm.domain_lengths is not None):
-                from matplotlib.patches import Patch
-                from matplotlib.lines import Line2D
                 legend_elements = []
-                
+
                 if conf.visualize_initial_samples:
+                    markersize = plt.rcParams.get('lines.markersize', 6)
                     legend_elements.extend([
-                        Patch(facecolor=RWTH_GRAY, alpha=0.3, label='Initial samples'),
-                        Patch(facecolor=RWTH_LIGHT_BLUE, label='Early exploration'),
-                        Patch(facecolor=RWTH_MAGENTA, label='Late exploration'),
+                        Line2D([0], [0], marker='o', color='w', markerfacecolor=RWTH_GRAY, 
+                               markersize=markersize, alpha=0.3, linestyle='', label='Initial samples'),
+                        Line2D([0], [0], marker='o', color='w', markerfacecolor=RWTH_LIGHT_BLUE, 
+                               markersize=markersize, linestyle='', label='Early exploration'),
+                        Line2D([0], [0], marker='o', color='w', markerfacecolor=RWTH_MAGENTA, 
+                               markersize=markersize, linestyle='', label='Late exploration'),
                     ])
                 
+                # Add safe region boundary to legend
+                linewidth = plt.rcParams.get('lines.linewidth', 2.5)
+                legend_elements.append(
+                    Line2D([0], [0], color=RWTH_BLACK, linewidth=linewidth, 
+                           label='Safe region')
+                )
+
+                # Add domain bounds to legend if they were plotted
+                if hasattr(exploration_module.safempc.ssm, 'domain_lengths') and exploration_module.safempc.ssm.domain_lengths is not None:
+                    domain_lengths = np.array(exploration_module.safempc.ssm.domain_lengths)
+                    if len(domain_lengths) >= env.n_s and env.n_s == 2:
+                        linewidth = plt.rcParams.get('lines.linewidth', 2.5)
+                        legend_elements.append(
+                            Line2D([0], [0], color=RWTH_PETROL, linewidth=linewidth, 
+                                   label='Domain bounds')
+                        )
+
                 # Add propagated uncertainty (ellipsoids) to legend if they were plotted
                 if verify_safety:
+                    linewidth = plt.rcParams.get('lines.linewidth', 2.5)
                     legend_elements.extend([
-                        Line2D([0], [0], color=RWTH_ORANGE, linewidth=2.0, 
+                        Line2D([0], [0], color=RWTH_ORANGE, linewidth=linewidth, 
                                label='Propagated uncertainty'),
                         Line2D([0], [0], color=RWTH_GREEN, linewidth=0, marker='o',
                                markersize=6, label='Safe trajectory')
                     ])
                 
-                # Add domain bounds to legend if they were plotted
-                if hasattr(exploration_module.safempc.ssm, 'domain_lengths') and exploration_module.safempc.ssm.domain_lengths is not None:
-                    domain_lengths = np.array(exploration_module.safempc.ssm.domain_lengths)
-                    if len(domain_lengths) >= env.n_s and env.n_s == 2:
-                        legend_elements.append(
-                            Line2D([0], [0], color=RWTH_PETROL, linewidth=1.5, 
-                                   linestyle='--', label='Domain bounds')
-                        )
-                
                 ax.legend(handles=legend_elements, loc='best', framealpha=0.9, fontsize=11)
-            
+                
             if visualize:
                 plt.show(block=False)
                 plt.pause(0.5)
