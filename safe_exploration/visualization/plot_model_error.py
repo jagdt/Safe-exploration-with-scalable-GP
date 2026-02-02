@@ -479,7 +479,7 @@ def plot_1d_comparison(states, actions, true_error, gp_mean, gp_std,
             
             # Plot exploration samples with RWTH colormap
             n_exploration = n_train - n_initial_samples
-            time_colors = np.arange(n_exploration)
+            time_colors = np.arange(1, n_exploration + 1)
             scatter = ax.scatter(train_x[n_initial_samples:], train_y[n_initial_samples:], 
                                c=time_colors, cmap=RWTH_CMAP, 
                                s=60, alpha=0.7, edgecolors=RWTH_BLACK, linewidth=0.8, 
@@ -492,7 +492,7 @@ def plot_1d_comparison(states, actions, true_error, gp_mean, gp_std,
             cbar.ax.yaxis.set_major_locator(MaxNLocator(integer=True))
         else:
             # All samples with colormap (no distinction)
-            time_colors = np.arange(n_train)
+            time_colors = np.arange(1, n_train + 1)
             scatter = ax.scatter(train_x, train_y, c=time_colors, cmap=RWTH_CMAP, 
                                s=60, alpha=0.7, edgecolors=RWTH_BLACK, linewidth=0.8, 
                                label='Training data', zorder=5)
@@ -582,13 +582,13 @@ def plot_2d_comparison(states, actions, true_error, gp_mean, gp_std,
             
             # Plot exploration samples with RWTH colormap
             n_exploration = n_train - n_initial_samples
-            time_colors = np.arange(n_exploration)
+            time_colors = np.arange(1, n_exploration + 1)
             scatter1 = axes[0].scatter(train_x[n_initial_samples:], train_y[n_initial_samples:], 
                                       c=time_colors, cmap=RWTH_CMAP, 
                                       s=40, alpha=0.8, edgecolors=RWTH_BLACK, linewidth=0.8, zorder=5)
         else:
             # All samples with colormap
-            time_colors = np.arange(n_train)
+            time_colors = np.arange(1, n_train + 1)
             scatter1 = axes[0].scatter(train_x, train_y, c=time_colors, cmap=RWTH_CMAP, 
                                       s=40, alpha=0.8, edgecolors=RWTH_BLACK, linewidth=0.8, zorder=5)
     
@@ -741,7 +741,7 @@ def plot_training_error_scatter(states, actions, true_error, gp_mean, dim_names,
         
         # Plot exploration samples with RWTH colormap
         n_exploration = n_train - n_initial_samples
-        time_colors = np.arange(n_exploration)
+        time_colors = np.arange(1, n_exploration + 1)
         scatter = ax.scatter(dtheta[n_initial_samples:], theta[n_initial_samples:], u[n_initial_samples:],
                            c=time_colors, cmap=RWTH_CMAP, 
                            s=60, alpha=0.8, edgecolors=RWTH_BLACK, linewidth=0.5, 
@@ -754,7 +754,7 @@ def plot_training_error_scatter(states, actions, true_error, gp_mean, dim_names,
         cbar.ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     else:
         # All samples with colormap (no distinction)
-        time_colors = np.arange(n_train)
+        time_colors = np.arange(1, n_train + 1)
         scatter = ax.scatter(dtheta, theta, u, c=time_colors, cmap=RWTH_CMAP, 
                            s=60, alpha=0.8, edgecolors=RWTH_BLACK, linewidth=0.5, 
                            depthshade=True, label='Training data')

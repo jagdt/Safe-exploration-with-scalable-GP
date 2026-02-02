@@ -170,7 +170,7 @@ def run_exploration(conf, visualize=False):
             n_bins = 256
             cmap = LinearSegmentedColormap.from_list('rwth_trajectory', colors_list, N=n_bins)
             # Generate colors for each iteration
-            iter_colors = [cmap(i / max(n_iterations - 1, 1)) for i in range(n_iterations)]
+            iter_colors = [cmap((i+1) / max(n_iterations, 1)) for i in range(n_iterations)]
             c_sample = lambda it: iter_colors[it] if it < len(iter_colors) else RWTH_BLUE
         else:
             c_sample = lambda it: RWTH_BLUE
@@ -224,7 +224,7 @@ def run_exploration(conf, visualize=False):
 
         # Add colorbar and legend
         if (visualize or save_vis) and n_iterations > 1:
-            sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=0, vmax=n_iterations-1))
+            sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=1, vmax=n_iterations))
             sm.set_array([])
             cbar = fig.colorbar(sm, ax=ax, pad=0.02, aspect=30)
             cbar.set_label('Iteration', fontsize=12, rotation=270, labelpad=20)
