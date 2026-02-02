@@ -18,6 +18,7 @@ from .visualization import plot_model_error_comparison
 try:
     import matplotlib.pyplot as plt
     import matplotlib as mpl
+    from matplotlib.ticker import MaxNLocator
     from matplotlib.colors import LinearSegmentedColormap
     _has_matplotlib = True
 except:
@@ -228,6 +229,7 @@ def run_exploration(conf, visualize=False):
             cbar = fig.colorbar(sm, ax=ax, pad=0.02, aspect=30)
             cbar.set_label('Iteration', fontsize=12, rotation=270, labelpad=20)
             cbar.ax.tick_params(labelsize=10)
+            cbar.ax.yaxis.set_major_locator(MaxNLocator(integer=True))
             
             if conf.visualize_initial_samples or verify_safety or (hasattr(exploration_module.safempc.ssm, 'domain_lengths') and exploration_module.safempc.ssm.domain_lengths is not None):
                 from matplotlib.patches import Patch

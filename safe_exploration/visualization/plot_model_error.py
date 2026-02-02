@@ -12,6 +12,7 @@ Uses actual trained GP and environment from MPC framework to compare:
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import cm
+from matplotlib.ticker import MaxNLocator
 from matplotlib.colors import Normalize, LinearSegmentedColormap
 from mpl_toolkits.mplot3d import Axes3D
 import warnings
@@ -488,6 +489,7 @@ def plot_1d_comparison(states, actions, true_error, gp_mean, gp_std,
             cbar = plt.colorbar(scatter, ax=ax, pad=0.02, aspect=30)
             cbar.set_label('Exploration step', fontsize=12, rotation=270, labelpad=20)
             cbar.ax.tick_params(labelsize=10)
+            cbar.ax.yaxis.set_major_locator(MaxNLocator(integer=True))
         else:
             # All samples with colormap (no distinction)
             time_colors = np.arange(n_train)
@@ -499,6 +501,7 @@ def plot_1d_comparison(states, actions, true_error, gp_mean, gp_std,
             cbar = plt.colorbar(scatter, ax=ax, pad=0.02, aspect=30)
             cbar.set_label('Sample order', fontsize=12, rotation=270, labelpad=20)
             cbar.ax.tick_params(labelsize=10)
+            cbar.ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     
     ax.axhline(0, color=RWTH_BLACK, linestyle=':', linewidth=1.5, alpha=0.5)
     
@@ -638,6 +641,7 @@ def plot_2d_comparison(states, actions, true_error, gp_mean, gp_std,
             cbar_samples = plt.colorbar(scatter3, ax=axes[2], pad=0.12, aspect=20)
             cbar_samples.set_label('Exploration step', fontsize=12, rotation=270, labelpad=20)
             cbar_samples.ax.tick_params(labelsize=10)
+            cbar_samples.ax.yaxis.set_major_locator(MaxNLocator(integer=True))
         else:
             scatter3 = axes[2].scatter(train_x, train_y, c=time_colors, cmap=RWTH_CMAP, 
                                       s=40, alpha=0.8, edgecolors=RWTH_BLACK, linewidth=0.8, zorder=5)
@@ -646,6 +650,7 @@ def plot_2d_comparison(states, actions, true_error, gp_mean, gp_std,
             cbar_samples = plt.colorbar(scatter3, ax=axes[2], pad=0.12, aspect=20)
             cbar_samples.set_label('Sample order', fontsize=12, rotation=270, labelpad=20)
             cbar_samples.ax.tick_params(labelsize=10)
+            cbar_samples.ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     
     axes[2].set_xlabel(label_map.get(dim_names[x_dim], dim_names[x_dim]), fontsize=14)
     axes[2].set_ylabel(label_map.get(dim_names[y_dim], dim_names[y_dim]), fontsize=14)
@@ -746,6 +751,7 @@ def plot_training_error_scatter(states, actions, true_error, gp_mean, dim_names,
         cbar = fig.colorbar(scatter, ax=ax, pad=0.1, shrink=0.8, aspect=20)
         cbar.set_label('Exploration step', fontsize=12, rotation=270, labelpad=25)
         cbar.ax.tick_params(labelsize=10)
+        cbar.ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     else:
         # All samples with colormap (no distinction)
         time_colors = np.arange(n_train)
@@ -757,6 +763,7 @@ def plot_training_error_scatter(states, actions, true_error, gp_mean, dim_names,
         cbar = fig.colorbar(scatter, ax=ax, pad=0.1, shrink=0.8, aspect=20)
         cbar.set_label('Sample order', fontsize=12, rotation=270, labelpad=25)
         cbar.ax.tick_params(labelsize=10)
+        cbar.ax.yaxis.set_major_locator(MaxNLocator(integer=True))
 
     # Improved axis labels
     label_map = {'dθ': r'$\dot{\vartheta}$ [rad/s]', 'θ': r'$\vartheta$ [rad]', 'u': r'$u$ [Nm]'}
