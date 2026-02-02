@@ -175,7 +175,7 @@ def sweep_initial_samples(n_values, seeds, base_overrides, output_dir):
     
     all_results = []
     
-    for gp_type in ['scalble', 'numpy']:
+    for gp_type in ['scalable', 'numpy']:
         for n in n_values:
             for seed in seeds:
                 # Create fresh config instance
