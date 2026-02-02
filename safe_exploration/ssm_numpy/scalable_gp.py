@@ -1236,7 +1236,6 @@ class ScalableGPModel(GPModelBase):
 
         self.beta_safety_per_dim = np.array([bounds.beta(dim_idx) for dim_idx in range(self.n_s_out)])
         self.projection_error_per_dim = np.array([bounds.projection_errors[dim_idx] for dim_idx in range(self.n_s_out)])
-        print(f"Computed beta_safety_per_dim: {self.beta_safety_per_dim}")
 
     def compute_truncation_radius_from_target_error(self, dim_idx, target_error):
         """Compute truncation radius to achieve target projection error.

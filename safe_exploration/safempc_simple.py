@@ -257,9 +257,6 @@ class SimpleSafeMPC(SafeMPC):
         """
         self.cost_func = cost_func
 
-        if self.compute_bounds:
-            self._get_gp_bounds()
-
         u_0 = MX.sym("init_control", (self.n_u, 1))
         k_ff_all = MX.sym("feed-forward control", (self.n_safe - 1, self.n_u))
         g = []
