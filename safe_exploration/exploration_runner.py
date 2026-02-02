@@ -13,56 +13,21 @@ from .gp_reachability import verify_trajectory_safety, trajectory_inside_ellipso
 from .safempc_exploration import StaticSafeMPCExploration, DynamicSafeMPCExploration
 from .utils import generate_initial_samples, unavailable
 from .utils_config import create_env, create_solver
-from .visualization import plot_model_error_comparison
+from .visualization import (
+    plot_model_error_comparison,
+    setup_trajectory_plot,
+    add_trajectory_colorbar_and_legend,
+    save_trajectory_plot,
+    RWTH_BLUE, RWTH_BLACK, RWTH_GREEN, RWTH_ORANGE,
+    RWTH_CMAP,
+)
 
 try:
     import matplotlib.pyplot as plt
     import matplotlib as mpl
-    from matplotlib.lines import Line2D
-    from matplotlib.ticker import MaxNLocator
-    from matplotlib.colors import LinearSegmentedColormap
     _has_matplotlib = True
 except:
     _has_matplotlib = False
-
-# Configure matplotlib for publication-quality plots
-if _has_matplotlib:
-    plt.rcParams.update({
-        'font.family': 'serif',
-        'font.serif': ['Computer Modern Roman', 'Times New Roman', 'DejaVu Serif'],
-        'font.size': 12,
-        'axes.labelsize': 14,
-        'axes.titlesize': 16,
-        'xtick.labelsize': 12,
-        'ytick.labelsize': 12,
-        'legend.fontsize': 11,
-        'lines.linewidth': 3.0,
-        'lines.markersize': 6,
-        'text.usetex': False,
-        'mathtext.fontset': 'cm',
-        'figure.figsize': (8, 6),
-        'axes.grid': False,
-        'grid.alpha': 0.3,
-        'grid.linestyle': '--',
-        'grid.linewidth': 0.5,
-    })
-
-# RWTH Aachen University corporate colors
-RWTH_BLUE = '#00549F'
-RWTH_BLACK = '#000000'
-RWTH_MAGENTA = '#E30066'
-RWTH_YELLOW = '#FFED00'
-RWTH_PETROL = '#006165'
-RWTH_TURQUOISE = '#0098A1'
-RWTH_GREEN = '#57AB27'
-RWTH_MAYGREEN = '#BDCD00'
-RWTH_ORANGE = '#F6A800'
-RWTH_RED = '#CC071E'
-RWTH_BORDEAUX = '#A11035'
-RWTH_PURPLE = '#612158'
-RWTH_VIOLET = '#7A6FAC'
-RWTH_LIGHT_BLUE = '#8EBAE5'
-RWTH_GRAY = '#9C9E9F'
 
 
 @unavailable(not _has_matplotlib, "matplotlib", conditionals=["visualize, save_vis"])
@@ -115,6 +80,7 @@ def run_exploration(conf, visualize=False):
         X, y = generate_initial_samples(env, conf, conf.relative_dynamics, safempc,
                                         safe_policy)
         safempc.update_model(X, y, opt_hyp=conf.train_gp, reinitialize_solver=False)
+        x_train_init = safempc.x_train
         
         # Initialize reference GP with ground truth hyperparameters if provided
         reference_gp = None
@@ -164,140 +130,22 @@ def run_exploration(conf, visualize=False):
         }
 
         # Initialize color code for plotting the states using RWTH colors
-        # Create a colormap from RWTH Light Blue to RWTH Blue to RWTH Magenta
         if _has_matplotlib and n_iterations > 1:
-            # Create custom colormap: Light Blue -> Blue -> Magenta
-            colors_list = [RWTH_LIGHT_BLUE, RWTH_BLUE, RWTH_MAGENTA]
-            n_bins = 256
-            cmap = LinearSegmentedColormap.from_list('rwth_trajectory', colors_list, N=n_bins)
-            # Generate colors for each iteration
-            iter_colors = [cmap((i+1) / max(n_iterations, 1)) for i in range(n_iterations)]
+            # Generate colors for each iteration using unified RWTH colormap
+            iter_colors = [RWTH_CMAP((i+1) / max(n_iterations, 1)) for i in range(n_iterations)]
             c_sample = lambda it: iter_colors[it] if it < len(iter_colors) else RWTH_BLUE
         else:
             c_sample = lambda it: RWTH_BLUE
 
         if visualize or conf.save_vis:
-            fig, ax = env.plot_safety_bounds(color=RWTH_BLACK, normalize=False)
-            
-            ax.set_xlabel(r'Angular velocity $\dot{\vartheta}$ [rad/s]', fontsize=14)
-            ax.set_ylabel(r'Angle $\vartheta$ [rad]', fontsize=14)
-            ax.set_title('Safe Exploration Trajectory', fontsize=16, fontweight='bold', pad=15)
-
-            # Plot domain bounds if available
-            if hasattr(exploration_module.safempc.ssm, 'domain_lengths') and exploration_module.safempc.ssm.domain_lengths is not None:
-                domain_lengths = np.array(exploration_module.safempc.ssm.domain_lengths)
-                
-                domain_bounds_norm = np.zeros((len(domain_lengths), 2))
-                domain_bounds_norm[:, 0] = -domain_lengths / 2
-                domain_bounds_norm[:, 1] = domain_lengths / 2
-                
-                if len(domain_bounds_norm) >= env.n_s:
-                    state_domain_bounds_norm = domain_bounds_norm[:env.n_s, :]
-                    state_norm_factors = env.norm[0]
-                    
-                    # Unnormalize
-                    state_domain_bounds_phys = state_domain_bounds_norm * state_norm_factors[:, np.newaxis]
-                    
-                    # For 2D state space (e.g., inverted pendulum: [dθ, θ])
-                    if env.n_s == 2:
-                        x_min, x_max = state_domain_bounds_phys[0, :]
-                        y_min, y_max = state_domain_bounds_phys[1, :]  
-                        
-                        from matplotlib.patches import Rectangle
-                        
-                        # Get current axis limits to define outer boundary
-                        xlim = ax.get_xlim()
-                        ylim = ax.get_ylim()
-
-                        outer_x = [xlim[0], xlim[1], xlim[1], xlim[0], xlim[0]]
-                        outer_y = [ylim[0], ylim[0], ylim[1], ylim[1], ylim[0]]
-                        inner_x = [x_min, x_min, x_max, x_max, x_min]
-                        inner_y = [y_min, y_max, y_max, y_min, y_min]
-                        
-                        # Combine outer and inner to create polygon with hole
-                        verts = list(zip(outer_x + inner_x, outer_y + inner_y))
-                        
-                        # Fill outside region
-                        from matplotlib.path import Path
-                        codes = [Path.MOVETO] + [Path.LINETO]*3 + [Path.CLOSEPOLY] + \
-                                [Path.MOVETO] + [Path.LINETO]*3 + [Path.CLOSEPOLY]
-                        path = Path(verts, codes)
-                        from matplotlib.patches import PathPatch
-                        patch = PathPatch(path, facecolor=RWTH_PETROL, alpha=0.1, edgecolor='none')
-                        ax.add_patch(patch)
-                        
-                        # Draw domain bounds border
-                        linewidth = plt.rcParams.get('lines.linewidth', 2.5)
-                        rect = Rectangle((x_min, y_min), x_max - x_min, y_max - y_min,
-                                       linewidth=linewidth, edgecolor=RWTH_PETROL, 
-                                       facecolor='none', 
-                                       label='Domain bounds')
-                        ax.add_patch(rect)
-
-            # plot the initial train set
-            x_train_init = exploration_module.x_train
-            if conf.visualize_initial_samples:            
-                c_gray = RWTH_GRAY
-                n_train, _ = np.shape(x_train_init)
-                for i in range(n_train):
-                    ax = env.plot_state(ax, x_train_init[i, :env.n_s], color=c_gray, normalize=False, unnormalize=True)
-
+            fig, ax = setup_trajectory_plot(env, exploration_module, conf, n_iterations)
             ell = None
             traj = None
 
-
         # Add colorbar and legend
         if (visualize or save_vis) and n_iterations > 1:
-            sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=1, vmax=n_iterations))
-            sm.set_array([])
-            cbar = fig.colorbar(sm, ax=ax, pad=0.02, aspect=30)
-            cbar.set_label('Iteration', fontsize=12, rotation=270, labelpad=20)
-            cbar.ax.tick_params(labelsize=10)
-            cbar.ax.yaxis.set_major_locator(MaxNLocator(integer=True))
-            
-            if conf.visualize_initial_samples or verify_safety or (hasattr(exploration_module.safempc.ssm, 'domain_lengths') and exploration_module.safempc.ssm.domain_lengths is not None):
-                legend_elements = []
-
-                if conf.visualize_initial_samples:
-                    markersize = plt.rcParams.get('lines.markersize', 6)
-                    legend_elements.extend([
-                        Line2D([0], [0], marker='o', color='w', markerfacecolor=RWTH_GRAY, 
-                               markersize=markersize, alpha=0.3, linestyle='', label='Initial samples'),
-                        Line2D([0], [0], marker='o', color='w', markerfacecolor=RWTH_LIGHT_BLUE, 
-                               markersize=markersize, linestyle='', label='Early exploration'),
-                        Line2D([0], [0], marker='o', color='w', markerfacecolor=RWTH_MAGENTA, 
-                               markersize=markersize, linestyle='', label='Late exploration'),
-                    ])
-                
-                # Add safe region boundary to legend
-                linewidth = plt.rcParams.get('lines.linewidth', 2.5)
-                legend_elements.append(
-                    Line2D([0], [0], color=RWTH_BLACK, linewidth=linewidth, 
-                           label='Safe region')
-                )
-
-                # Add domain bounds to legend if they were plotted
-                if hasattr(exploration_module.safempc.ssm, 'domain_lengths') and exploration_module.safempc.ssm.domain_lengths is not None:
-                    domain_lengths = np.array(exploration_module.safempc.ssm.domain_lengths)
-                    if len(domain_lengths) >= env.n_s and env.n_s == 2:
-                        linewidth = plt.rcParams.get('lines.linewidth', 2.5)
-                        legend_elements.append(
-                            Line2D([0], [0], color=RWTH_PETROL, linewidth=linewidth, 
-                                   label='Domain bounds')
-                        )
-
-                # Add propagated uncertainty (ellipsoids) to legend if they were plotted
-                if verify_safety:
-                    linewidth = plt.rcParams.get('lines.linewidth', 2.5)
-                    legend_elements.extend([
-                        Line2D([0], [0], color=RWTH_ORANGE, linewidth=linewidth, 
-                               label='Propagated uncertainty'),
-                        Line2D([0], [0], color=RWTH_GREEN, linewidth=0, marker='o',
-                               markersize=6, label='Safe trajectory')
-                    ])
-                
-                ax.legend(handles=legend_elements, loc='best', framealpha=0.9, fontsize=11)
-                
+            add_trajectory_colorbar_and_legend(fig, ax, conf, exploration_module, 
+                                              n_iterations, verify_safety)
             if visualize:
                 plt.show(block=False)
                 plt.pause(0.5)
@@ -423,16 +271,7 @@ def run_exploration(conf, visualize=False):
             x_i = x_next
 
         if save_vis and save_path is not None:
-            # Save with high quality
-            final_traj_plot_path = "{}/trajectory_final.png".format(save_path)
-            fig.savefig(final_traj_plot_path, dpi=300, bbox_inches='tight', facecolor='white')
-            print(f"Saved final trajectory plot: {final_traj_plot_path}")
-            
-            # # Also save as PDF for LaTeX inclusion
-            # final_traj_plot_path_pdf = "{}/trajectory_final.pdf".format(save_path)
-            # fig.savefig(final_traj_plot_path_pdf, bbox_inches='tight', facecolor='white')
-            # print(f"Saved final trajectory plot (PDF): {final_traj_plot_path_pdf}")
-            
+            save_trajectory_plot(fig, save_path)
             plt.close(fig)
 
         l_inf_gain += [inf_gain]

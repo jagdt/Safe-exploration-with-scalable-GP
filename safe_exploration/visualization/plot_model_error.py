@@ -13,50 +13,21 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import cm
 from matplotlib.ticker import MaxNLocator
-from matplotlib.colors import Normalize, LinearSegmentedColormap
+from matplotlib.colors import Normalize
 from mpl_toolkits.mplot3d import Axes3D
 import warnings
 import os
 import pickle
 
-# Configure matplotlib for publication-quality plots
-plt.rcParams.update({
-    'font.family': 'serif',
-    'font.serif': ['Computer Modern Roman', 'Times New Roman', 'DejaVu Serif'],
-    'font.size': 12,
-    'axes.labelsize': 14,
-    'axes.titlesize': 16,
-    'xtick.labelsize': 12,
-    'ytick.labelsize': 12,
-    'legend.fontsize': 11,
-    'lines.linewidth': 2.0,
-    'lines.markersize': 6,
-    'text.usetex': False,
-    'mathtext.fontset': 'cm',
-    'figure.figsize': (8, 6),
-    'axes.grid': True,
-    'grid.alpha': 0.3,
-    'grid.linestyle': '--',
-    'grid.linewidth': 0.5,
-})
+# Import unified visualization styles
+from .styles import (
+    RWTH_BLUE, RWTH_BLACK, RWTH_MAGENTA, RWTH_TURQUOISE,
+    RWTH_GREEN, RWTH_ORANGE, RWTH_RED, RWTH_BORDEAUX,
+    RWTH_PURPLE, RWTH_LIGHT_BLUE, RWTH_GRAY,
+    RWTH_CMAP, configure_matplotlib, get_axis_label,
+)
 
-# RWTH Aachen University corporate colors
-RWTH_BLUE = '#00549F'
-RWTH_BLACK = '#000000'
-RWTH_MAGENTA = '#E30066'
-RWTH_TURQUOISE = '#0098A1'
-RWTH_GREEN = '#57AB27'
-RWTH_ORANGE = '#F6A800'
-RWTH_RED = '#CC071E'
-RWTH_BORDEAUX = '#A11035'
-RWTH_PURPLE = '#612158'
-RWTH_LIGHT_BLUE = '#8EBAE5'
-RWTH_GRAY = '#9C9E9F'
-
-# Create RWTH trajectory colormap (same as in exploration_runner.py)
-colors_list = [RWTH_LIGHT_BLUE, RWTH_BLUE, RWTH_MAGENTA]
-n_bins = 256
-RWTH_CMAP = LinearSegmentedColormap.from_list('rwth_trajectory', colors_list, N=n_bins)
+configure_matplotlib()
 
 
 def compute_true_model_error(safempc, env, states, actions):
@@ -505,15 +476,12 @@ def plot_1d_comparison(states, actions, true_error, gp_mean, gp_std,
     
     ax.axhline(0, color=RWTH_BLACK, linestyle=':', linewidth=1.5, alpha=0.5)
     
-    # Improved axis labels with LaTeX
-    xlabel_map = {'dθ': r'$\dot{\vartheta}$ [rad/s]', 'θ': r'$\vartheta$ [rad]', 'u': r'$u$ [Nm]'}
-    ylabel_map = {'Δ(dθ)': r'$\Delta \dot{\vartheta}$ [rad/s]', 'Δ(θ)': r'$\Delta \vartheta$ [rad]'}
-    
-    ax.set_xlabel(xlabel_map.get(dim_names[vary_dim], dim_names[vary_dim]), fontsize=14)
-    ax.set_ylabel(ylabel_map.get(error_names[state_dim], error_names[state_dim]), fontsize=14)
+    # Use unified axis labels
+    ax.set_xlabel(get_axis_label(dim_names[vary_dim]), fontsize=14)
+    ax.set_ylabel(get_axis_label(error_names[state_dim]), fontsize=14)
     ax.set_title(f'Model Error Comparison', fontsize=16, fontweight='bold', pad=15)
     ax.legend(fontsize=11, loc='best', framealpha=0.95)
-    ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+    # ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
     
     plt.tight_layout()
     
@@ -561,10 +529,6 @@ def plot_2d_comparison(states, actions, true_error, gp_mean, gp_std,
     norm = Normalize(vmin=vmin, vmax=vmax)
     levels = np.linspace(vmin, vmax, 21)
     
-    # Axis label mappings
-    label_map = {'dθ': r'$\dot{\vartheta}$ [rad/s]', 'θ': r'$\vartheta$ [rad]', 'u': r'$u$ [Nm]'}
-    error_label_map = {'Δ(dθ)': r'$\Delta \dot{\vartheta}$', 'Δ(θ)': r'$\Delta \vartheta$'}
-    
     # Plot 1: True model error
     im1 = axes[0].contourf(X, Y, Z_true, levels=levels, cmap='RdBu_r', norm=norm)
     axes[0].contour(X, Y, Z_true, levels=levels, colors='black', linewidths=0.3, alpha=0.3)
@@ -592,11 +556,11 @@ def plot_2d_comparison(states, actions, true_error, gp_mean, gp_std,
             scatter1 = axes[0].scatter(train_x, train_y, c=time_colors, cmap=RWTH_CMAP, 
                                       s=40, alpha=0.8, edgecolors=RWTH_BLACK, linewidth=0.8, zorder=5)
     
-    axes[0].set_xlabel(label_map.get(dim_names[x_dim], dim_names[x_dim]), fontsize=14)
-    axes[0].set_ylabel(label_map.get(dim_names[y_dim], dim_names[y_dim]), fontsize=14)
-    axes[0].set_title(f'True Error: {error_label_map.get(error_names[state_dim], error_names[state_dim])}', 
+    axes[0].set_xlabel(get_axis_label(dim_names[x_dim]), fontsize=14)
+    axes[0].set_ylabel(get_axis_label(dim_names[y_dim]), fontsize=14)
+    axes[0].set_title(f'True Error: {get_axis_label(error_names[state_dim] + "_short", error_names[state_dim])}', 
                      fontsize=15, fontweight='bold', pad=10)
-    axes[0].grid(True, alpha=0.2, linestyle='--', linewidth=0.5)
+    # axes[0].grid(True, alpha=0.2, linestyle='--', linewidth=0.5)
     
     # Plot 2: GP predicted error
     im2 = axes[1].contourf(X, Y, Z_gp, levels=levels, cmap='RdBu_r', norm=norm)
@@ -616,11 +580,11 @@ def plot_2d_comparison(states, actions, true_error, gp_mean, gp_std,
             scatter2 = axes[1].scatter(train_x, train_y, c=time_colors, cmap=RWTH_CMAP, 
                                       s=40, alpha=0.8, edgecolors=RWTH_BLACK, linewidth=0.8, zorder=5)
     
-    axes[1].set_xlabel(label_map.get(dim_names[x_dim], dim_names[x_dim]), fontsize=14)
-    axes[1].set_ylabel(label_map.get(dim_names[y_dim], dim_names[y_dim]), fontsize=14)
-    axes[1].set_title(f'GP Prediction: {error_label_map.get(error_names[state_dim], error_names[state_dim])}', 
+    axes[1].set_xlabel(get_axis_label(dim_names[x_dim]), fontsize=14)
+    axes[1].set_ylabel(get_axis_label(dim_names[y_dim]), fontsize=14)
+    axes[1].set_title(f'GP Prediction: {get_axis_label(error_names[state_dim] + "_short", error_names[state_dim])}', 
                      fontsize=15, fontweight='bold', pad=10)
-    axes[1].grid(True, alpha=0.2, linestyle='--', linewidth=0.5)
+    # axes[1].grid(True, alpha=0.2, linestyle='--', linewidth=0.5)
     
     # Plot 3: GP uncertainty
     im3 = axes[2].contourf(X, Y, Z_std, levels=20, cmap='viridis')
@@ -652,11 +616,11 @@ def plot_2d_comparison(states, actions, true_error, gp_mean, gp_std,
             cbar_samples.ax.tick_params(labelsize=10)
             cbar_samples.ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     
-    axes[2].set_xlabel(label_map.get(dim_names[x_dim], dim_names[x_dim]), fontsize=14)
-    axes[2].set_ylabel(label_map.get(dim_names[y_dim], dim_names[y_dim]), fontsize=14)
-    axes[2].set_title(r'GP Uncertainty ($\sigma$): ' + error_label_map.get(error_names[state_dim], error_names[state_dim]), 
+    axes[2].set_xlabel(get_axis_label(dim_names[x_dim]), fontsize=14)
+    axes[2].set_ylabel(get_axis_label(dim_names[y_dim]), fontsize=14)
+    axes[2].set_title(r'GP Uncertainty ($\sigma$): ' + get_axis_label(error_names[state_dim] + '_short', error_names[state_dim]), 
                      fontsize=15, fontweight='bold', pad=10)
-    axes[2].grid(True, alpha=0.2, linestyle='--', linewidth=0.5)
+    # axes[2].grid(True, alpha=0.2, linestyle='--', linewidth=0.5)
     
     # Add colorbars after tight_layout
     plt.tight_layout()
@@ -765,16 +729,15 @@ def plot_training_error_scatter(states, actions, true_error, gp_mean, dim_names,
         cbar.ax.tick_params(labelsize=10)
         cbar.ax.yaxis.set_major_locator(MaxNLocator(integer=True))
 
-    # Improved axis labels
-    label_map = {'dθ': r'$\dot{\vartheta}$ [rad/s]', 'θ': r'$\vartheta$ [rad]', 'u': r'$u$ [Nm]'}
-    ax.set_xlabel(label_map.get(dim_names[0], dim_names[0]), fontsize=14, labelpad=10)
-    ax.set_ylabel(label_map.get(dim_names[1], dim_names[1]), fontsize=14, labelpad=10)
-    ax.set_zlabel(label_map.get(dim_names[2], dim_names[2]), fontsize=14, labelpad=10)
+    # Use unified axis labels
+    ax.set_xlabel(get_axis_label(dim_names[0]), fontsize=14, labelpad=10)
+    ax.set_ylabel(get_axis_label(dim_names[1]), fontsize=14, labelpad=10)
+    ax.set_zlabel(get_axis_label(dim_names[2]), fontsize=14, labelpad=10)
     ax.set_title('Training Data: Sample Acquisition Timeline', fontweight='bold', fontsize=16, pad=20)
     
     # Improve viewing angle
     ax.view_init(elev=20, azim=45)
-    ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+    # ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
 
     plt.tight_layout()
     

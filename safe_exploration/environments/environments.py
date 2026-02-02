@@ -25,6 +25,7 @@ from torch import Tensor
 
 from ..utils import unavailable, assert_shape
 from ..visualization.utils_visualization import plot_ellipsoid_2D
+from ..visualization import get_linewidth
 
 try:
     import matplotlib.pyplot as plt
@@ -736,7 +737,7 @@ class InvertedPendulum(Environment):
             
             p_i = p_i + self.p_origin.reshape((n_s, 1))
             label = 'Propagated uncertainty' if i == 0 else None
-            linewidth = plt.rcParams.get('lines.linewidth', 2.0)
+            linewidth = get_linewidth()
             ax, handles[i] = plot_ellipsoid_2D(p_i, q_i, ax, color=color, linewidth=linewidth, label=label)
 
         if vis_safety_bounds:
@@ -777,7 +778,7 @@ class InvertedPendulum(Environment):
             x_polygon = np.dot(x_polygon, m_x.T)
 
         if plot_safe_bounds:
-            linewidth = plt.rcParams.get('lines.linewidth', 2.0)
+            linewidth = get_linewidth()
             for i, simplex in enumerate(self.ch_safety_bounds.simplices):
                 label = 'Safe region' if i == 0 else None
                 ax.plot(x_polygon[simplex, 0], x_polygon[simplex, 1], 'k-', label=label, linewidth=linewidth)
