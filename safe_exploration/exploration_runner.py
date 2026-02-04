@@ -151,6 +151,7 @@ def run_exploration(conf, visualize=False):
                 plt.pause(0.5)
 
         safety_all = None
+        inside_ellipsoid = None
         if verify_safety:
             safety_all = np.zeros((n_iterations,), dtype=bool)
             inside_ellipsoid = np.zeros((n_iterations, safempc.n_safe))
