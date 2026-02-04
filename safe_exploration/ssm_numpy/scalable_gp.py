@@ -1179,8 +1179,8 @@ class ScalableGPModel(GPModelBase):
             
             # Sequential rank-1 updates for each new sample
             for j in range(x_new.shape[0]):
-                phi_j = Phi_new[j:j+1, :].T  # [n_features × 1]
-                L = self._cholesky_rank1_update(L, phi_j)
+                phi_j = Phi_new[j:j+1, :]
+                L = self.chol_rankk_update_qr(L, phi_j)
                 
                 # Check for numerical issues (nearly singular L)
                 if np.any(np.diag(L) < 1e-12):
@@ -1203,7 +1203,24 @@ class ScalableGPModel(GPModelBase):
         # Update training data
         self.x_train = np.vstack((self.x_train, x_new))
         self.y_train = np.vstack((self.y_train, y_new))
-    
+
+    def chol_rankk_update_qr(self, L, Phi_new):
+        """
+        Update L (lower-tri Cholesky of A) to be Cholesky of A + Phi_new^T Phi_new.
+        L: (M,M) lower, A = L L^T
+        Phi_new: (n_new, M)
+        returns L_new: (M,M) lower
+        """
+        # U^T is Phi_new, stack [L^T; Phi_new]
+        S = np.vstack([L.T, Phi_new])
+        # Thin QR: S = Q R, R is (M,M) upper
+        _, R = np.linalg.qr(S, mode="reduced")
+        # Ensure positive diagonal (Cholesky convention)
+        d = np.sign(np.diag(R))
+        d[d == 0] = 1.0
+        R = (d[:, None]) * R
+        return R.T 
+
     def _cholesky_rank1_update(self, L, v):
         """Update Cholesky factor L when adding v @ v^T to L @ L^T
         
