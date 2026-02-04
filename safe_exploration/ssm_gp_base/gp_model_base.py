@@ -149,12 +149,12 @@ class KernelGPModel(GPModelBase):
     """Base class for kernel-based GP models
     
     Provides the predict_casadi_symbolic implementation for traditional GPs
-    that use kernel functions and store inv_K matrices (e.g., GPy-based, NumPy-based).
+    that use kernel functions and kernel matrix representations.
     
     Required attributes in subclasses:
     - self.z: training inputs
     - self.beta: posterior coefficients
-    - self.inv_K: list of inverse kernel matrices
+    - self.L_chol: list of Cholesky factors of kernel matrices
     - self.hyp: list of hyperparameter dicts
     - self.kern_types: list of kernel type strings
     """
@@ -162,9 +162,12 @@ class KernelGPModel(GPModelBase):
     def predict_casadi_symbolic(self, x_new, compute_grads=False):
         """Return symbolic CasADi expressions for predictive mean/variance
         
-        This method uses the pre-computed GP parameters (hyp, z, beta, inv_K)
+        This method uses the pre-computed GP parameters (hyp, z, beta, L_chol)
         to create symbolic CasADi expressions for prediction. This is used
         for gradient-based optimization in MPC.
+        
+        Computes inverse Cholesky factors inv_L = L^{-1} for variance computation.
+        This is done via triangular solve with identity, which is numerically stable.
         
         Parameters
         ----------
@@ -186,10 +189,13 @@ class KernelGPModel(GPModelBase):
         assert np.shape(x_new)[0] == 1, \
             "We only support this for a single input vector right now"
 
+        inv_L = [np.linalg.solve(L, np.eye(L.shape[0])) for L in self.L_chol]
+        
         out_dict = gp_pred_function(x_new, self.hyp, self.kern_types, self.z, 
-                                    self.beta, self.inv_K, True, compute_grads)
+                                    self.beta, inv_L, True, compute_grads)
         mu_new = out_dict["pred_mu"]
         sigma_new = out_dict["pred_sigma"]
+        
         if compute_grads:
             jac_mu = out_dict["jac_mu"]
             return mu_new.T, sigma_new.T, jac_mu

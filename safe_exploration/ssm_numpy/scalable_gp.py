@@ -1082,11 +1082,11 @@ class ScalableGPModel(GPModelBase):
             
             y_mu_pred[:, i] = Phi_test @ self.posterior_mean_coeffs[i]
             
-            V = np.linalg.solve(self.L_PhiT_Phi[i], Phi_test.T)
-            V = np.linalg.solve(self.L_PhiT_Phi[i].T, V)
+            # Predictive variance: Var[f(x)] = σ² φ(x)^T A^{-1} φ(x) where A = Φ^T Φ + σ²I
+            U = np.linalg.solve(self.L_PhiT_Phi[i], Phi_test.T)
             
-            variance = self.noise_var[i] * np.sum(Phi_test * V.T, axis=1)
-            y_sigm_pred[:, i] = np.sqrt(np.maximum(variance, 1e-10))
+            var_f = self.noise_var[i] * np.sum(U * U, axis=0)
+            y_sigm_pred[:, i] = np.sqrt(np.maximum(var_f, 1e-10))
         
         if quantiles is not None:
             raise NotImplementedError("Quantiles not implemented for ScalableGPModel")
@@ -1144,7 +1144,107 @@ class ScalableGPModel(GPModelBase):
             x_new = np.vstack((self.x_train, x))
             y_new = np.vstack((self.y_train, y))
         
-        self.train(x_new, y_new, opt_hyp=opt_hyp)
+        # Efficient online update without retraining from scratch
+        if not replace_old and self.gp_trained and not opt_hyp:
+            self._update_online(x, y)
+        else:
+            # Full retraining required
+            self.train(x_new, y_new, opt_hyp=opt_hyp)
+    
+    def _update_online(self, x_new, y_new):
+        """Efficient online update using rank-k Cholesky update
+        
+        Updates the Cholesky factorization L of (Φ^T Φ + σ²I) incrementally
+        when new data arrives, avoiding full recomputation.
+        
+        Parameters
+        ----------
+        x_new : ndarray [n_new × (n_s_in + n_u)]
+            New training inputs
+        y_new : ndarray [n_new × n_s_out]
+            New training targets
+        """
+        x_new = np.atleast_2d(x_new)
+        y_new = np.atleast_2d(y_new)
+        
+        if x_new.shape[0] != y_new.shape[0]:
+            raise ValueError("x_new and y_new must have same number of samples")
+        
+        for i in range(self.n_s_out):
+            # Compute features for new data
+            Phi_new = self._phi_features(x_new, self.lambdas[i], i)  # [n_new × n_features]
+
+            # Use Cholesky rank-k update: update L to incorporate Φ_new^T @ Φ_new
+            L = self.L_PhiT_Phi[i].copy()
+            
+            # Sequential rank-1 updates for each new sample
+            for j in range(x_new.shape[0]):
+                phi_j = Phi_new[j:j+1, :].T  # [n_features × 1]
+                L = self._cholesky_rank1_update(L, phi_j)
+                
+                # Check for numerical issues (nearly singular L)
+                if np.any(np.diag(L) < 1e-12):
+                    warnings.warn(f"Cholesky factor nearly singular for dim {i}, recomputing from scratch")
+                    # Fall back to recomputing from scratch
+                    x_all = np.vstack((self.x_train, x_new))
+                    y_all = np.vstack((self.y_train, y_new))
+                    self.train(x_all, y_all, opt_hyp=False)
+                    return
+            
+            self.L_PhiT_Phi[i] = L
+            
+            # Update Φ^T y incrementally
+            self.PhiT_y[i] += Phi_new.T @ y_new[:, i:i+1].ravel()
+            
+            # Recompute posterior mean coefficients
+            temp = np.linalg.solve(self.L_PhiT_Phi[i], self.PhiT_y[i])
+            self.posterior_mean_coeffs[i] = np.linalg.solve(self.L_PhiT_Phi[i].T, temp)
+        
+        # Update training data
+        self.x_train = np.vstack((self.x_train, x_new))
+        self.y_train = np.vstack((self.y_train, y_new))
+    
+    def _cholesky_rank1_update(self, L, v):
+        """Update Cholesky factor L when adding v @ v^T to L @ L^T
+        
+        Given L @ L^T and vector v, compute L_new such that:
+        L_new @ L_new^T = L @ L^T + v @ v^T
+        
+        Uses standard Givens rotations for numerical stability.
+        Standard formula: c = L_kk / r, s = v_k / r where r = √(L_kk² + v_k²)
+        
+        Parameters
+        ----------
+        L : ndarray [n × n]
+            Lower triangular Cholesky factor
+        v : ndarray [n × 1] or [n]
+            Vector to add (as rank-1 update v @ v^T)
+        
+        Returns
+        -------
+        L_new : ndarray [n × n]
+            Updated Cholesky factor
+        """
+        v = np.asarray(v).ravel()
+        n = len(v)
+        L_new = L.copy()
+        v_work = v.copy()
+        
+        for k in range(n):
+            r = np.sqrt(L_new[k, k]**2 + v_work[k]**2)
+            
+            # Standard stable formula
+            c = L_new[k, k] / r
+            s = v_work[k] / r
+            
+            L_new[k, k] = r
+            
+            if k < n - 1:
+                # Update remaining entries in column k and working vector
+                L_new[k+1:, k] = c * L_new[k+1:, k] + s * v_work[k+1:]
+                v_work[k+1:] = c * v_work[k+1:] - s * L_new[k+1:, k]
+        
+        return L_new
     
     def sample_from_gp(self, inp, size=10):
         """Sample from GP predictive distribution
@@ -1353,9 +1453,8 @@ class ScalableGPModel(GPModelBase):
             
             mu_new = mtimes(Phi, self.posterior_mean_coeffs[i])
             
-            V = solve(self.L_PhiT_Phi[i], Phi.T)
-            V = solve(self.L_PhiT_Phi[i].T, V)
-            variance = self.noise_var[i] * sum1(Phi @ V)
+            U = solve(self.L_PhiT_Phi[i], Phi.T)
+            variance = self.noise_var[i] * sum1(U * U)
             sigma_new = fmax(variance, 1e-10)
             
             pred_func = Function("pred_func", [inp], [mu_new, sigma_new], ["inp"], ["mu_1", "sigma_1"])

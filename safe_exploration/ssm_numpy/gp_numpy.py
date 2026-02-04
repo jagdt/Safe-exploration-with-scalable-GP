@@ -19,7 +19,7 @@ class NumpyGPModel(KernelGPModel):
         n_s (int): number of state dimensions of the dynamic system
         n_u (int): number of action/control dimensions of the dynamic system
         beta (np.ndarray): Posterior coefficients [N × n_s_out]
-        inv_K (list): List of inverse kernel matrices, one per dimension
+        L_chol (list): List of Cholesky factors L where L @ L.T = K + σ²I, one per dimension
         z (np.ndarray): Training inputs
         hyp (list[dict]): List of hyperparameter dictionaries
     """
@@ -51,7 +51,7 @@ class NumpyGPModel(KernelGPModel):
         self.hyp_optimized = False
 
         self.beta = None
-        self.inv_K = None
+        self.L_chol = None
         self.z = None
         self.kern_types = self._init_kernel_function(kern_types, hyp)
         self.hyp = self._create_hyp_dict(self.kern_types)
@@ -132,7 +132,7 @@ class NumpyGPModel(KernelGPModel):
         gp_dict["kern_types"] = self.kern_types
         gp_dict["hyp"] = self.hyp
         gp_dict["beta"] = self.beta
-        gp_dict["inv_K"] = self.inv_K
+        gp_dict["L_chol"] = self.L_chol
 
         return gp_dict
 
@@ -316,7 +316,7 @@ class NumpyGPModel(KernelGPModel):
         n_beta = n_data
         beta = np.empty((n_beta, self.n_s_out))
 
-        inv_K = [None] * self.n_s_out
+        L_chol = [None] * self.n_s_out
 
         for i in range(self.n_s_out):
             y_i = y[:, i].reshape(-1, 1)
@@ -337,12 +337,12 @@ class NumpyGPModel(KernelGPModel):
                 K += jitter * np.eye(n_beta)
                 L = np.linalg.cholesky(K)
             
-            inv_K[i] = np.linalg.solve(L.T, np.linalg.solve(L, np.eye(n_beta)))
+            L_chol[i] = L
             
             beta[:, i] = np.linalg.solve(L.T, np.linalg.solve(L, y_i)).reshape(-1, )
 
         self.z = X
-        self.inv_K = inv_K
+        self.L_chol = L_chol
         self.beta = beta
         self.gp_trained = True
         self.x_train = X
@@ -804,7 +804,10 @@ class NumpyGPModel(KernelGPModel):
             K_ss = self.compute_kernel(x_new, x_new, 
                                       self.kern_types[i], self.hyp[i])
             
-            var = np.diag(K_ss) - np.sum((K_star @ self.inv_K[i]) * K_star, axis=1)
+            # Variance: k_** - k_* (K + σ²I)^{-1} k_*^T = k_** - k_* L^{-T} L^{-1} k_*^T
+            V = np.linalg.solve(self.L_chol[i], K_star.T)
+            
+            var = np.diag(K_ss) - np.sum(V * V, axis=0)
             
             y_sigm_pred[:, i] = np.sqrt(np.maximum(var, 1e-10))
 
@@ -905,9 +908,112 @@ class NumpyGPModel(KernelGPModel):
             x_new = np.vstack((self.x_train, x))
             y_new = np.vstack((self.y_train, y))
 
-        # TODO: implement efficient update without retraining from scratch
-        # Currently always retrains with the new data
-        self.train(x_new, y_new, opt_hyp=opt_hyp)
+        # Efficient online update without retraining from scratch
+        if not replace_old and self.gp_trained and not opt_hyp:
+            self._update_online(x, y)
+        else:
+            # Full retraining required
+            self.train(x_new, y_new, opt_hyp=opt_hyp)
+    
+    def _update_online(self, x_new, y_new):
+        """Efficient online GP update using incremental Cholesky factorization
+        
+        For each new point (x_N+1, y_N+1), extends the Cholesky factor:
+        - Compute k = k(X_old, x_N+1)
+        - Solve v = L^{-1} k  (forward triangular solve)
+        - Compute α = √(k_++ - v^T v)  where k_++ = k(x_N+1, x_N+1) + σ²
+        - Extend L_new = [L, 0; v^T, α]
+        
+        This is O(N²) per new point and numerically stable.
+        
+        Parameters
+        ----------
+        x_new : ndarray [n_new × (n_s + n_u)]
+            New training inputs
+        y_new : ndarray [n_new × n_s]
+            New training targets
+        """
+        x_new = np.atleast_2d(x_new)
+        y_new = np.atleast_2d(y_new)
+        n_new = x_new.shape[0]
+        
+        if x_new.shape[0] != y_new.shape[0]:
+            raise ValueError("x_new and y_new must have same number of samples")
+        
+        for i in range(self.n_s_out):
+            L = self.L_chol[i]
+            N_old = L.shape[0]
+            
+            # Extend Cholesky factor for each new point
+            for j in range(n_new):
+                x_j = x_new[j:j+1, :]
+                
+                # Compute cross-covariance
+                if j == 0:
+                    X_current = self.z
+                else:
+                    X_current = np.vstack([self.z, x_new[:j]])
+                
+                k = self.compute_kernel(X_current, x_j, self.kern_types[i], self.hyp[i]).ravel()
+                
+                # Self-covariance k_++ = k(x_j, x_j) + σ² + jitter
+                k_plus_plus = self.compute_kernel(x_j, x_j, self.kern_types[i], self.hyp[i])[0, 0]
+                k_plus_plus += self.noise_var[i]
+                # Adaptive jitter based on kernel scale
+                adaptive_jitter = 1e-5 * k_plus_plus
+                k_plus_plus += adaptive_jitter
+                
+                # Solve v = L^{-1} k
+                v = np.linalg.solve(L, k)
+                
+                # Compute α = √(k_++ - v^T v)
+                alpha_sq = k_plus_plus - np.dot(v, v)
+                
+                if alpha_sq <= 0:
+                    # Numerical issue: add adaptive jitter and retry
+                    warnings.warn(f"Online update: negative α² = {alpha_sq:.2e} for dim {i}, point {j}. Adding jitter.")
+                    jitter = max(1e-6, -alpha_sq + 1e-6)
+                    alpha_sq = k_plus_plus + jitter - np.dot(v, v)
+                    
+                    if alpha_sq <= 0:
+                        # Still negative, fall back to retraining
+                        warnings.warn(f"Online update failed for dimension {i}, retraining from scratch")
+                        x_all = np.vstack((self.x_train, x_new))
+                        y_all = np.vstack((self.y_train, y_new))
+                        self.train(x_all, y_all, opt_hyp=False)
+                        return
+                
+                alpha = np.sqrt(alpha_sq)
+                
+                # Extend Cholesky factor: L_new = [L, 0; v^T, α]
+                N_current = L.shape[0]
+                L_new = np.zeros((N_current + 1, N_current + 1))
+                L_new[:N_current, :N_current] = L
+                L_new[N_current, :N_current] = v
+                L_new[N_current, N_current] = alpha
+                
+                L = L_new
+            
+            self.L_chol[i] = L
+            
+            # Update posterior coefficients: β = (L L^T)^{-1} y = L^{-T} L^{-1} y
+            y_all = np.vstack((self.y_train[:, i:i+1], y_new[:, i:i+1]))
+            w = np.linalg.solve(L, y_all)
+            beta_new = np.linalg.solve(L.T, w).ravel()
+            
+            # Resize beta array if needed
+            N_total = N_old + n_new
+            if self.beta.shape[0] < N_total:
+                beta_resized = np.zeros((N_total, self.n_s_out))
+                beta_resized[:self.beta.shape[0], :] = self.beta
+                self.beta = beta_resized
+            
+            self.beta[:N_total, i] = beta_new
+        
+        # Update training data
+        self.x_train = np.vstack((self.x_train, x_new))
+        self.y_train = np.vstack((self.y_train, y_new))
+        self.z = self.x_train
 
     def sample_from_gp(self, inp, size=10):
         """ Sample from GP predictive distribution
