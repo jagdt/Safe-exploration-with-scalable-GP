@@ -190,9 +190,31 @@ def _unscaled_dist(x, y):
     return sqrt(r2)
 
 
-def gp_pred(x, kern, beta=None, x_train=None, k_inv_training=None, pred_var=True):
-    """
-
+def gp_pred(x, kern, beta=None, x_train=None, inv_L_training=None, pred_var=True):
+    """GP prediction with CasADi symbolic expressions
+    
+    Parameters
+    ----------
+    x : SX
+        Test inputs (symbolic)
+    kern : callable
+        Kernel function
+    beta : ndarray, optional
+        Posterior coefficients
+    x_train : ndarray, optional
+        Training inputs
+    inv_L_training : ndarray, optional
+        Inverse of Cholesky factor: inv_L = L^{-1}
+        Used to compute variance reduction via ||inv_L @ k*^T||^2
+    pred_var : bool
+        Whether to compute predictive variance
+    
+    Returns
+    -------
+    pred_mu : SX
+        Predictive mean
+    pred_sigm : SX, optional
+        Predictive standard deviation
     """
     n_pred, _ = np.shape(x)
 
@@ -206,7 +228,8 @@ def gp_pred(x, kern, beta=None, x_train=None, k_inv_training=None, pred_var=True
         pred_sigm = kern(x, diag_only=True)
 
         if not beta is None:
-            pred_sigm = pred_sigm - sum2(mtimes(k_star, k_inv_training) * k_star)
+            v = mtimes(inv_L_training, k_star.T)
+            pred_sigm = pred_sigm - mtimes(v.T, v)
 
         return pred_mu, pred_sigm
 
@@ -250,10 +273,33 @@ def _get_kernel_function(kern_type, hyp):
         raise ValueError("Unknown kernel {}".format(kern_type))
 
 
-def gp_pred_function(x, hyp, kern_types, x_train=None, beta=None, k_inv_training=None,
+def gp_pred_function(x, hyp, kern_types, x_train=None, beta=None, inv_L_training=None,
                      pred_var=True, compute_grads=False):
-    """
-
+    """Create CasADi symbolic GP prediction function
+    
+    Parameters
+    ----------
+    x : SX
+        Test inputs (symbolic)
+    hyp : list of dict
+        Hyperparameters for each output dimension
+    kern_types : list of str
+        Kernel types for each output dimension
+    x_train : ndarray, optional
+        Training inputs
+    beta : ndarray, optional
+        Posterior coefficients
+    inv_L_training : list of ndarray, optional
+        Inverse Cholesky factors for each output: inv_L[i] = L[i]^{-1}
+    pred_var : bool
+        Whether to compute predictive variance
+    compute_grads : bool
+        Whether to compute gradients of mean w.r.t. inputs
+    
+    Returns
+    -------
+    out_dict : dict
+        Dictionary with 'pred_mu', 'pred_sigma' (if pred_var), 'jac_mu' (if compute_grads)
     """
     n_gps = len(kern_types)
     inp = SX.sym("input", x.shape)
@@ -269,11 +315,11 @@ def gp_pred_function(x, hyp, kern_types, x_train=None, beta=None, k_inv_training
             beta_i = None
         else:
             beta_i = beta[:, i]
-        k_inv_i = None
-        if not k_inv_training is None:
-            k_inv_i = k_inv_training[i]
+        inv_L_i = None
+        if not inv_L_training is None:
+            inv_L_i = inv_L_training[i]
         if pred_var:
-            mu_new, sigma_new = gp_pred(inp, kern_i, beta_i, x_train, k_inv_i, pred_var)
+            mu_new, sigma_new = gp_pred(inp, kern_i, beta_i, x_train, inv_L_i, pred_var)
             pred_func = Function("pred_func", [inp], [mu_new, sigma_new], ["inp"],
                                  ["mu_1", "sigma_1"])
             F_1 = pred_func(inp=x)
@@ -281,7 +327,7 @@ def gp_pred_function(x, hyp, kern_types, x_train=None, beta=None, k_inv_training
             pred_sigma_all = horzcat(pred_sigma_all, pred_sigma)
 
         else:
-            mu_new = gp_pred(inp, kern_i, beta_i, x_train, k_inv_i, pred_var)
+            mu_new = gp_pred(inp, kern_i, beta_i, x_train, inv_L_i, pred_var)
             pred_func = Function("pred_func", [inp], [mu_new], ["inp"], ["mu_1"])
             F_1 = pred_func(inp=x)
 

@@ -47,9 +47,8 @@ def setup_trajectory_plot(env, exploration_module, config, n_iterations):
     fig, ax = env.plot_safety_bounds(color=RWTH_BLACK, normalize=False)
     
     # Set axis labels and title
-    ax.set_xlabel(get_axis_label('angular_velocity'), fontsize=14)
-    ax.set_ylabel(get_axis_label('angle'), fontsize=14)
-    ax.set_title('Safe Exploration Trajectory', fontsize=16, fontweight='bold', pad=15)
+    ax.set_xlabel(get_axis_label('angular_velocity'))
+    ax.set_ylabel(get_axis_label('angle'))
     
     # Plot domain bounds if available
     _plot_domain_bounds(ax, env, exploration_module)
@@ -91,8 +90,7 @@ def add_trajectory_colorbar_and_legend(fig, ax, config, exploration_module,
     sm = plt.cm.ScalarMappable(cmap=RWTH_CMAP, norm=plt.Normalize(vmin=1, vmax=n_iterations))
     sm.set_array([])
     cbar = fig.colorbar(sm, ax=ax, pad=0.02, aspect=30)
-    cbar.set_label('Exploration step', fontsize=12, rotation=270, labelpad=20)
-    cbar.ax.tick_params(labelsize=10)
+    cbar.set_label('Exploration step', rotation=270, labelpad=20)
     cbar.ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     
     # Determine if legend is needed
@@ -106,7 +104,7 @@ def add_trajectory_colorbar_and_legend(fig, ax, config, exploration_module,
         legend_elements = _create_legend_elements(
             config, exploration_module, verify_safety
         )
-        ax.legend(handles=legend_elements, loc='best', framealpha=0.9, fontsize=11)
+        ax.legend(handles=legend_elements, loc='upper right', framealpha=0.9)
 
 
 def _plot_domain_bounds(ax, env, exploration_module):

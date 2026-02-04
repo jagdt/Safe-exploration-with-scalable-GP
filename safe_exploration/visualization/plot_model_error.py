@@ -458,29 +458,25 @@ def plot_1d_comparison(states, actions, true_error, gp_mean, gp_std,
             
             # Add colorbar for exploration samples
             cbar = plt.colorbar(scatter, ax=ax, pad=0.02, aspect=30)
-            cbar.set_label('Exploration step', fontsize=12, rotation=270, labelpad=20)
-            cbar.ax.tick_params(labelsize=10)
+            cbar.set_label('Exploration step', rotation=270, labelpad=20)
             cbar.ax.yaxis.set_major_locator(MaxNLocator(integer=True))
         else:
-            # All samples with colormap (no distinction)
-            time_colors = np.arange(1, n_train + 1)
-            scatter = ax.scatter(train_x, train_y, c=time_colors, cmap=RWTH_CMAP, 
-                               s=60, alpha=0.7, edgecolors=RWTH_BLACK, linewidth=0.8, 
-                               label='Training data', zorder=5)
+            # Only initial samples - plot in grey without colorbar
+            ax.scatter(train_x, train_y, c=RWTH_GRAY, 
+                      s=60, alpha=0.3, edgecolors=RWTH_BLACK, linewidth=0.8, 
+                      label='Initial samples', zorder=4)
             
             # Add colorbar
             cbar = plt.colorbar(scatter, ax=ax, pad=0.02, aspect=30)
-            cbar.set_label('Sample order', fontsize=12, rotation=270, labelpad=20)
-            cbar.ax.tick_params(labelsize=10)
+            cbar.set_label('Sample order', rotation=270, labelpad=20)
             cbar.ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     
     ax.axhline(0, color=RWTH_BLACK, linestyle=':', linewidth=1.5, alpha=0.5)
     
     # Use unified axis labels
-    ax.set_xlabel(get_axis_label(dim_names[vary_dim]), fontsize=14)
-    ax.set_ylabel(get_axis_label(error_names[state_dim]), fontsize=14)
-    ax.set_title(f'Model Error Comparison', fontsize=16, fontweight='bold', pad=15)
-    ax.legend(fontsize=11, loc='best', framealpha=0.95)
+    ax.set_xlabel(get_axis_label(dim_names[vary_dim]))
+    ax.set_ylabel(get_axis_label(error_names[state_dim]))
+    ax.legend(loc='best', framealpha=0.95)
     # ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
     
     plt.tight_layout()
@@ -551,15 +547,14 @@ def plot_2d_comparison(states, actions, true_error, gp_mean, gp_std,
                                       c=time_colors, cmap=RWTH_CMAP, 
                                       s=40, alpha=0.8, edgecolors=RWTH_BLACK, linewidth=0.8, zorder=5)
         else:
-            # All samples with colormap
-            time_colors = np.arange(1, n_train + 1)
-            scatter1 = axes[0].scatter(train_x, train_y, c=time_colors, cmap=RWTH_CMAP, 
-                                      s=40, alpha=0.8, edgecolors=RWTH_BLACK, linewidth=0.8, zorder=5)
-    
-    axes[0].set_xlabel(get_axis_label(dim_names[x_dim]), fontsize=14)
-    axes[0].set_ylabel(get_axis_label(dim_names[y_dim]), fontsize=14)
+            # Only initial samples - plot in grey
+            axes[0].scatter(train_x, train_y, c=RWTH_GRAY, 
+                          s=40, alpha=0.3, edgecolors=RWTH_BLACK, linewidth=0.8, zorder=4)
+
+    axes[0].set_xlabel(get_axis_label(dim_names[x_dim]))
+    axes[0].set_ylabel(get_axis_label(dim_names[y_dim]))
     axes[0].set_title(f'True Error: {get_axis_label(error_names[state_dim] + "_short", error_names[state_dim])}', 
-                     fontsize=15, fontweight='bold', pad=10)
+                     fontweight='bold', pad=10)
     # axes[0].grid(True, alpha=0.2, linestyle='--', linewidth=0.5)
     
     # Plot 2: GP predicted error
@@ -577,13 +572,14 @@ def plot_2d_comparison(states, actions, true_error, gp_mean, gp_std,
                                       c=time_colors, cmap=RWTH_CMAP, 
                                       s=40, alpha=0.8, edgecolors=RWTH_BLACK, linewidth=0.8, zorder=5)
         else:
-            scatter2 = axes[1].scatter(train_x, train_y, c=time_colors, cmap=RWTH_CMAP, 
-                                      s=40, alpha=0.8, edgecolors=RWTH_BLACK, linewidth=0.8, zorder=5)
-    
-    axes[1].set_xlabel(get_axis_label(dim_names[x_dim]), fontsize=14)
-    axes[1].set_ylabel(get_axis_label(dim_names[y_dim]), fontsize=14)
+            # Only initial samples - plot in grey
+            axes[1].scatter(train_x, train_y, c=RWTH_GRAY, 
+                          s=40, alpha=0.3, edgecolors=RWTH_BLACK, linewidth=0.8, zorder=4)
+
+    axes[1].set_xlabel(get_axis_label(dim_names[x_dim]))
+    axes[1].set_ylabel(get_axis_label(dim_names[y_dim]))
     axes[1].set_title(f'GP Prediction: {get_axis_label(error_names[state_dim] + "_short", error_names[state_dim])}', 
-                     fontsize=15, fontweight='bold', pad=10)
+                     fontweight='bold', pad=10)
     # axes[1].grid(True, alpha=0.2, linestyle='--', linewidth=0.5)
     
     # Plot 3: GP uncertainty
@@ -603,23 +599,22 @@ def plot_2d_comparison(states, actions, true_error, gp_mean, gp_std,
             
             # Add colorbar for exploration samples
             cbar_samples = plt.colorbar(scatter3, ax=axes[2], pad=0.12, aspect=20)
-            cbar_samples.set_label('Exploration step', fontsize=12, rotation=270, labelpad=20)
-            cbar_samples.ax.tick_params(labelsize=10)
+            cbar_samples.set_label('Exploration step', rotation=270, labelpad=20)
             cbar_samples.ax.yaxis.set_major_locator(MaxNLocator(integer=True))
         else:
-            scatter3 = axes[2].scatter(train_x, train_y, c=time_colors, cmap=RWTH_CMAP, 
-                                      s=40, alpha=0.8, edgecolors=RWTH_BLACK, linewidth=0.8, zorder=5)
-            
+            # Only initial samples - plot in grey without colorbar
+            axes[2].scatter(train_x, train_y, c=RWTH_GRAY, 
+                          s=40, alpha=0.3, edgecolors=RWTH_BLACK, linewidth=0.8, zorder=4)
+
             # Add colorbar for sample order
             cbar_samples = plt.colorbar(scatter3, ax=axes[2], pad=0.12, aspect=20)
-            cbar_samples.set_label('Sample order', fontsize=12, rotation=270, labelpad=20)
-            cbar_samples.ax.tick_params(labelsize=10)
+            cbar_samples.set_label('Sample order', rotation=270, labelpad=20)
             cbar_samples.ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     
-    axes[2].set_xlabel(get_axis_label(dim_names[x_dim]), fontsize=14)
-    axes[2].set_ylabel(get_axis_label(dim_names[y_dim]), fontsize=14)
+    axes[2].set_xlabel(get_axis_label(dim_names[x_dim]))
+    axes[2].set_ylabel(get_axis_label(dim_names[y_dim]))
     axes[2].set_title(r'GP Uncertainty ($\sigma$): ' + get_axis_label(error_names[state_dim] + '_short', error_names[state_dim]), 
-                     fontsize=15, fontweight='bold', pad=10)
+                     fontweight='bold', pad=10)
     # axes[2].grid(True, alpha=0.2, linestyle='--', linewidth=0.5)
     
     # Add colorbars after tight_layout
@@ -627,13 +622,11 @@ def plot_2d_comparison(states, actions, true_error, gp_mean, gp_std,
     
     # Shared colorbar for first two plots
     cbar1 = fig.colorbar(im2, ax=axes[:2], location='left', pad=0.08, aspect=30)
-    cbar1.set_label('Model error', fontsize=12)
-    cbar1.ax.tick_params(labelsize=10)
+    cbar1.set_label('Model error')
     
     # Colorbar for uncertainty plot
     cbar3 = fig.colorbar(im3, ax=axes[2], pad=0.02, aspect=30)
-    cbar3.set_label('Std deviation', fontsize=12)
-    cbar3.ax.tick_params(labelsize=10)
+    cbar3.set_label('Standard deviation')
     
     if save_path is not None:
         plt.savefig(save_path, dpi=300, bbox_inches='tight', facecolor='white')
@@ -713,27 +706,24 @@ def plot_training_error_scatter(states, actions, true_error, gp_mean, dim_names,
         
         # Add colorbar for exploration timing
         cbar = fig.colorbar(scatter, ax=ax, pad=0.1, shrink=0.8, aspect=20)
-        cbar.set_label('Exploration step', fontsize=12, rotation=270, labelpad=25)
-        cbar.ax.tick_params(labelsize=10)
+        cbar.set_label('Exploration step', rotation=270, labelpad=25)
         cbar.ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     else:
-        # All samples with colormap (no distinction)
-        time_colors = np.arange(1, n_train + 1)
-        scatter = ax.scatter(dtheta, theta, u, c=time_colors, cmap=RWTH_CMAP, 
-                           s=60, alpha=0.8, edgecolors=RWTH_BLACK, linewidth=0.5, 
-                           depthshade=True, label='Training data')
-        
+        # Only initial samples - plot in grey without colorbar
+        ax.scatter(dtheta, theta, u, c=RWTH_GRAY, 
+                  s=60, alpha=0.3, edgecolors=RWTH_BLACK, linewidth=0.5, 
+                  depthshade=True, label='Initial samples')
+
         # Add colorbar for sample timing
         cbar = fig.colorbar(scatter, ax=ax, pad=0.1, shrink=0.8, aspect=20)
-        cbar.set_label('Sample order', fontsize=12, rotation=270, labelpad=25)
-        cbar.ax.tick_params(labelsize=10)
+        cbar.set_label('Sample order', rotation=270, labelpad=25)
         cbar.ax.yaxis.set_major_locator(MaxNLocator(integer=True))
 
     # Use unified axis labels
-    ax.set_xlabel(get_axis_label(dim_names[0]), fontsize=14, labelpad=10)
-    ax.set_ylabel(get_axis_label(dim_names[1]), fontsize=14, labelpad=10)
-    ax.set_zlabel(get_axis_label(dim_names[2]), fontsize=14, labelpad=10)
-    ax.set_title('Training Data: Sample Acquisition Timeline', fontweight='bold', fontsize=16, pad=20)
+    ax.set_xlabel(get_axis_label(dim_names[0]), labelpad=10)
+    ax.set_ylabel(get_axis_label(dim_names[1]), labelpad=10)
+    ax.set_zlabel(get_axis_label(dim_names[2]), labelpad=10)
+    ax.set_title('Training Data: Sample Acquisition Timeline', fontweight='bold', pad=20)
     
     # Improve viewing angle
     ax.view_init(elev=20, azim=45)
