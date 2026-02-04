@@ -121,7 +121,7 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
     fig, ax = plt.subplots(figsize=(12, 8))
     
     # Timing components to visualize
-    components = ['gp_training', 'mpc_optimization', 'total']
+    components = ['initial_training', 'gp_training', 'mpc_optimization', 'total']
     
     # Collect timing data for all GP types
     all_timing_data = {}
@@ -140,9 +140,15 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
             comp_times = {comp: [] for comp in components}
             for result in results_list:
                 if 'timing' in result and result['timing']:
+                    n_iterations = result['config'].get('n_iterations', 20)
                     for comp in components:
                         if comp in result['timing']:
-                            comp_times[comp].append(result['timing'][comp]['mean'])
+                            # Handle initial_training (scalar) vs per-iteration times (dict with 'mean')
+                            if isinstance(result['timing'][comp], dict):
+                                comp_times[comp].append(result['timing'][comp]['mean'])
+                            else:
+                                # For initial_training, amortize over all iterations
+                                comp_times[comp].append(result['timing'][comp] / n_iterations)
             
             # Compute mean across seeds
             for comp in components:
@@ -151,13 +157,14 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
                 else:
                     timing_means[comp].append(0.0)
         
-        # Calculate 'other' time as total - mpc - gp_training
+        # Calculate 'other' time as total - mpc - gp_training - initial_training
         other_time = []
         for i in range(len(param_values)):
             total = timing_means['total'][i]
             mpc = timing_means['mpc_optimization'][i]
             gp = timing_means['gp_training'][i]
-            other = max(0.0, total - mpc - gp)
+            initial = timing_means['initial_training'][i]
+            other = max(0.0, total - mpc - gp - initial)
             other_time.append(other)
         
         timing_means['other'] = other_time
@@ -171,9 +178,15 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
     if 'numpy' in gp_types and 'numpy' in all_timing_data:
         bottom_numpy = np.zeros(len(param_values))
         
+        # Initial Training - solid, alpha=1.0
+        values = np.array(all_timing_data['numpy']['initial_training'])
+        ax.bar(x - width/2, values, width, label='Standard GP (Initial Training)', 
+               bottom=bottom_numpy, color=RWTH_GREEN, alpha=1.0)
+        bottom_numpy += values
+        
         # GP Training - solid, alpha=0.8
         values = np.array(all_timing_data['numpy']['gp_training'])
-        ax.bar(x - width/2, values, width, label='Standard GP (Training)', 
+        ax.bar(x - width/2, values, width, label='Standard GP (Online Training)', 
                bottom=bottom_numpy, color=RWTH_GREEN, alpha=0.8)
         bottom_numpy += values
         
@@ -192,9 +205,15 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
     if 'scalable' in gp_types and 'scalable' in all_timing_data:
         bottom_scalable = np.zeros(len(param_values))
         
+        # Initial Training - solid, alpha=1.0
+        values = np.array(all_timing_data['scalable']['initial_training'])
+        ax.bar(x + width/2, values, width, label='Scalable GP (Initial Training)',
+               bottom=bottom_scalable, color=RWTH_BLUE, alpha=1.0)
+        bottom_scalable += values
+        
         # GP Training - solid, alpha=0.8
         values = np.array(all_timing_data['scalable']['gp_training'])
-        ax.bar(x + width/2, values, width, label='Scalable GP (Training)',
+        ax.bar(x + width/2, values, width, label='Scalable GP (Online Training)',
                bottom=bottom_scalable, color=RWTH_BLUE, alpha=0.8)
         bottom_scalable += values
         
@@ -211,7 +230,7 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
     
     ax.set_xlabel('Number of initial training points')
     ax.set_ylabel('Average time per iteration (s)')
-    ax.set_title('Computational Time vs Data Points')
+    ax.set_title('Computational Time vs Number of Initial Training Points')
     ax.set_xticks(x)
     ax.set_xticklabels([str(p) for p in param_values])
     ax.legend()
@@ -736,7 +755,7 @@ def main():
     """Main evaluation function"""
     
     # Specify result directories
-    timestamp = "20260203_100000"
+    timestamp = "20260205_002425"
     
     initial_samples_dir = f"experiments/results_exploration/initial_samples_sweep_{timestamp}"
     

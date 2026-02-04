@@ -79,7 +79,11 @@ def run_exploration(conf, visualize=False):
         safempc, safe_policy = create_solver(conf, env)
         X, y = generate_initial_samples(env, conf, conf.relative_dynamics, safempc,
                                         safe_policy)
+        
+        # Time the initial training
+        t_initial_train_start = time.time()
         safempc.update_model(X, y, opt_hyp=conf.train_gp, reinitialize_solver=False)
+        t_initial_training = time.time() - t_initial_train_start
         x_train_init = safempc.x_train
         
         # Initialize reference GP with ground truth hyperparameters if provided
@@ -124,6 +128,7 @@ def run_exploration(conf, visualize=False):
         
         # Initialize timing tracking
         timing_per_iteration = {
+            'initial_training': t_initial_training,
             'mpc_optimization': np.empty(n_iterations),
             'gp_training': np.empty(n_iterations),
             'total': np.empty(n_iterations),
