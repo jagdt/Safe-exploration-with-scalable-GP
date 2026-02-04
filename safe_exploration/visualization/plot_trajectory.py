@@ -93,16 +93,21 @@ def add_trajectory_colorbar_and_legend(fig, ax, config, exploration_module,
     cbar.set_label('Exploration step', rotation=270, labelpad=20)
     cbar.ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     
+    # Check visualization flags
+    show_ellipsoids = verify_safety and config.visualize_ellipsoids
+    show_safe_traj = verify_safety and config.visualize_safe_trajectory
+    
     # Determine if legend is needed
     has_legend_items = (
         config.visualize_initial_samples or 
-        verify_safety or 
+        show_ellipsoids or 
+        show_safe_traj or 
         _has_domain_bounds(exploration_module)
     )
     
     if has_legend_items:
         legend_elements = _create_legend_elements(
-            config, exploration_module, verify_safety
+            config, exploration_module, verify_safety, show_ellipsoids, show_safe_traj
         )
         ax.legend(handles=legend_elements, loc='upper right', framealpha=0.9)
 
@@ -219,7 +224,8 @@ def _has_domain_bounds(exploration_module):
     return len(domain_lengths) >= 2
 
 
-def _create_legend_elements(config, exploration_module, verify_safety):
+def _create_legend_elements(config, exploration_module, verify_safety, 
+                           show_ellipsoids=True, show_safe_traj=True):
     """Create legend elements for the trajectory plot.
     
     Parameters
@@ -230,6 +236,10 @@ def _create_legend_elements(config, exploration_module, verify_safety):
         The exploration module
     verify_safety : bool
         Whether safety verification is enabled
+    show_ellipsoids : bool
+        Whether ellipsoids are shown (default: True)
+    show_safe_traj : bool
+        Whether safe trajectory is shown (default: True)
         
     Returns
     -------
@@ -265,13 +275,17 @@ def _create_legend_elements(config, exploration_module, verify_safety):
         )
     
     # Propagated uncertainty (safety verification)
-    if verify_safety:
-        legend_elements.extend([
+    if show_ellipsoids:
+        legend_elements.append(
             Line2D([0], [0], color=RWTH_ORANGE, linewidth=linewidth,
-                   label='Propagated uncertainty'),
+                   label='Propagated uncertainty')
+        )
+    
+    if show_safe_traj:
+        legend_elements.append(
             Line2D([0], [0], color=RWTH_GREEN, linewidth=0, marker='o',
                    markersize=6, label='Safe trajectory')
-        ])
+        )
     
     return legend_elements
 

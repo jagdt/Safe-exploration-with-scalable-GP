@@ -192,24 +192,26 @@ def run_exploration(conf, visualize=False):
                     print(f"  Safety verification: {'SAFE' if inside_ellipsoid[i].all() else 'UNSAFE'}")
 
                     if visualize or save_vis:
-                        if not ell is None:
-                            for j in range(len(ell)):
-                                ell[j].remove()
-                        ax, ell = env.plot_ellipsoid_trajectory(p_ctrl, q_all, vis_safety_bounds=False, ax=ax,
-                                                                unnormalize=True, color=RWTH_ORANGE)
+                        if conf.visualize_ellipsoids:
+                            if not ell is None:
+                                for j in range(len(ell)):
+                                    ell[j].remove()
+                            ax, ell = env.plot_ellipsoid_trajectory(p_ctrl, q_all, vis_safety_bounds=False, ax=ax,
+                                                                    unnormalize=True, color=RWTH_ORANGE)
                         
-                        if traj is not None:
-                            for t in traj:
-                                t.remove()
-                        
-                        # Plot the planned trajectory under optimized control law
-                        traj = []
-                        if x_traj_safe is not None and len(x_traj_safe) > 0:
-                            for j in range(len(x_traj_safe)):
-                                x_unnorm, _ = env.unnormalize(x_traj_safe[j].squeeze())
-                                line, = ax.plot(x_unnorm[0], x_unnorm[1], color=RWTH_GREEN, 
-                                              marker='o', markersize=2, linestyle='')
-                                traj.append(line)
+                        if conf.visualize_safe_trajectory:
+                            if traj is not None:
+                                for t in traj:
+                                    t.remove()
+                            
+                            # Plot the planned trajectory under optimized control law
+                            traj = []
+                            if x_traj_safe is not None and len(x_traj_safe) > 0:
+                                for j in range(len(x_traj_safe)):
+                                    x_unnorm, _ = env.unnormalize(x_traj_safe[j].squeeze())
+                                    line, = ax.plot(x_unnorm[0], x_unnorm[1], color=RWTH_GREEN, 
+                                                  marker='o', markersize=2, linestyle='')
+                                    traj.append(line)
                         
                         fig.canvas.draw()
 
