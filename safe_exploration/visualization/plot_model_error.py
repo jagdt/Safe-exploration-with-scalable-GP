@@ -27,6 +27,14 @@ from .styles import (
     RWTH_CMAP, configure_matplotlib, get_axis_label,
 )
 
+# Import GP bounds computation
+try:
+    from ..ssm_numpy.gp_bounds import NumpyGPBounds, ScalableGPBounds
+    _has_gp_bounds = True
+except ImportError:
+    _has_gp_bounds = False
+    print("Warning: Could not import gp_bounds module. Confidence bounds will use fallback values.")
+
 configure_matplotlib()
 
 
@@ -237,39 +245,73 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_b
         x_train = x_train_gp
     
     
-    beta = 2.0
-    if hasattr(safempc.ssm, 'beta_safety'):
-        beta = safempc.ssm.beta_safety
-    elif hasattr(safempc, 'beta_safety'):
-        beta = safempc.beta_safety
-        
-    proj_error = 0.0
-    if hasattr(safempc.ssm, 'projection_error_per_dim'):
-        proj_error = safempc.ssm.projection_error_per_dim
-    elif hasattr(safempc, 'projection_error_per_dim'):
-        proj_error = safempc.projection_error_per_dim
+    # Compute confidence bounds using gp_bounds module
+    beta_per_dim = np.ones(n_s) * 2.0
+    proj_error_per_dim = np.zeros(n_s)
     
-    if proj_error is None:
-        proj_error = 0.0
+    # Try to use gp_bounds module if available
+    try:
+        from ..ssm_numpy.gp_bounds import NumpyGPBounds, ScalableGPBounds
         
-    def get_param_for_dim(param, dim, n_s):
-        if np.size(param) == 1:
-            return float(param)
-        else:
-            param = np.asarray(param).flatten()
-            if param.size == n_s:
-                return param[dim]
-            warnings.warn(f"Parameter size {param.size} does not match n_s {n_s}, using first element")
-            return param[0]
+        if hasattr(safempc.ssm, 'gp_trained') and safempc.ssm.gp_trained:
+            print("Computing confidence bounds using gp_bounds module...")
             
-    print(f"Using beta={beta}, projection_error={proj_error}")
-
+            # Determine GP type and create appropriate bounds object
+            gp_type = type(safempc.ssm).__name__
+            
+            # Get parameters from safempc
+            delta = getattr(safempc, 'delta', 0.05)
+            rkhs_norm = getattr(safempc, 'rkhs_norm', 1.0)
+            R_subgaussian = getattr(safempc, 'R_subgaussian', 1.0)
+            
+            if 'Scalable' in gp_type or 'scalable' in gp_type.lower():
+                print(f"  Detected scalable GP: {gp_type}")
+                projection_error = getattr(safempc, 'projection_error', None)
+                bounds = ScalableGPBounds(
+                    safempc.ssm,
+                    delta=delta,
+                    rkhs_norm=rkhs_norm,
+                    R_subgaussian=R_subgaussian,
+                    projection_error=projection_error
+                )
+                for dim in range(n_s):
+                    beta_per_dim[dim] = bounds.beta(dim)
+                    proj_error_per_dim[dim] = bounds.projection_errors[dim]
+                print(f"  Beta (per dim): {beta_per_dim}")
+                print(f"  Projection error (per dim): {proj_error_per_dim}")
+            else:
+                print(f"  Detected standard GP: {gp_type}")
+                bounds = NumpyGPBounds(
+                    safempc.ssm,
+                    delta=delta,
+                    rkhs_norm=rkhs_norm,
+                    R_subgaussian=R_subgaussian
+                )
+                for dim in range(n_s):
+                    beta_per_dim[dim] = bounds.beta(dim)
+                print(f"  Beta (per dim): {beta_per_dim}")
+    except Exception as e:
+        print(f"  Could not compute bounds using gp_bounds module: {e}")
+        print(f"  Falling back to default values from safempc attributes")
+        # Fallback to existing attributes
+        if hasattr(safempc.ssm, 'beta_safety_per_dim'):
+            beta_per_dim = np.asarray(safempc.ssm.beta_safety_per_dim)
+        elif hasattr(safempc, 'beta_safety'):
+            beta_val = safempc.beta_safety
+            beta_per_dim = np.ones(n_s) * (beta_val if np.isscalar(beta_val) else beta_val[0])
+        
+        if hasattr(safempc.ssm, 'projection_error_per_dim') and safempc.ssm.projection_error_per_dim is not None:
+            proj_error_per_dim = np.asarray(safempc.ssm.projection_error_per_dim)
+        elif hasattr(safempc, 'projection_error_per_dim') and safempc.projection_error_per_dim is not None:
+            proj_error_per_dim = np.asarray(safempc.projection_error_per_dim)
+    
+   
     save_path = None
 
     # Plot 1D slice varying u
     for dim in range(safempc.n_s):
-        beta_dim = get_param_for_dim(beta, dim, safempc.n_s)
-        proj_dim = get_param_for_dim(proj_error, dim, safempc.n_s)
+        beta_dim = beta_per_dim[dim]
+        proj_dim = proj_error_per_dim[dim]
         
         if save_dir is not None:
             save_path = os.path.join(save_dir, f'model_error_1d_u_dim{dim}.png')
@@ -286,8 +328,8 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_b
     
     # Plot 1D slice varying theta
     for dim in range(safempc.n_s):
-        beta_dim = get_param_for_dim(beta, dim, safempc.n_s)
-        proj_dim = get_param_for_dim(proj_error, dim, safempc.n_s)
+        beta_dim = beta_per_dim[dim]
+        proj_dim = proj_error_per_dim[dim]
         
         if save_dir is not None:
             save_path = os.path.join(save_dir, f'model_error_1d_theta_dim{dim}.png')
@@ -304,8 +346,8 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_b
     
     # Plot 1D slice varying dtheta
     for dim in range(safempc.n_s):
-        beta_dim = get_param_for_dim(beta, dim, safempc.n_s)
-        proj_dim = get_param_for_dim(proj_error, dim, safempc.n_s)
+        beta_dim = beta_per_dim[dim]
+        proj_dim = proj_error_per_dim[dim]
         
         if save_dir is not None:
             save_path = os.path.join(save_dir, f'model_error_1d_dtheta_dim{dim}.png')
@@ -428,12 +470,10 @@ def plot_1d_comparison(states, actions, true_error, gp_mean, gp_std,
     # Plot Confidence Bound (Safety Bound)
     if plot_bounds:
         bound = beta * gp_std_sorted + proj_error
-        ax.plot(x_sorted, gp_sorted + bound, color=RWTH_BLACK, linestyle='-.', 
-                linewidth=1.5, label='Safety bound', alpha=0.7, zorder=3)
-        ax.plot(x_sorted, gp_sorted - bound, color=RWTH_BLACK, linestyle='-.', 
-                linewidth=1.5, alpha=0.7, zorder=3)
-        ax.fill_between(x_sorted, gp_sorted - bound, gp_sorted + bound,
-                        color=RWTH_GRAY, alpha=0.2, label='Safety region', zorder=1)
+        ax.plot(x_sorted, gp_sorted + bound, color=RWTH_ORANGE, linestyle='-.', 
+                linewidth=2.0, label='Confidence bound', alpha=0.8, zorder=3)
+        ax.plot(x_sorted, gp_sorted - bound, color=RWTH_ORANGE, linestyle='-.', 
+                linewidth=2.0, alpha=0.8, zorder=3)
     
     # Plot training points with time-ordered colorbar
     if x_train is not None and y_train is not None:
@@ -465,11 +505,6 @@ def plot_1d_comparison(states, actions, true_error, gp_mean, gp_std,
             ax.scatter(train_x, train_y, c=RWTH_GRAY, 
                       s=60, alpha=0.3, edgecolors=RWTH_BLACK, linewidth=0.8, 
                       label='Initial samples', zorder=4)
-            
-            # Add colorbar
-            cbar = plt.colorbar(scatter, ax=ax, pad=0.02, aspect=30)
-            cbar.set_label('Sample order', rotation=270, labelpad=20)
-            cbar.ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     
     ax.axhline(0, color=RWTH_BLACK, linestyle=':', linewidth=1.5, alpha=0.5)
     
@@ -606,11 +641,6 @@ def plot_2d_comparison(states, actions, true_error, gp_mean, gp_std,
             axes[2].scatter(train_x, train_y, c=RWTH_GRAY, 
                           s=40, alpha=0.3, edgecolors=RWTH_BLACK, linewidth=0.8, zorder=4)
 
-            # Add colorbar for sample order
-            cbar_samples = plt.colorbar(scatter3, ax=axes[2], pad=0.12, aspect=20)
-            cbar_samples.set_label('Sample order', rotation=270, labelpad=20)
-            cbar_samples.ax.yaxis.set_major_locator(MaxNLocator(integer=True))
-    
     axes[2].set_xlabel(get_axis_label(dim_names[x_dim]))
     axes[2].set_ylabel(get_axis_label(dim_names[y_dim]))
     axes[2].set_title(r'GP Uncertainty ($\sigma$): ' + get_axis_label(error_names[state_dim] + '_short', error_names[state_dim]), 
@@ -713,11 +743,6 @@ def plot_training_error_scatter(states, actions, true_error, gp_mean, dim_names,
         ax.scatter(dtheta, theta, u, c=RWTH_GRAY, 
                   s=60, alpha=0.3, edgecolors=RWTH_BLACK, linewidth=0.5, 
                   depthshade=True, label='Initial samples')
-
-        # Add colorbar for sample timing
-        cbar = fig.colorbar(scatter, ax=ax, pad=0.1, shrink=0.8, aspect=20)
-        cbar.set_label('Sample order', rotation=270, labelpad=25)
-        cbar.ax.yaxis.set_major_locator(MaxNLocator(integer=True))
 
     # Use unified axis labels
     ax.set_xlabel(get_axis_label(dim_names[0]), labelpad=10)
