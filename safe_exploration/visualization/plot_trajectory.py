@@ -109,7 +109,7 @@ def add_trajectory_colorbar_and_legend(fig, ax, config, exploration_module,
         legend_elements = _create_legend_elements(
             config, exploration_module, verify_safety, show_ellipsoids, show_safe_traj
         )
-        ax.legend(handles=legend_elements, loc='upper right', framealpha=0.9)
+        ax.legend(handles=legend_elements, loc='lower left', framealpha=0.9)
 
 
 def _plot_domain_bounds(ax, env, exploration_module):
