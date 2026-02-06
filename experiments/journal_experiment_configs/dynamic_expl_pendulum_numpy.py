@@ -10,51 +10,51 @@ from .defaultconfig_exploration import DefaultConfigExploration
 
 class Config(DefaultConfigExploration):
     """
-    Options class for the exploration setting
+    Options class for continued exploration from a previous run
     """
     static_exploration = False
-    n_safe_samples = 600
-    n_safe = 8
+    n_safe = 2
+    n_iterations = 10
+    n_safe_samples = 400
+
+    noise_std_dev = [1e-3, 1e-4]
+    # environment
+    env_name = "InvertedPendulum"
+    env_options = dict()
+    init_std = np.array([1.0, 0.2]) # standard deviation of random initial states for static exploration
+    env_options["init_std"] = init_std
+    env_options["plant_noise"] = np.array(noise_std_dev) ** 2
+    env_options["max_deg"] = 20
+    env_options["max_dtheta"] = 1.2
+    env_options["max_dtheta_theta_0"] = 0.8
+    solver_type = "safempc"
+    pendulum_simple_constraints = False
+    enable_objectives = False
 
     # -- GP model
-    gp_type = 'scalable'  # one of 'gpy', 'numpy', 'scalable'
-    # Whether to use global hyperparameter optimization first
+    gp_type = 'numpy'  # one of 'gpy', 'numpy', 'scalable'
     use_global_opt_first = False
-    # Domain lengths for each dimension.
-    domain_lengths = [6.0, 2.5, 2.0] # [dθ, θ, u]
+    domain_lengths = [6.0, 2.5, 2.0]  # [dθ, θ, u]
+    retrain_gp_interval = None # retrain the gp every n-th iteration, None to disable
 
     # -- Scalable GP specific parameters
-    # Number of frequencies to use per dimension.
     n_frequencies = 5
-    # Periods for each dimension.
     periods = list(1.2 * np.array(domain_lengths))
-    # Lengthscale multiple for the scalable GP to compute periods.
     lengthscale_multiple = 3.0
-    # Truncation radius for the scalable GP features
     truncation_radius = [13.0, 14.0]
-    # Target projection error for adaptive truncation
     truncation_target = [5e-6, 5e-7]
 
     # -- GP Bounds parameters
-    # Whether to compute GP bounds. Otherwise uses constant ß.
     compute_bounds = True
-    # Whether to plot the GP bounds when plotting the model error and GP fit.
-    plot_bounds = False
-    # Confidence level for the GP bounds
+    plot_bounds = True
     delta = 0.05
-    # Assumed RKHS norm of the true function
     rkhs_norm = [20.0, 20.0]
-    # Subgaussian noise bound
-    R_subgaussian = [1e-4, 1e-5] # Match the noise of the environment
-    # Model mismatch offset
-    projection_error = None # None to compute automatically
+    R_subgaussian = noise_std_dev
+    projection_error = None
 
     # -- Reference GP parameters
-    # Whether to use a reference GP with ground truth hyperparameters
     reference_gp = True
-    # Kernel types for the reference GP
     reference_kern_types = ['sum_lin_rbf', 'sum_lin_rbf']
-    # Hyperparameters of the reference GP
     reference_hyp = [
         {
             'rbf.lengthscale': np.array([7.8, 1.8, 6.2]),
@@ -68,7 +68,7 @@ class Config(DefaultConfigExploration):
         }
     ]
     # Noise variances for the reference GP
-    reference_noise_var = np.array([1e-4, 1e-5]) ** 2
+    reference_noise_var = np.array(noise_std_dev) ** 2
 
     def __init__(self, file=None):
         """ """
