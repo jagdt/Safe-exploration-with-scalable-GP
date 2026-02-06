@@ -35,6 +35,7 @@ class Config(DefaultConfigExploration):
     gp_type = 'numpy'  # one of 'gpy', 'numpy', 'scalable'
     use_global_opt_first = False
     domain_lengths = [6.0, 2.5, 2.0]  # [dθ, θ, u]
+    update_model_interval = None  # update GP with new data every n-th iteration, None to disable
     retrain_gp_interval = None # retrain the gp every n-th iteration, None to disable
 
     # -- Scalable GP specific parameters

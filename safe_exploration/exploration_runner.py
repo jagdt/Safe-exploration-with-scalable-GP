@@ -260,11 +260,16 @@ def run_exploration(conf, visualize=False):
             sigm_sum[i] = np.sum(pred_conf)
 
             # update model and information gain
-            retrain = ((i+1) % conf.retrain_gp_interval == 0) if conf.retrain_gp_interval is not None else False
-            t_train_start = time.time()
-            exploration_module.update_model(z_i, x_next_obs.reshape((1, env.n_s)),
-                                            train=retrain, replace_old=False)
-            timing_per_iteration['gp_training'][i] = time.time() - t_train_start
+            update_model = conf.update_model_interval is not None and ((i+1) % conf.update_model_interval == 0)
+            
+            if update_model:
+                retrain = ((i+1) % conf.retrain_gp_interval == 0) if conf.retrain_gp_interval is not None else False
+                t_train_start = time.time()
+                exploration_module.update_model(z_i, x_next_obs.reshape((1, env.n_s)),
+                                                train=retrain, replace_old=False)
+                timing_per_iteration['gp_training'][i] = time.time() - t_train_start
+            else:
+                timing_per_iteration['gp_training'][i] = 0.0
             
             inf_gain[i, :] = exploration_module.get_information_gain()
             
