@@ -187,8 +187,8 @@ class NumpyGPModel(KernelGPModel):
                 hyp_i["lengthscale"] = np.ones(self.input_dim)
                 hyp_i["variance"] = 0.1
             elif kern_types[i] == "sum_lin_rbf":
-                hyp_i["rbf.lengthscale"] = np.ones(self.input_dim)
-                hyp_i["rbf.variance"] = 0.1
+                hyp_i["rbf.lengthscale"] = 10.0 * np.ones(self.input_dim)
+                hyp_i["rbf.variance"] = 0.01
                 hyp_i["linear.variances"] = 0.01 * np.ones(self.input_dim)
             elif kern_types[i] == "prod_lin_rbf":
                 hyp_i["prod.rbf.lengthscale"] = np.ones(self.input_dim)
@@ -673,16 +673,16 @@ class NumpyGPModel(KernelGPModel):
         elif kern_type == 'sum_lin_rbf':
             # RBF lengthscales: [1e-6, 1e6]
             bounds.extend([(-13.8, 13.8)] * self.input_dim)
-            # RBF variance: [1e-6, 1e4]
-            bounds.append((-13.8, 9.2))
-            # Linear variances: [1e-6, 1e1]
-            bounds.extend([(-13.8, 2.3)] * self.input_dim)
-            # Noise: [1e-14, 1e0]
-            bounds.append((-32.2, 0.0))
+            # RBF variance: [1e-5, 1e4]
+            bounds.append((-11.5, 9.2))
+            # Linear variances: [1e-6, 1e-1]
+            bounds.extend([(-13.8, -2.3)] * self.input_dim)
+            # Noise: [1e-10, 1e-2]
+            bounds.append((-23.0, -6.9))
         
         elif kern_type == 'sum_lin_rbf_linear_only':
-            # Linear variances: [1e-8, 1e0]
-            bounds.extend([(-18.4, 0.0)] * self.input_dim)
+            # Linear variances: [1e-6, 1e0]
+            bounds.extend([(-13.8, 0.0)] * self.input_dim)
             # Noise: [1e-14, 1e0]
             bounds.append((-32.2, 0.0))
         

@@ -15,7 +15,7 @@ class Config(DefaultConfigExploration):
     static_exploration = False
     n_safe = 5
     n_iterations = 10
-    n_safe_samples = 400
+    n_safe_samples = 500
 
     noise_std_dev = [1e-3, 1e-4]
     # environment
