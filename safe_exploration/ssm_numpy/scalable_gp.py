@@ -717,7 +717,7 @@ class ScalableGPModel(GPModelBase):
             initial_params_log,
             args=(X, y, dim_idx, kern_type, cache),
             method='L-BFGS-B',
-            bounds=bounds,
+            # bounds=bounds,
             options={'maxiter': max_iter, 'disp': False}
         )
         if result.success or result.status == 1:
@@ -760,7 +760,7 @@ class ScalableGPModel(GPModelBase):
         """
         result_de = differential_evolution(
             self._neg_log_marginal_likelihood,
-            bounds,
+            # bounds,
             args=(X, y, dim_idx, kern_type, cache),
             strategy='best1bin',
             maxiter=500,
@@ -779,7 +779,7 @@ class ScalableGPModel(GPModelBase):
             result_de.x,
             args=(X, y, dim_idx, kern_type, cache),
             method='L-BFGS-B',
-            bounds=bounds,
+            # bounds=bounds,
             options={'maxiter': max_iter, 'disp': False}
         )
         
@@ -1017,12 +1017,12 @@ class ScalableGPModel(GPModelBase):
             bounds.append((-20.7, -11.5))
         
         elif kern_type == "sum_lin_rbf":
-            # RBF factor: [1e-4, 1e4]
-            bounds.append((-9.2, 9.2))
-            # RBF exponential decay rates: [1e-4, 1e4]
-            bounds.extend([(-9.2, 9.2)] * self.input_dim)
-            # Linear variances: [1e-6, 1e1]
-            bounds.extend([(-13.8, 2.3)] * self.input_dim)
+            # RBF factor: [1e-6, 1e6]
+            bounds.append((-13.8, 13.8))
+            # RBF exponential decay rates: [1e-6, 1e6]
+            bounds.extend([(-13.8, 13.8)] * self.input_dim)
+            # Linear variances: [1e-8, 1e1]
+            bounds.extend([(-18.4, 2.3)] * self.input_dim)
             # Noise: [1e-14, 1e0]
             bounds.append((-32.2, 0.0))
         
