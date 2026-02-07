@@ -672,9 +672,9 @@ class NumpyGPModel(KernelGPModel):
         
         elif kern_type == 'sum_lin_rbf':
             # RBF lengthscales: [1e-4, 1e4]
-            bounds.extend([(-9.2, 4.6)] * self.input_dim)
+            bounds.extend([(-9.2, 9.2)] * self.input_dim)
             # RBF variance: [1e-6, 1e4]
-            bounds.append((-13.8, 4.6))
+            bounds.append((-13.8, 9.2))
             # Linear variances: [1e-6, 1e1]
             bounds.extend([(-13.8, 2.3)] * self.input_dim)
             # Noise: [1e-14, 1e0]
