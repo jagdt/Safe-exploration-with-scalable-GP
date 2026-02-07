@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import json
 from pathlib import Path
 from collections import defaultdict
+from matplotlib.ticker import MaxNLocator
 
 # Add parent directory to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -349,8 +350,16 @@ def plot_info_gain_trajectories(results_by_type, gp_types, param_name, param_val
         ax.set_ylabel('Information Gain')
         gp_label = 'Standard GP' if gp_type == 'numpy' else 'Scalable GP'
         ax.set_title(gp_label)
+        ax.xaxis.set_major_locator(MaxNLocator(integer=True))
         ax.legend()
         # ax.grid(True, alpha=0.3)
+    
+    # Set same y-axis limits for all subplots
+    all_ylims = [ax.get_ylim() for ax in axes]
+    y_min = min(ylim[0] for ylim in all_ylims)
+    y_max = max(ylim[1] for ylim in all_ylims)
+    for ax in axes:
+        ax.set_ylim([y_min, y_max])
     
     plt.tight_layout()
     
@@ -755,7 +764,7 @@ def main():
     """Main evaluation function"""
     
     # Specify result directories
-    timestamp = "20260206_162300"
+    timestamp = "20260207_095531"
     
     initial_samples_dir = f"experiments/results_exploration/initial_samples_sweep_{timestamp}"
     
