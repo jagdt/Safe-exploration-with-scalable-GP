@@ -172,8 +172,13 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
         all_timing_data[gp_type] = timing_means
     
     # Plot grouped stacked bars
+    fig, ax = plt.subplots(figsize=(12, 8))
     x = np.arange(len(param_values))
     width = 0.35
+    
+    # Store handles and labels for custom legend
+    handles = []
+    labels = []
     
     # Plot Standard GP (numpy)
     if 'numpy' in gp_types and 'numpy' in all_timing_data:
@@ -181,26 +186,39 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
         
         # Initial Training - solid, alpha=1.0
         values = np.array(all_timing_data['numpy']['initial_training'])
-        ax.bar(x - width/2, values, width, label='Standard GP (Initial Training)', 
+        h1 = ax.bar(x - width/2, values, width,
                bottom=bottom_numpy, color=RWTH_GREEN, alpha=1.0)
+        handles.append(h1)
+        labels.append('Standard GP (Initial Training)')
         bottom_numpy += values
         
         # GP Training - solid, alpha=0.8
         values = np.array(all_timing_data['numpy']['gp_training'])
-        ax.bar(x - width/2, values, width, label='Standard GP (Online Training)', 
+        h2 = ax.bar(x - width/2, values, width,
                bottom=bottom_numpy, color=RWTH_GREEN, alpha=0.8)
+        handles.append(h2)
+        labels.append('Standard GP (Online Training)')
         bottom_numpy += values
         
-        # MPC Optimization - hatch, alpha=0.6
+        # MPC Optimization - hatch, alpha=0.6 for color, alpha=1.0 for hatch
         values = np.array(all_timing_data['numpy']['mpc_optimization'])
-        ax.bar(x - width/2, values, width, label='Standard GP (MPC)', 
-               bottom=bottom_numpy, color=RWTH_GREEN, alpha=0.6, hatch='//')
+        # First layer: colored background with transparency
+        h3a = ax.bar(x - width/2, values, width,
+               bottom=bottom_numpy, color=RWTH_GREEN, alpha=0.6, linewidth=0)
+        # Second layer: opaque black hatch lines only
+        h3b = ax.bar(x - width/2, values, width,
+               bottom=bottom_numpy, color='none', alpha=1.0, hatch='//', edgecolor='black', linewidth=0)
+        handles.append((h3a, h3b))
+        labels.append('Standard GP (MPC)')
         bottom_numpy += values
         
         # Other - alpha=0.4
         values = np.array(all_timing_data['numpy']['other'])
-        ax.bar(x - width/2, values, width, label='Standard GP (Other)', 
+        h4 = ax.bar(x - width/2, values, width,
                bottom=bottom_numpy, color=RWTH_GREEN, alpha=0.4)
+        handles.append(h4)
+        labels.append('Standard GP (Other)')
+        bottom_numpy += values
     
     # Plot Scalable GP
     if 'scalable' in gp_types and 'scalable' in all_timing_data:
@@ -208,41 +226,52 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
         
         # Initial Training - solid, alpha=1.0
         values = np.array(all_timing_data['scalable']['initial_training'])
-        ax.bar(x + width/2, values, width, label='Scalable GP (Initial Training)',
+        h5 = ax.bar(x + width/2, values, width,
                bottom=bottom_scalable, color=RWTH_BLUE, alpha=1.0)
+        handles.append(h5)
+        labels.append('Scalable GP (Initial Training)')
         bottom_scalable += values
         
         # GP Training - solid, alpha=0.8
         values = np.array(all_timing_data['scalable']['gp_training'])
-        ax.bar(x + width/2, values, width, label='Scalable GP (Online Training)',
+        h6 = ax.bar(x + width/2, values, width,
                bottom=bottom_scalable, color=RWTH_BLUE, alpha=0.8)
+        handles.append(h6)
+        labels.append('Scalable GP (Online Training)')
         bottom_scalable += values
         
-        # MPC Optimization - hatch, alpha=0.6
+        # MPC Optimization - hatch, alpha=0.6 for color, alpha=1.0 for hatch
         values = np.array(all_timing_data['scalable']['mpc_optimization'])
-        ax.bar(x + width/2, values, width, label='Scalable GP (MPC)',
-               bottom=bottom_scalable, color=RWTH_BLUE, alpha=0.6, hatch='//')
+        # First layer: colored background with transparency
+        h7a = ax.bar(x + width/2, values, width,
+               bottom=bottom_scalable, color=RWTH_BLUE, alpha=0.6, linewidth=0)
+        # Second layer: opaque black hatch lines only
+        h7b = ax.bar(x + width/2, values, width,
+               bottom=bottom_scalable, color='none', alpha=1.0, hatch='//', edgecolor='black', linewidth=0)
+        handles.append((h7a, h7b))
+        labels.append('Scalable GP (MPC)')
         bottom_scalable += values
         
         # Other - alpha=0.4
         values = np.array(all_timing_data['scalable']['other'])
-        ax.bar(x + width/2, values, width, label='Scalable GP (Other)',
+        h8 = ax.bar(x + width/2, values, width,
                bottom=bottom_scalable, color=RWTH_BLUE, alpha=0.4)
+        handles.append(h8)
+        labels.append('Scalable GP (Other)')
+        bottom_scalable += values
     
     ax.set_xlabel('Number of initial training points')
     ax.set_ylabel('Average time per iteration (s)')
-    ax.set_title('Computational Time vs Number of Initial Training Points')
     ax.set_xticks(x)
     ax.set_xticklabels([str(p) for p in param_values])
-    ax.legend()
-    # ax.grid(True, alpha=0.3, axis='y')
+    ax.legend(handles, labels, loc='upper left')
     
     plt.tight_layout()
     
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
-        filepath = os.path.join(output_dir, f"timing_breakdown_{param_name}.png")
-        plt.savefig(filepath, dpi=300, bbox_inches='tight')
+        filepath = os.path.join(output_dir, f"timing_breakdown_{param_name}.svg")
+        plt.savefig(filepath, bbox_inches='tight')
         print(f"\nFigure saved to: {filepath}")
     
     plt.show()
@@ -265,11 +294,6 @@ def plot_info_gain_trajectories(results_by_type, gp_types, param_name, param_val
     output_dir : str, optional
         Directory to save plots
     """
-    fig, axes = plt.subplots(1, len(gp_types), figsize=(12 * len(gp_types), 8))
-
-    if len(gp_types) == 1:
-        axes = [axes]
-    
     # RWTH color palette for different parameter values
     rwth_colors = [
         RWTH_BLUE,      # #00549F
@@ -289,8 +313,12 @@ def plot_info_gain_trajectories(results_by_type, gp_types, param_name, param_val
     else:
         colors = rwth_colors[:len(param_values)]
     
-    for ax_idx, gp_type in enumerate(gp_types):
-        ax = axes[ax_idx]
+    # Store figures and axes for shared y-axis limits
+    figures_axes = []
+    
+    for gp_type in gp_types:
+        # Create separate figure for each GP type
+        fig, ax = plt.subplots(figsize=(12, 8))
         
         for param_idx, param_val in enumerate(param_values):
             if param_val not in results_by_type[gp_type]:
@@ -348,24 +376,137 @@ def plot_info_gain_trajectories(results_by_type, gp_types, param_name, param_val
         
         ax.set_xlabel('Iteration')
         ax.set_ylabel('Information Gain')
-        gp_label = 'Standard GP' if gp_type == 'numpy' else 'Scalable GP'
-        ax.set_title(gp_label)
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-        ax.legend()
+        ax.legend(loc='upper left')
         # ax.grid(True, alpha=0.3)
+        
+        figures_axes.append((fig, ax, gp_type))
     
-    # Set same y-axis limits for all subplots
-    all_ylims = [ax.get_ylim() for ax in axes]
-    y_min = min(ylim[0] for ylim in all_ylims)
-    y_max = max(ylim[1] for ylim in all_ylims)
-    for ax in axes:
-        ax.set_ylim([y_min, y_max])
+    # Set same y-axis limits for all plots
+    if figures_axes:
+        all_ylims = [ax.get_ylim() for fig, ax, gp_type in figures_axes]
+        y_min = min(ylim[0] for ylim in all_ylims)
+        y_max = max(ylim[1] for ylim in all_ylims)
+        
+        for fig, ax, gp_type in figures_axes:
+            ax.set_ylim([y_min, y_max])
+            plt.figure(fig.number)
+            plt.tight_layout()
+            
+            if output_dir:
+                filepath = os.path.join(output_dir, f"info_gain_trajectory_{gp_type}_{param_name}.svg")
+                plt.savefig(filepath, bbox_inches='tight')
+                print(f"Figure saved to: {filepath}")
+            
+            plt.show()
+
+
+def plot_info_gain_comparison(results_by_type, gp_types, param_name, param_values, output_dir=None):
+    """
+    Plot information gain comparison between Standard GP and Scalable GP in one plot
+    Standard GP in blue (different shades), Scalable GP in green (different shades)
+    
+    Parameters
+    ----------
+    results_by_type : dict
+        {gp_type: {param_value: [results]}}
+    gp_types : list
+        List of GP types to compare
+    param_name : str
+        Name of the parameter being varied
+    param_values : list
+        Sorted list of parameter values
+    output_dir : str, optional
+        Directory to save plots
+    """
+    # Create single plot
+    fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+    
+    # Generate color shades: Standard GP in blue, Scalable GP in green
+    n_params = len(param_values)
+    
+    # Create shades from light to dark
+    numpy_colors = [plt.cm.Blues(0.3 + 0.7 * (i / max(n_params - 1, 1))) for i in range(n_params)]
+    scalable_colors = [plt.cm.Greens(0.3 + 0.7 * (i / max(n_params - 1, 1))) for i in range(n_params)]
+    
+    gp_colors = {
+        'numpy': numpy_colors,
+        'scalable': scalable_colors
+    }
+    
+    # Define line styles for different parameter values
+    line_styles = ['-', '--', '-.', ':']
+    if n_params > len(line_styles):
+        # Repeat line styles if needed
+        line_styles = line_styles * ((n_params // len(line_styles)) + 1)
+    
+    gp_labels = {
+        'numpy': 'Standard GP',
+        'scalable': 'Scalable GP'
+    }
+    
+    for param_idx, param_val in enumerate(param_values):
+        for gp_type in gp_types:
+            if param_val not in results_by_type[gp_type]:
+                continue
+            
+            results_list = results_by_type[gp_type][param_val]
+            
+            # Extract information gain trajectories
+            trajectories = []
+            for result in results_list:
+                info_gain_key = 'information_gain_reference' if 'information_gain_reference' in result else 'information_gain'
+                
+                if info_gain_key in result:
+                    # New format: dict with 'trajectory' or 'per_iteration'
+                    if isinstance(result[info_gain_key], dict):
+                        if 'trajectory' in result[info_gain_key]:
+                            traj = result[info_gain_key]['trajectory']
+                        elif 'per_iteration' in result[info_gain_key]:
+                            traj = result[info_gain_key]['per_iteration']
+                        else:
+                            continue
+                        if isinstance(traj, list):
+                            traj = np.array(traj)
+                        # Sum across dimensions if multi-dimensional
+                        if traj.ndim > 1:
+                            traj = np.sum(traj, axis=1)
+                        trajectories.append(traj)
+                    # Legacy format: array
+                    elif isinstance(result[info_gain_key], (list, np.ndarray)):
+                        traj = np.array(result[info_gain_key])
+                        if traj.ndim > 1:
+                            traj = np.sum(traj, axis=1)
+                        trajectories.append(traj)
+            
+            if not trajectories:
+                continue
+            
+            # Ensure all trajectories have the same length
+            min_len = min(len(t) for t in trajectories)
+            trajectories = [t[:min_len] for t in trajectories]
+            trajectories = np.array(trajectories)
+            
+            # Calculate mean across seeds (no std plotted)
+            mean_traj = np.mean(trajectories, axis=0)
+            iterations = np.arange(1, len(mean_traj) + 1)
+            
+            # Plot mean trajectory with specific line style
+            label = f'{gp_labels[gp_type]} (N={param_val})'
+            ax.plot(iterations, mean_traj, color=gp_colors[gp_type][param_idx], 
+                   linestyle=line_styles[param_idx], label=label, linewidth=3.5)
+    
+    ax.set_xlabel('Iteration')
+    ax.set_ylabel('Information Gain')
+    ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+    ax.legend(loc='upper left')
+    # ax.grid(True, alpha=0.3)
     
     plt.tight_layout()
     
     if output_dir:
-        filepath = os.path.join(output_dir, f"info_gain_trajectory_{param_name}.png")
-        plt.savefig(filepath, dpi=300, bbox_inches='tight')
+        filepath = os.path.join(output_dir, f"info_gain_comparison_{param_name}.svg")
+        plt.savefig(filepath, bbox_inches='tight')
         print(f"Figure saved to: {filepath}")
     
     plt.show()
@@ -395,12 +536,11 @@ def plot_safety_metrics(n_samples_values,
     output_dir : str, optional
         Directory to save plots
     """
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(18, 7))
-    
     x = np.arange(len(n_samples_values))
     width = 0.35
     
     # Plot 1: Safety verification success rate
+    fig1, ax1 = plt.subplots(figsize=(12, 8))
     ax1.bar(x - width/2, numpy_safety_mean, width, 
             yerr=numpy_safety_std, label='Standard GP', 
             color=RWTH_GREEN, alpha=0.8, capsize=5)
@@ -410,14 +550,23 @@ def plot_safety_metrics(n_samples_values,
     
     ax1.set_xlabel('Number of initial training points')
     ax1.set_ylabel('Safety verification success rate (%)')
-    ax1.set_title('Verified Safe Trajectories')
     ax1.set_xticks(x)
     ax1.set_xticklabels([str(int(n)) for n in n_samples_values])
-    ax1.legend()
+    ax1.legend(loc='lower left')
     ax1.set_ylim([0, 105])
-    # ax1.grid(True, alpha=0.3, axis='y')
+    
+    plt.tight_layout()
+    
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+        filepath = os.path.join(output_dir, "safety_verification_comparison.svg")
+        plt.savefig(filepath, bbox_inches='tight')
+        print(f"Figure saved to: {filepath}")
+    
+    plt.show()
     
     # Plot 2: Trajectory fully inside ellipsoid rate
+    fig2, ax2 = plt.subplots(figsize=(12, 8))
     ax2.bar(x - width/2, numpy_inside_mean, width,
             yerr=numpy_inside_std, label='Standard GP',
             color=RWTH_GREEN, alpha=0.8, capsize=5)
@@ -427,19 +576,16 @@ def plot_safety_metrics(n_samples_values,
     
     ax2.set_xlabel('Number of initial training points')
     ax2.set_ylabel('Trajectory inside ellipsoid rate (%)')
-    ax2.set_title('Trajectories Fully Within Uncertainty Bounds')
     ax2.set_xticks(x)
     ax2.set_xticklabels([str(int(n)) for n in n_samples_values])
-    ax2.legend()
+    ax2.legend(loc='lower left')
     ax2.set_ylim([0, 105])
-    # ax2.grid(True, alpha=0.3, axis='y')
     
     plt.tight_layout()
     
     if output_dir:
-        os.makedirs(output_dir, exist_ok=True)
-        filepath = os.path.join(output_dir, "safety_metrics_comparison.png")
-        plt.savefig(filepath, dpi=300, bbox_inches='tight')
+        filepath = os.path.join(output_dir, "inside_ellipsoid_comparison.svg")
+        plt.savefig(filepath, bbox_inches='tight')
         print(f"Figure saved to: {filepath}")
     
     plt.show()
@@ -729,6 +875,10 @@ def plot_initial_samples_comparison(results_dir, output_dir=None):
     print("\nCreating information gain trajectory plots...")
     plot_info_gain_trajectories(results_by_type, ['numpy', 'scalable'], 'n_safe_samples', n_samples_values.tolist(), output_dir)
     
+    # Create information gain comparison plot
+    print("\nCreating information gain comparison plot...")
+    plot_info_gain_comparison(results_by_type, ['numpy', 'scalable'], 'n_safe_samples', n_samples_values.tolist(), output_dir)
+    
     # Create safety metrics plot
     print("\nCreating safety metrics comparison...")
     plot_safety_metrics(n_samples_values, 
@@ -764,7 +914,7 @@ def main():
     """Main evaluation function"""
     
     # Specify result directories
-    timestamp = "20260207_234731"
+    timestamp = "20260208_002027"
     
     initial_samples_dir = f"experiments/results_exploration/initial_samples_sweep_{timestamp}"
     
