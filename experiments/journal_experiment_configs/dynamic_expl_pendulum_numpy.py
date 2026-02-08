@@ -14,8 +14,8 @@ class Config(DefaultConfigExploration):
     """
     static_exploration = False
     n_safe = 5
-    n_iterations = 10
-    n_safe_samples = 500
+    n_iterations = 6
+    n_safe_samples = 600
 
     noise_std_dev = [1e-3, 1e-4]
     # environment
@@ -32,7 +32,7 @@ class Config(DefaultConfigExploration):
     enable_objectives = False
 
     # -- GP model
-    gp_type = 'numpy'  # one of 'gpy', 'numpy', 'scalable'
+    gp_type = 'scalable'  # one of 'gpy', 'numpy', 'scalable'
     use_global_opt_first = False
     domain_lengths = [6.0, 2.5, 2.0]  # [dθ, θ, u]
     update_model_interval = None  # update GP with new data every n-th iteration, None to disable
