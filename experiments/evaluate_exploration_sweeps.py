@@ -9,6 +9,7 @@ import sys
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib import colors as mcolors
 import json
 from pathlib import Path
 from collections import defaultdict
@@ -39,6 +40,17 @@ RWTH_RED = '#A11035'
 RWTH_ORANGE = '#F6A800'
 RWTH_PURPLE = '#612158'
 RWTH_TURQUOISE = '#0098A1'
+
+
+def _rwth_light(hex_color, white_mix=0.2):
+    """Return a lighter variant of a hex color by mixing with white."""
+    rgb = np.array(mcolors.to_rgb(hex_color))
+    rgb_light = (1 - white_mix) * rgb + white_mix * np.ones(3)
+    return mcolors.to_hex(rgb_light)
+
+
+RWTH_LIGHT_BLUE = _rwth_light(RWTH_BLUE)
+RWTH_LIGHT_GREEN = _rwth_light(RWTH_GREEN)
 
 
 def load_results_from_directory(results_dir):
@@ -424,10 +436,22 @@ def plot_info_gain_comparison(results_by_type, gp_types, param_name, param_value
     
     # Generate color shades: Standard GP in blue, Scalable GP in green
     n_params = len(param_values)
-    
-    # Create shades from light to dark
-    numpy_colors = [plt.cm.Blues(0.3 + 0.7 * (i / max(n_params - 1, 1))) for i in range(n_params)]
-    scalable_colors = [plt.cm.Greens(0.3 + 0.7 * (i / max(n_params - 1, 1))) for i in range(n_params)]
+
+    def _shades_from_base(hex_color, n, white_mix_max=0.60):
+        """Return n shades from light (mixed with white) to base color."""
+        base_rgb = np.array(mcolors.to_rgb(hex_color))
+        if n <= 1:
+            return [base_rgb]
+        shades = []
+        for i in range(n):
+            t = i / (n - 1)
+            white_mix = white_mix_max * (1 - t)
+            rgb = (1 - white_mix) * base_rgb + white_mix * np.ones(3)
+            shades.append(rgb)
+        return shades
+
+    numpy_colors = _shades_from_base(RWTH_GREEN, n_params)
+    scalable_colors = _shades_from_base(RWTH_BLUE, n_params)
     
     gp_colors = {
         'numpy': numpy_colors,
@@ -543,10 +567,10 @@ def plot_safety_metrics(n_samples_values,
     fig1, ax1 = plt.subplots(figsize=(12, 8))
     ax1.bar(x - width/2, numpy_safety_mean, width, 
             yerr=numpy_safety_std, label='Standard GP', 
-            color=RWTH_GREEN, alpha=0.8, capsize=5)
+            color=RWTH_LIGHT_GREEN, alpha=0.8, capsize=5)
     ax1.bar(x + width/2, scalable_safety_mean, width,
             yerr=scalable_safety_std, label='Scalable GP',
-            color=RWTH_BLUE, alpha=0.8, capsize=5)
+            color=RWTH_LIGHT_BLUE, alpha=0.8, capsize=5)
     
     ax1.set_xlabel('Number of initial training points')
     ax1.set_ylabel('Safety verification success rate (%)')
@@ -569,10 +593,10 @@ def plot_safety_metrics(n_samples_values,
     fig2, ax2 = plt.subplots(figsize=(12, 8))
     ax2.bar(x - width/2, numpy_inside_mean, width,
             yerr=numpy_inside_std, label='Standard GP',
-            color=RWTH_GREEN, alpha=0.8, capsize=5)
+            color=RWTH_LIGHT_GREEN, alpha=0.8, capsize=5)
     ax2.bar(x + width/2, scalable_inside_mean, width,
             yerr=scalable_inside_std, label='Scalable GP',
-            color=RWTH_BLUE, alpha=0.8, capsize=5)
+            color=RWTH_LIGHT_BLUE, alpha=0.8, capsize=5)
     
     ax2.set_xlabel('Number of initial training points')
     ax2.set_ylabel('Trajectory inside ellipsoid rate (%)')
@@ -914,7 +938,7 @@ def main():
     """Main evaluation function"""
     
     # Specify result directories
-    timestamp = "20260208_002027"
+    timestamp = "20260207_234731"
     
     initial_samples_dir = f"experiments/results_exploration/initial_samples_sweep_{timestamp}"
     
