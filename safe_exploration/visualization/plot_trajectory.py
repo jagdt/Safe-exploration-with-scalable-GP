@@ -88,7 +88,7 @@ def add_trajectory_colorbar_and_legend(fig, ax, config, exploration_module,
         sm = plt.cm.ScalarMappable(cmap=RWTH_CMAP, norm=plt.Normalize(vmin=1, vmax=n_iterations))
         sm.set_array([])
         cbar = fig.colorbar(sm, ax=ax, pad=0.02, aspect=30)
-        cbar.set_label('Exploration step', rotation=270, labelpad=20)
+        cbar.set_label('Exploration step', rotation=270, labelpad=35)
         cbar.ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     
     # Check visualization flags
@@ -313,7 +313,15 @@ def save_trajectory_plot(fig, save_path, filename='trajectory_final.png'):
     str
         Full path to saved file
     """
+    # Save as PNG
     full_path = f"{save_path}/{filename}"
     fig.savefig(full_path, dpi=300, bbox_inches='tight', facecolor='white')
     print(f"Saved trajectory plot: {full_path}")
+    
+    # Save as SVG
+    svg_filename = filename.replace('.png', '.svg')
+    svg_path = f"{save_path}/{svg_filename}"
+    fig.savefig(svg_path, format='svg', bbox_inches='tight', facecolor='white')
+    print(f"Saved trajectory plot (SVG): {svg_path}")
+    
     return full_path
