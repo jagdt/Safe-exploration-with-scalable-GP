@@ -148,7 +148,7 @@ def run_exploration(conf, visualize=False):
             traj = None
 
         # Add colorbar and legend
-        if (visualize or save_vis) and n_iterations > 1:
+        if visualize or save_vis:
             add_trajectory_colorbar_and_legend(fig, ax, conf, exploration_module, 
                                               n_iterations, verify_safety)
             if visualize:

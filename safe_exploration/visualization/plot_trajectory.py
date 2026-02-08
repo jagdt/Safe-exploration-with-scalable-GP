@@ -83,19 +83,18 @@ def add_trajectory_colorbar_and_legend(fig, ax, config, exploration_module,
     -------
     None
     """
-    if n_iterations <= 1:
-        return
-    
     # Add colorbar for iteration coloring
-    sm = plt.cm.ScalarMappable(cmap=RWTH_CMAP, norm=plt.Normalize(vmin=1, vmax=n_iterations))
-    sm.set_array([])
-    cbar = fig.colorbar(sm, ax=ax, pad=0.02, aspect=30)
-    cbar.set_label('Exploration step', rotation=270, labelpad=20)
-    cbar.ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+    if n_iterations > 1:
+        sm = plt.cm.ScalarMappable(cmap=RWTH_CMAP, norm=plt.Normalize(vmin=1, vmax=n_iterations))
+        sm.set_array([])
+        cbar = fig.colorbar(sm, ax=ax, pad=0.02, aspect=30)
+        cbar.set_label('Exploration step', rotation=270, labelpad=35)
+        cbar.ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     
     # Check visualization flags
-    show_ellipsoids = verify_safety and config.visualize_ellipsoids
-    show_safe_traj = verify_safety and config.visualize_safe_trajectory
+    # Only show ellipsoids/safe trajectory if there will be iterations to plot them
+    show_ellipsoids = verify_safety and config.visualize_ellipsoids and n_iterations > 0
+    show_safe_traj = verify_safety and config.visualize_safe_trajectory and n_iterations > 0
     
     # Determine if legend is needed
     has_legend_items = (
@@ -107,7 +106,7 @@ def add_trajectory_colorbar_and_legend(fig, ax, config, exploration_module,
     
     if has_legend_items:
         legend_elements = _create_legend_elements(
-            config, exploration_module, verify_safety, show_ellipsoids, show_safe_traj
+            config, exploration_module, verify_safety, show_ellipsoids, show_safe_traj, n_iterations
         )
         ax.legend(handles=legend_elements, loc='lower left', framealpha=0.9)
 
@@ -225,7 +224,7 @@ def _has_domain_bounds(exploration_module):
 
 
 def _create_legend_elements(config, exploration_module, verify_safety, 
-                           show_ellipsoids=True, show_safe_traj=True):
+                           show_ellipsoids=True, show_safe_traj=True, n_iterations=1):
     """Create legend elements for the trajectory plot.
     
     Parameters
@@ -240,6 +239,8 @@ def _create_legend_elements(config, exploration_module, verify_safety,
         Whether ellipsoids are shown (default: True)
     show_safe_traj : bool
         Whether safe trajectory is shown (default: True)
+    n_iterations : int
+        Number of iterations (default: 1)
         
     Returns
     -------
@@ -252,14 +253,19 @@ def _create_legend_elements(config, exploration_module, verify_safety,
     
     # Initial samples legend entries
     if config.visualize_initial_samples:
-        legend_elements.extend([
+        # Always show initial samples
+        legend_elements.append(
             Line2D([0], [0], marker='o', color='w', markerfacecolor=RWTH_GRAY,
-                   markersize=markersize, alpha=0.3, linestyle='', label='Initial samples'),
-            Line2D([0], [0], marker='o', color='w', markerfacecolor=RWTH_LIGHT_BLUE,
-                   markersize=markersize, linestyle='', label='Early exploration'),
-            Line2D([0], [0], marker='o', color='w', markerfacecolor=RWTH_MAGENTA,
-                   markersize=markersize, linestyle='', label='Late exploration'),
-        ])
+                   markersize=markersize, alpha=0.3, linestyle='', label='Initial samples')
+        )
+        # # Only show early/late exploration if there will be iterations
+        # if n_iterations > 0:
+        #     legend_elements.extend([
+        #         Line2D([0], [0], marker='o', color='w', markerfacecolor=RWTH_LIGHT_BLUE,
+        #                markersize=markersize, linestyle='', label='Early exploration'),
+        #         Line2D([0], [0], marker='o', color='w', markerfacecolor=RWTH_MAGENTA,
+        #                markersize=markersize, linestyle='', label='Late exploration'),
+        #     ])
     
     # Safe region boundary
     legend_elements.append(
@@ -284,7 +290,7 @@ def _create_legend_elements(config, exploration_module, verify_safety,
     if show_safe_traj:
         legend_elements.append(
             Line2D([0], [0], color=RWTH_GREEN, linewidth=0, marker='o',
-                   markersize=6, label='Safe trajectory')
+                   markersize=markersize, label='Safe trajectory')
         )
     
     return legend_elements
@@ -307,7 +313,15 @@ def save_trajectory_plot(fig, save_path, filename='trajectory_final.png'):
     str
         Full path to saved file
     """
+    # Save as PNG
     full_path = f"{save_path}/{filename}"
     fig.savefig(full_path, dpi=300, bbox_inches='tight', facecolor='white')
     print(f"Saved trajectory plot: {full_path}")
+    
+    # Save as SVG
+    svg_filename = filename.replace('.png', '.svg')
+    svg_path = f"{save_path}/{svg_filename}"
+    fig.savefig(svg_path, format='svg', bbox_inches='tight', facecolor='white')
+    print(f"Saved trajectory plot (SVG): {svg_path}")
+    
     return full_path
