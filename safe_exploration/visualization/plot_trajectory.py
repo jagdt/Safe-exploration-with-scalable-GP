@@ -258,14 +258,14 @@ def _create_legend_elements(config, exploration_module, verify_safety,
             Line2D([0], [0], marker='o', color='w', markerfacecolor=RWTH_GRAY,
                    markersize=markersize, alpha=0.3, linestyle='', label='Initial samples')
         )
-        # Only show early/late exploration if there will be iterations
-        if n_iterations > 0:
-            legend_elements.extend([
-                Line2D([0], [0], marker='o', color='w', markerfacecolor=RWTH_LIGHT_BLUE,
-                       markersize=markersize, linestyle='', label='Early exploration'),
-                Line2D([0], [0], marker='o', color='w', markerfacecolor=RWTH_MAGENTA,
-                       markersize=markersize, linestyle='', label='Late exploration'),
-            ])
+        # # Only show early/late exploration if there will be iterations
+        # if n_iterations > 0:
+        #     legend_elements.extend([
+        #         Line2D([0], [0], marker='o', color='w', markerfacecolor=RWTH_LIGHT_BLUE,
+        #                markersize=markersize, linestyle='', label='Early exploration'),
+        #         Line2D([0], [0], marker='o', color='w', markerfacecolor=RWTH_MAGENTA,
+        #                markersize=markersize, linestyle='', label='Late exploration'),
+        #     ])
     
     # Safe region boundary
     legend_elements.append(
