@@ -291,7 +291,7 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
 
 def plot_info_gain_trajectories(results_by_type, gp_types, param_name, param_values, output_dir=None):
     """
-    Plot information gain development over iterations for different parameter values
+    Plot mutual information development over iterations for different parameter values
     
     Parameters
     ----------
@@ -387,7 +387,7 @@ def plot_info_gain_trajectories(results_by_type, gp_types, param_name, param_val
                           color=colors[param_idx], alpha=0.2)
         
         ax.set_xlabel('Iteration')
-        ax.set_ylabel('Information Gain')
+        ax.set_ylabel('Mutual information')
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
         ax.legend(loc='upper left')
         # ax.grid(True, alpha=0.3)
@@ -415,7 +415,7 @@ def plot_info_gain_trajectories(results_by_type, gp_types, param_name, param_val
 
 def plot_info_gain_comparison(results_by_type, gp_types, param_name, param_values, output_dir=None):
     """
-    Plot information gain comparison between Standard GP and Scalable GP in one plot
+    Plot mutual information comparison between Standard GP and Scalable GP in one plot
     Standard GP in blue (different shades), Scalable GP in green (different shades)
     
     Parameters
@@ -521,7 +521,7 @@ def plot_info_gain_comparison(results_by_type, gp_types, param_name, param_value
                    linestyle=line_styles[param_idx], label=label, linewidth=3.5)
     
     ax.set_xlabel('Iteration')
-    ax.set_ylabel('Information Gain')
+    ax.set_ylabel('Mutual information')
     ax.xaxis.set_major_locator(MaxNLocator(integer=True))
     ax.legend(loc='upper left')
     # ax.grid(True, alpha=0.3)
@@ -895,12 +895,12 @@ def plot_initial_samples_comparison(results_dir, output_dir=None):
     }
     plot_timing_breakdown(results_by_type, ['numpy', 'scalable'], 'n_safe_samples', n_samples_values, output_dir)
     
-    # Create information gain trajectory plot
-    print("\nCreating information gain trajectory plots...")
+    # Create mutual information trajectory plot
+    print("\nCreating mutual information trajectory plots...")
     plot_info_gain_trajectories(results_by_type, ['numpy', 'scalable'], 'n_safe_samples', n_samples_values.tolist(), output_dir)
     
-    # Create information gain comparison plot
-    print("\nCreating information gain comparison plot...")
+    # Create mutual information comparison plot
+    print("\nCreating mutual information comparison plot...")
     plot_info_gain_comparison(results_by_type, ['numpy', 'scalable'], 'n_safe_samples', n_samples_values.tolist(), output_dir)
     
     # Create safety metrics plot
@@ -922,12 +922,12 @@ def plot_initial_samples_comparison(results_dir, output_dir=None):
             if not np.isnan(numpy_time_mean[i]):
                 print(f"  Standard GP:")
                 print(f"    Time: {numpy_time_mean[i]:.3f} ± {numpy_time_std[i]:.3f} s")
-                print(f"    Info gain: {numpy_info_gain_mean[i]:.3f} ± {numpy_info_gain_std[i]:.3f}")
+                print(f"    Mutual information: {numpy_info_gain_mean[i]:.3f} ± {numpy_info_gain_std[i]:.3f}")
                 print(f"    Feasibility: {numpy_feasible_mean[i]:.1f} ± {numpy_feasible_std[i]:.1f} %")
             if not np.isnan(scalable_time_mean[i]):
                 print(f"  Scalable GP:")
                 print(f"    Time: {scalable_time_mean[i]:.3f} ± {scalable_time_std[i]:.3f} s")
-                print(f"    Info gain: {scalable_info_gain_mean[i]:.3f} ± {scalable_info_gain_std[i]:.3f}")
+                print(f"    Mutual information: {scalable_info_gain_mean[i]:.3f} ± {scalable_info_gain_std[i]:.3f}")
                 print(f"    Feasibility: {scalable_feasible_mean[i]:.1f} ± {scalable_feasible_std[i]:.1f} %")
             if not np.isnan(numpy_time_mean[i]) and not np.isnan(scalable_time_mean[i]):
                 speedup = numpy_time_mean[i] / scalable_time_mean[i]
