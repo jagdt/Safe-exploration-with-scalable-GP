@@ -78,8 +78,18 @@ def run_exploration_experiment(config, experiment_name="experiment"):
             if timing_data:
                 # Compute statistics for each timing component
                 metrics['timing'] = {}
+                n_iterations = config.n_iterations
                 for key, values in timing_data.items():
-                    if isinstance(values, np.ndarray) and values.size > 0:
+                    if key == 'initial_training':
+                        # Initial training is a scalar - amortize over all iterations
+                        if isinstance(values, (int, float)):
+                            per_iter = float(values) / n_iterations
+                            metrics['timing'][key] = {
+                                'mean': per_iter,
+                                'total': float(values),
+                                'per_iteration': per_iter
+                            }
+                    elif isinstance(values, np.ndarray) and values.size > 0:
                         metrics['timing'][key] = {
                             'mean': float(np.mean(values)),
                             'std': float(np.std(values)),
@@ -240,8 +250,8 @@ def main():
     # Common overrides for all experiments
     base_overrides = {
         'verbose': 1,
-        'static_exploration': False,
-        'n_iterations': 20,
+        'static_exploration': True,
+        'n_iterations': 50,
         'save_results': True,
         'save_vis': True,
         'visualize': False,
@@ -250,7 +260,7 @@ def main():
     }
     
     # Random seeds for statistical robustness
-    seeds = [1,2]
+    seeds = [1,2,3,4,5,6,7,8,9,10]
     # seeds = list(range(2))
     
     # Sweep: Vary initial samples, compare GP types
