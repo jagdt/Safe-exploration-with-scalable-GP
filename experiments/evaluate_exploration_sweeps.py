@@ -272,7 +272,7 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
         labels.append('Scalable GP (Other)')
         bottom_scalable += values
     
-    ax.set_xlabel('Number of initial training points')
+    ax.set_xlabel(r'Number of initial training points $N_{\mathrm{init}}$')
     ax.set_ylabel('Average time per iteration (s)')
     ax.set_xticks(x)
     ax.set_xticklabels([str(p) for p in param_values])
@@ -306,6 +306,20 @@ def plot_info_gain_trajectories(results_by_type, gp_types, param_name, param_val
     output_dir : str, optional
         Directory to save plots
     """
+    # Larger font sizes for subfigure display (will be ~0.48 textwidth instead of 0.85)
+    with plt.rc_context({
+        'font.size': 30,
+        'axes.labelsize': 36,
+        'xtick.labelsize': 30,
+        'ytick.labelsize': 30,
+        'legend.fontsize': 28,
+        'lines.linewidth': 4.5,
+    }):
+        plot_info_gain_trajectories_impl(results_by_type, gp_types, param_name, param_values, output_dir)
+
+
+def plot_info_gain_trajectories_impl(results_by_type, gp_types, param_name, param_values, output_dir=None):
+    """Implementation of plot_info_gain_trajectories with custom font sizes applied."""
     # RWTH color palette for different parameter values
     rwth_colors = [
         RWTH_BLUE,      # #00549F
@@ -381,13 +395,13 @@ def plot_info_gain_trajectories(results_by_type, gp_types, param_name, param_val
             iterations = np.arange(1, len(mean_traj) + 1)
             
             # Plot with shaded error region
-            label = f'{param_name.replace("_", " ").replace("n ", "N=").replace("N=safe samples", "N=")}{param_val}'
+            label = rf'$N_{{\mathrm{{init}}}}={param_val}$'
             ax.plot(iterations, mean_traj, color=colors[param_idx], label=label)
             ax.fill_between(iterations, mean_traj - std_traj, mean_traj + std_traj, 
                           color=colors[param_idx], alpha=0.2)
         
-        ax.set_xlabel('Iteration')
-        ax.set_ylabel('Mutual information')
+        ax.set_xlabel('Iteration', labelpad=10)
+        ax.set_ylabel('Mutual information', labelpad=15)
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
         ax.legend(loc='upper left')
         # ax.grid(True, alpha=0.3)
@@ -514,11 +528,17 @@ def plot_info_gain_comparison(results_by_type, gp_types, param_name, param_value
             # Calculate mean across seeds (no std plotted)
             mean_traj = np.mean(trajectories, axis=0)
             iterations = np.arange(1, len(mean_traj) + 1)
-            
+
             # Plot mean trajectory with specific line style
-            label = f'{gp_labels[gp_type]} (N={param_val})'
-            ax.plot(iterations, mean_traj, color=gp_colors[gp_type][param_idx], 
-                   linestyle=line_styles[param_idx], label=label, linewidth=3.5)
+            label = rf'{gp_labels[gp_type]} ($N_{{\mathrm{{init}}}}={param_val}$)'
+            ax.plot(
+                iterations,
+                mean_traj,
+                color=gp_colors[gp_type][param_idx],
+                linestyle=line_styles[param_idx],
+                label=label,
+                linewidth=3.5,
+            )
     
     ax.set_xlabel('Iteration')
     ax.set_ylabel('Mutual information')
@@ -560,6 +580,15 @@ def plot_safety_metrics(n_samples_values,
     output_dir : str, optional
         Directory to save plots
     """
+    # Larger font sizes for subfigure display (will be ~0.48 textwidth instead of 0.85)
+    plt.rcParams.update({
+        'font.size': 30,
+        'axes.labelsize': 36,
+        'xtick.labelsize': 30,
+        'ytick.labelsize': 30,
+        'legend.fontsize': 28,
+    })
+    
     x = np.arange(len(n_samples_values))
     width = 0.35
     
@@ -572,8 +601,8 @@ def plot_safety_metrics(n_samples_values,
             yerr=scalable_safety_std, label='Scalable GP',
             color=RWTH_LIGHT_BLUE, alpha=0.8, capsize=5)
     
-    ax1.set_xlabel('Number of initial training points')
-    ax1.set_ylabel('Safety verification success rate (%)')
+    ax1.set_xlabel(r'Number of initial training points $N_{\mathrm{init}}$', labelpad=10, x=0.42)
+    ax1.set_ylabel('Safety verification\nsuccess rate (%)', labelpad=15)
     ax1.set_xticks(x)
     ax1.set_xticklabels([str(int(n)) for n in n_samples_values])
     ax1.legend(loc='lower left')
@@ -598,8 +627,8 @@ def plot_safety_metrics(n_samples_values,
             yerr=scalable_inside_std, label='Scalable GP',
             color=RWTH_LIGHT_BLUE, alpha=0.8, capsize=5)
     
-    ax2.set_xlabel('Number of initial training points')
-    ax2.set_ylabel('Trajectory inside ellipsoid rate (%)')
+    ax2.set_xlabel(r'Number of initial training points $N_{\mathrm{init}}$', labelpad=10, x=0.42)
+    ax2.set_ylabel('Trajectory inside\nellipsoid rate (%)', labelpad=15)
     ax2.set_xticks(x)
     ax2.set_xticklabels([str(int(n)) for n in n_samples_values])
     ax2.legend(loc='lower left')
@@ -938,7 +967,7 @@ def main():
     """Main evaluation function"""
     
     # Specify result directories
-    timestamp = "20260207_234731"
+    timestamp = "20260208_002027"
     
     initial_samples_dir = f"experiments/results_exploration/initial_samples_sweep_{timestamp}"
     
