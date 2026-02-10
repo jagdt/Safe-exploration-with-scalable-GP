@@ -918,24 +918,29 @@ class NumpyGPModel(KernelGPModel):
     def _update_online(self, x_new, y_new):
         """Efficient online GP update using incremental Cholesky factorization
         
-        For each new point (x_N+1, y_N+1), extends the Cholesky factor:
+        Extends the Cholesky factor for one new point (x_N+1, y_N+1):
         - Compute k = k(X_old, x_N+1)
-        - Solve v = L^{-1} k  (forward triangular solve)
-        - Compute α = √(k_++ - v^T v)  where k_++ = k(x_N+1, x_N+1) + σ²
-        - Extend L_new = [L, 0; v^T, α]
+        - Solve r = L^{-1} k  (forward triangular solve, plain NumPy)
+        - Compute κ = √(k_++ - r^T r)  where k_++ = k(x_N+1, x_N+1) + σ²
+        - Extend L_new = [L, 0; r^T, κ]
         
-        This is O(N²) per new point and numerically stable.
+        This is O(N²) per new point and uses plain NumPy for fair comparison.
+        
+        NOTE: This implementation assumes x_new contains only ONE data point.
+        For multiple points, call this method repeatedly.
         
         Parameters
         ----------
-        x_new : ndarray [n_new × (n_s + n_u)]
-            New training inputs
-        y_new : ndarray [n_new × n_s]
-            New training targets
+        x_new : ndarray [1 × (n_s + n_u)]
+            New training input (single sample)
+        y_new : ndarray [1 × n_s]
+            New training target (single sample)
         """
         x_new = np.atleast_2d(x_new)
         y_new = np.atleast_2d(y_new)
-        n_new = x_new.shape[0]
+        
+        if x_new.shape[0] != 1:
+            raise ValueError("_update_online expects exactly one new sample. Got {} samples.".format(x_new.shape[0]))
         
         if x_new.shape[0] != y_new.shape[0]:
             raise ValueError("x_new and y_new must have same number of samples")
@@ -944,65 +949,52 @@ class NumpyGPModel(KernelGPModel):
             L = self.L_chol[i]
             N_old = L.shape[0]
             
-            # Extend Cholesky factor for each new point
-            for j in range(n_new):
-                x_j = x_new[j:j+1, :]
-                
-                # Compute cross-covariance
-                if j == 0:
-                    X_current = self.z
-                else:
-                    X_current = np.vstack([self.z, x_new[:j]])
-                
-                k = self.compute_kernel(X_current, x_j, self.kern_types[i], self.hyp[i]).ravel()
-                
-                # Self-covariance k_++ = k(x_j, x_j) + σ² + jitter
-                k_plus_plus = self.compute_kernel(x_j, x_j, self.kern_types[i], self.hyp[i])[0, 0]
-                k_plus_plus += self.noise_var[i]
-                # Adaptive jitter based on kernel scale
-                adaptive_jitter = 1e-5 * k_plus_plus
-                k_plus_plus += adaptive_jitter
-                
-                # Solve v = L^{-1} k
-                v = np.linalg.solve(L, k)
-                
-                # Compute α = √(k_++ - v^T v)
-                alpha_sq = k_plus_plus - np.dot(v, v)
-                
-                if alpha_sq <= 0:
-                    # Numerical issue: add adaptive jitter and retry
-                    warnings.warn(f"Online update: negative α² = {alpha_sq:.2e} for dim {i}, point {j}. Adding jitter.")
-                    jitter = max(1e-6, -alpha_sq + 1e-6)
-                    alpha_sq = k_plus_plus + jitter - np.dot(v, v)
-                    
-                    if alpha_sq <= 0:
-                        # Still negative, fall back to retraining
-                        warnings.warn(f"Online update failed for dimension {i}, retraining from scratch")
-                        x_all = np.vstack((self.x_train, x_new))
-                        y_all = np.vstack((self.y_train, y_new))
-                        self.train(x_all, y_all, opt_hyp=False)
-                        return
-                
-                alpha = np.sqrt(alpha_sq)
-                
-                # Extend Cholesky factor: L_new = [L, 0; v^T, α]
-                N_current = L.shape[0]
-                L_new = np.zeros((N_current + 1, N_current + 1))
-                L_new[:N_current, :N_current] = L
-                L_new[N_current, :N_current] = v
-                L_new[N_current, N_current] = alpha
-                
-                L = L_new
+            # Compute cross-covariance k = k(X_old, x_new)
+            k = self.compute_kernel(self.z, x_new, self.kern_types[i], self.hyp[i]).ravel()
             
-            self.L_chol[i] = L
+            # Self-covariance k_++ = k(x_new, x_new) + σ² + jitter
+            k_plus_plus = self.compute_kernel(x_new, x_new, self.kern_types[i], self.hyp[i])[0, 0]
+            k_plus_plus += self.noise_var[i]
+            # Adaptive jitter based on kernel scale
+            adaptive_jitter = 1e-5 * k_plus_plus
+            k_plus_plus += adaptive_jitter
             
-            # Update posterior coefficients: β = (L L^T)^{-1} y = L^{-T} L^{-1} y
-            y_all = np.vstack((self.y_train[:, i:i+1], y_new[:, i:i+1]))
-            w = np.linalg.solve(L, y_all)
-            beta_new = np.linalg.solve(L.T, w).ravel()
+            # Solve r = L^{-1} k using forward substitution (plain NumPy)
+            r = self._forward_subst(L, k)
+            
+            # Compute κ = √(k_++ - r^T r)
+            kappa_sq = k_plus_plus - np.dot(r, r)
+            
+            if kappa_sq <= 0:
+                # Numerical issue: add adaptive jitter and retry
+                warnings.warn(f"Online update: negative κ² = {kappa_sq:.2e} for dim {i}. Adding jitter.")
+                jitter = max(1e-6, -kappa_sq + 1e-6)
+                kappa_sq = k_plus_plus + jitter - np.dot(r, r)
+                
+                if kappa_sq <= 0:
+                    # Still negative, fall back to retraining
+                    warnings.warn(f"Online update failed for dimension {i}, retraining from scratch")
+                    x_all = np.vstack((self.x_train, x_new))
+                    y_all = np.vstack((self.y_train, y_new))
+                    self.train(x_all, y_all, opt_hyp=False)
+                    return
+            
+            kappa = np.sqrt(kappa_sq)
+            
+            # Extend Cholesky factor: L_new = [[L, 0], [r^T, κ]]
+            L_new = np.zeros((N_old + 1, N_old + 1), dtype=L.dtype)
+            L_new[:N_old, :N_old] = L
+            L_new[N_old, :N_old] = r
+            L_new[N_old, N_old] = kappa
+            
+            self.L_chol[i] = L_new
+            
+            # Update posterior coefficients: β = (L L^T)^{-1} y using plain NumPy
+            y_all = np.vstack((self.y_train[:, i:i+1], y_new[:, i:i+1])).ravel()
+            beta_new = self._solve_chol_lower(L_new, y_all)
             
             # Resize beta array if needed
-            N_total = N_old + n_new
+            N_total = N_old + 1
             if self.beta.shape[0] < N_total:
                 beta_resized = np.zeros((N_total, self.n_s_out))
                 beta_resized[:self.beta.shape[0], :] = self.beta

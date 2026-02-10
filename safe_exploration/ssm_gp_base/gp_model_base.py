@@ -24,10 +24,77 @@ class GPModelBase(StateSpaceModel, ABC):
     The base class provides:
     - __call__: Single input prediction via CasADi
     - get_forward_model_casadi: Get symbolic forward model
+    - Common linear algebra utilities (triangular solves, Cholesky operations)
     
     Subclasses must implement:
     - predict_casadi_symbolic: Symbolic prediction (implementation-specific)
     """
+    
+    @staticmethod
+    def _forward_subst(L, b):
+        """Solve L x = b for lower-triangular L (plain NumPy implementation)
+        
+        Parameters
+        ----------
+        L : ndarray [n × n]
+            Lower triangular matrix
+        b : ndarray [n]
+            Right-hand side vector
+        
+        Returns
+        -------
+        x : ndarray [n]
+            Solution vector
+        """
+        b = np.asarray(b)
+        x = np.zeros_like(b, dtype=L.dtype)
+        n = L.shape[0]
+        for i in range(n):
+            x[i] = (b[i] - L[i, :i] @ x[:i]) / L[i, i]
+        return x
+    
+    @staticmethod
+    def _back_subst(U, b):
+        """Solve U x = b for upper-triangular U (plain NumPy implementation)
+        
+        Parameters
+        ----------
+        U : ndarray [n × n]
+            Upper triangular matrix
+        b : ndarray [n]
+            Right-hand side vector
+        
+        Returns
+        -------
+        x : ndarray [n]
+            Solution vector
+        """
+        b = np.asarray(b)
+        x = np.zeros_like(b, dtype=U.dtype)
+        n = U.shape[0]
+        for i in range(n-1, -1, -1):
+            x[i] = (b[i] - U[i, i+1:] @ x[i+1:]) / U[i, i]
+        return x
+    
+    @staticmethod
+    def _solve_chol_lower(L, b):
+        """Solve (L L^T) x = b with lower-triangular L (plain NumPy)
+        
+        Parameters
+        ----------
+        L : ndarray [n × n]
+            Lower triangular Cholesky factor
+        b : ndarray [n]
+            Right-hand side vector
+        
+        Returns
+        -------
+        x : ndarray [n]
+            Solution vector
+        """
+        y = GPModelBase._forward_subst(L, b)
+        x = GPModelBase._back_subst(L.T, y)
+        return x
     
     def __call__(self, states, actions):
         """Single input predictions via CasADi symbolic computation
