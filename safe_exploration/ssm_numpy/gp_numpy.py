@@ -677,7 +677,7 @@ class NumpyGPModel(KernelGPModel):
             bounds.append((-11.5, 9.2))
             # Linear variances: [1e-6, 1e-1]
             bounds.extend([(-13.8, -2.3)] * self.input_dim)
-            # Noise: [1e-10, 1e-2]
+            # Noise: [1e-10, 1e-3]
             bounds.append((-23.0, -6.9))
         
         elif kern_type == 'sum_lin_rbf_linear_only':

@@ -1023,8 +1023,8 @@ class ScalableGPModel(GPModelBase):
             bounds.extend([(-9.2, 9.2)] * self.input_dim)
             # Linear variances: [1e-6, 1e1]
             bounds.extend([(-13.8, 2.3)] * self.input_dim)
-            # Noise: [1e-14, 1e0]
-            bounds.append((-32.2, 0.0))
+            # Noise: [1e-10, 1e-3]
+            bounds.append((-23.0, -6.9))
         
         elif kern_type == "sum_lin_rbf_linear_only":
             # Linear variances: [1e-6, 1e0]
