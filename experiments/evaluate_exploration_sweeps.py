@@ -278,6 +278,10 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
     ax.set_xticklabels([str(p) for p in param_values])
     ax.legend(handles, labels, loc='upper left')
     
+    # Add margin at top (10% extra space)
+    y_min, y_max = ax.get_ylim()
+    ax.set_ylim([y_min, y_max * 1.1])
+    
     plt.tight_layout()
     
     if output_dir:
@@ -594,19 +598,23 @@ def plot_safety_metrics(n_samples_values,
     
     # Plot 1: Safety verification success rate
     fig1, ax1 = plt.subplots(figsize=(12, 8))
+    
+    # Add grey line at 95% confidence level
+    ax1.axhline(y=95, color='grey', linestyle='--', linewidth=2, alpha=0.6, zorder=1)
+    
     ax1.bar(x - width/2, numpy_safety_mean, width, 
             yerr=numpy_safety_std, label='Standard GP', 
-            color=RWTH_LIGHT_GREEN, alpha=0.8, capsize=5)
+            color=RWTH_LIGHT_GREEN, alpha=0.8, capsize=5, zorder=3)
     ax1.bar(x + width/2, scalable_safety_mean, width,
             yerr=scalable_safety_std, label='Scalable GP',
-            color=RWTH_LIGHT_BLUE, alpha=0.8, capsize=5)
+            color=RWTH_LIGHT_BLUE, alpha=0.8, capsize=5, zorder=3)
     
     ax1.set_xlabel(r'Number of initial training points $N_{\mathrm{init}}$', labelpad=10, x=0.42)
     ax1.set_ylabel('Safety verification\nsuccess rate (%)', labelpad=15)
     ax1.set_xticks(x)
     ax1.set_xticklabels([str(int(n)) for n in n_samples_values])
     ax1.legend(loc='lower left')
-    ax1.set_ylim([0, 105])
+    ax1.set_ylim([80, 100])
     
     plt.tight_layout()
     
@@ -620,19 +628,23 @@ def plot_safety_metrics(n_samples_values,
     
     # Plot 2: Trajectory fully inside ellipsoid rate
     fig2, ax2 = plt.subplots(figsize=(12, 8))
+    
+    # Add grey line at 95% confidence level
+    ax2.axhline(y=95, color='grey', linestyle='--', linewidth=6, alpha=0.6, zorder=1)
+    
     ax2.bar(x - width/2, numpy_inside_mean, width,
             yerr=numpy_inside_std, label='Standard GP',
-            color=RWTH_LIGHT_GREEN, alpha=0.8, capsize=5)
+            color=RWTH_LIGHT_GREEN, alpha=0.8, capsize=5, zorder=3)
     ax2.bar(x + width/2, scalable_inside_mean, width,
             yerr=scalable_inside_std, label='Scalable GP',
-            color=RWTH_LIGHT_BLUE, alpha=0.8, capsize=5)
+            color=RWTH_LIGHT_BLUE, alpha=0.8, capsize=5, zorder=3)
     
     ax2.set_xlabel(r'Number of initial training points $N_{\mathrm{init}}$', labelpad=10, x=0.42)
     ax2.set_ylabel('Trajectory inside\nellipsoid rate (%)', labelpad=15)
     ax2.set_xticks(x)
     ax2.set_xticklabels([str(int(n)) for n in n_samples_values])
     ax2.legend(loc='lower left')
-    ax2.set_ylim([0, 105])
+    ax2.set_ylim([80, 102])
     
     plt.tight_layout()
     
@@ -967,7 +979,7 @@ def main():
     """Main evaluation function"""
     
     # Specify result directories
-    timestamp = "20260211_144523"
+    timestamp = "20260212_203904"
     
     initial_samples_dir = f"experiments/results_exploration/initial_samples_sweep_{timestamp}"
     
