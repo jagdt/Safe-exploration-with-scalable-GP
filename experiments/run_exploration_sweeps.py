@@ -251,7 +251,7 @@ def main():
     base_overrides = {
         'verbose': 1,
         'static_exploration': True,
-        'n_iterations': 50,
+        'n_iterations': 20,
         'save_results': True,
         'save_vis': True,
         'visualize': False,
@@ -260,8 +260,9 @@ def main():
     }
     
     # Random seeds for statistical robustness
-    seeds = [1,2,3,4,5,6,7,8,9,10]
+    seeds = [1,2,3,4,5]
     # seeds = list(range(2))
+    # seeds = [1,2]  # For quick testing - use more seeds for full sweep
     
     # Sweep: Vary initial samples, compare GP types
     print("\n" + "="*80)
@@ -269,9 +270,9 @@ def main():
     print("="*80)
     
     n_values = [400, 500, 600]
-    # n_values = [600]
+    # n_values = [400]
     overrides_samples = base_overrides.copy()
-    overrides_samples['n_frequencies'] = 5  # Fixed for scalable GP in this sweep
+    overrides_samples['n_frequencies'] = 4  # Fixed for scalable GP in this sweep
     
     output_dir_samples = f"results_exploration/initial_samples_sweep_{timestamp}"
     sweep_initial_samples(n_values, seeds, overrides_samples, output_dir_samples)

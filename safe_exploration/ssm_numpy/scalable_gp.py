@@ -1023,8 +1023,8 @@ class ScalableGPModel(GPModelBase):
             bounds.extend([(-9.2, 9.2)] * self.input_dim)
             # Linear variances: [1e-6, 1e1]
             bounds.extend([(-13.8, 2.3)] * self.input_dim)
-            # Noise: [1e-14, 1e0]
-            bounds.append((-32.2, 0.0))
+            # Noise: [1e-10, 1e-3]
+            bounds.append((-23.0, -6.9))
         
         elif kern_type == "sum_lin_rbf_linear_only":
             # Linear variances: [1e-6, 1e0]
@@ -1151,84 +1151,110 @@ class ScalableGPModel(GPModelBase):
             # Full retraining required
             self.train(x_new, y_new, opt_hyp=opt_hyp)
     
-    def _update_online(self, x_new, y_new):
-        """Efficient online update using rank-k Cholesky update
+    @staticmethod
+    def _cholupdate_lower_inplace(L, x):
+        """In-place rank-1 Cholesky update: L L^T <- L L^T + x x^T
         
-        Updates the Cholesky factorization L of (Φ^T Φ + σ²I) incrementally
-        when new data arrives, avoiding full recomputation.
+        Updates the Cholesky factor L in place using Givens-like rotations.
+        This is O(M²) and numerically stable.
         
         Parameters
         ----------
-        x_new : ndarray [n_new × (n_s_in + n_u)]
-            New training inputs
-        y_new : ndarray [n_new × n_s_out]
-            New training targets
+        L : ndarray [n × n]
+            Lower triangular Cholesky factor (modified in place)
+        x : ndarray [n]
+            Vector for rank-1 update
+        
+        Returns
+        -------
+        L : ndarray [n × n]
+            Updated Cholesky factor (same object, modified in place)
+        """
+        x = np.asarray(x, dtype=L.dtype).reshape(-1).copy()
+        n = L.shape[0]
+
+        for k in range(n):
+            Lkk = L[k, k]
+            xk = x[k]
+            r = np.sqrt(Lkk*Lkk + xk*xk)
+
+            # Givens rotation coefficients
+            c = r / Lkk
+            s = xk / Lkk
+
+            L[k, k] = r
+            if k + 1 < n:
+                # Vectorized update of the tail
+                L[k+1:, k] = (L[k+1:, k] + s * x[k+1:]) / c
+                x[k+1:] = c * x[k+1:] - s * L[k+1:, k]
+
+        return L
+    
+    def _update_online(self, x_new, y_new):
+        """Efficient online update using rank-1 Cholesky update
+        
+        Updates the Cholesky factorization L of (Φ^T Φ + σ²I) incrementally
+        using O(M²) rank-1 Cholesky update when new data arrives.
+        
+        NOTE: This implementation assumes x_new contains only ONE data point.
+        For multiple points, call this method repeatedly.
+        
+        Parameters
+        ----------
+        x_new : ndarray [1 × (n_s_in + n_u)]
+            New training input (single sample)
+        y_new : ndarray [1 × n_s_out]
+            New training target (single sample)
         """
         x_new = np.atleast_2d(x_new)
         y_new = np.atleast_2d(y_new)
+        
+        if x_new.shape[0] != 1:
+            raise ValueError("_update_online expects exactly one new sample. Got {} samples.".format(x_new.shape[0]))
         
         if x_new.shape[0] != y_new.shape[0]:
             raise ValueError("x_new and y_new must have same number of samples")
         
         for i in range(self.n_s_out):
-            # Compute features for new data
-            Phi_new = self._phi_features(x_new, self.lambdas[i], i)  # [n_new × n_features]
+            # Compute features for new data point
+            phi = self._phi_features(x_new, self.lambdas[i], i).ravel()  # [n_features]
 
-            # Use Cholesky rank-k update: update L to incorporate Φ_new^T @ Φ_new
-            L = self.L_PhiT_Phi[i].copy()
+            # Rank-1 Cholesky update: A <- A + phi phi^T (O(M²))
+            L = self.L_PhiT_Phi[i]
+            try:
+                self._cholupdate_lower_inplace(L, phi)
+            except (ValueError, FloatingPointError):
+                warnings.warn(f"Cholesky update failed for dim {i}, recomputing from scratch")
+                # Fall back to recomputing from scratch
+                x_all = np.vstack((self.x_train, x_new))
+                y_all = np.vstack((self.y_train, y_new))
+                self.train(x_all, y_all, opt_hyp=False)
+                return
             
-            # Sequential rank-1 updates for each new sample
-            for j in range(x_new.shape[0]):
-                phi_j = Phi_new[j:j+1, :]
-                L = self.chol_rankk_update_qr(L, phi_j)
-                
-                # Check for numerical issues (nearly singular L)
-                if np.any(np.diag(L) < 1e-12):
-                    warnings.warn(f"Cholesky factor nearly singular for dim {i}, recomputing from scratch")
-                    # Fall back to recomputing from scratch
-                    x_all = np.vstack((self.x_train, x_new))
-                    y_all = np.vstack((self.y_train, y_new))
-                    self.train(x_all, y_all, opt_hyp=False)
-                    return
+            # Check for numerical issues (nearly singular L)
+            if np.any(np.diag(L) < 1e-12):
+                warnings.warn(f"Cholesky factor nearly singular for dim {i}, recomputing from scratch")
+                # Fall back to recomputing from scratch
+                x_all = np.vstack((self.x_train, x_new))
+                y_all = np.vstack((self.y_train, y_new))
+                self.train(x_all, y_all, opt_hyp=False)
+                return
             
-            self.L_PhiT_Phi[i] = L
+            # Update Φ^T y incrementally: b <- b + phi * y
+            self.PhiT_y[i] += phi * float(y_new[0, i])
             
-            # Update Φ^T y incrementally
-            self.PhiT_y[i] += Phi_new.T @ y_new[:, i:i+1].ravel()
-            
-            # Recompute posterior mean coefficients
-            temp = np.linalg.solve(self.L_PhiT_Phi[i], self.PhiT_y[i])
-            self.posterior_mean_coeffs[i] = np.linalg.solve(self.L_PhiT_Phi[i].T, temp)
+            # Solve (L L^T) w = b for posterior coefficients (O(M²))
+            self.posterior_mean_coeffs[i] = self._solve_chol_lower(L, self.PhiT_y[i])
         
         # Update training data
         self.x_train = np.vstack((self.x_train, x_new))
         self.y_train = np.vstack((self.y_train, y_new))
 
-    def chol_rankk_update_qr(self, L, Phi_new):
-        """
-        Update L (lower-tri Cholesky of A) to be Cholesky of A + Phi_new^T Phi_new.
-        L: (M,M) lower, A = L L^T
-        Phi_new: (n_new, M)
-        returns L_new: (M,M) lower
-        """
-        # U^T is Phi_new, stack [L^T; Phi_new]
-        S = np.vstack([L.T, Phi_new])
-        # Thin QR: S = Q R, R is (M,M) upper
-        _, R = np.linalg.qr(S, mode="reduced")
-        # Ensure positive diagonal (Cholesky convention)
-        d = np.sign(np.diag(R))
-        d[d == 0] = 1.0
-        R = (d[:, None]) * R
-        return R.T 
-
     def _cholesky_rank1_update(self, L, v):
-        """Update Cholesky factor L when adding v @ v^T to L @ L^T
+        """DEPRECATED: Use _cholupdate_lower_inplace instead.
         
-        Given L @ L^T and vector v, compute L_new such that:
-        L_new @ L_new^T = L @ L^T + v @ v^T
-        
-        Uses standard Givens rotations for numerical stability.
-        Standard formula: c = L_kk / r, s = v_k / r where r = √(L_kk² + v_k²)
+        This method creates a copy of L and is less efficient than in-place update.
+        Kept for backward compatibility only.
         
         Parameters
         ----------
@@ -1242,25 +1268,9 @@ class ScalableGPModel(GPModelBase):
         L_new : ndarray [n × n]
             Updated Cholesky factor
         """
-        v = np.asarray(v).ravel()
-        n = len(v)
+        warnings.warn("_cholesky_rank1_update is deprecated, use _cholupdate_lower_inplace", DeprecationWarning)
         L_new = L.copy()
-        v_work = v.copy()
-        
-        for k in range(n):
-            r = np.sqrt(L_new[k, k]**2 + v_work[k]**2)
-            
-            # Standard stable formula
-            c = L_new[k, k] / r
-            s = v_work[k] / r
-            
-            L_new[k, k] = r
-            
-            if k < n - 1:
-                # Update remaining entries in column k and working vector
-                L_new[k+1:, k] = c * L_new[k+1:, k] + s * v_work[k+1:]
-                v_work[k+1:] = c * v_work[k+1:] - s * L_new[k+1:, k]
-        
+        self._cholupdate_lower_inplace(L_new, v)
         return L_new
     
     def sample_from_gp(self, inp, size=10):

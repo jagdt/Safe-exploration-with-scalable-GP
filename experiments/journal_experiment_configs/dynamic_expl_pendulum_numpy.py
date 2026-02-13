@@ -17,7 +17,8 @@ class Config(DefaultConfigExploration):
     n_iterations = 6
     n_safe_samples = 600
 
-    noise_std_dev = [1e-3, 1e-4]
+
+    noise_std_dev = [5e-4, 5e-5]
     # environment
     env_name = "InvertedPendulum"
     env_options = dict()
@@ -35,7 +36,7 @@ class Config(DefaultConfigExploration):
     gp_type = 'scalable'  # one of 'gpy', 'numpy', 'scalable'
     use_global_opt_first = False
     domain_lengths = [6.0, 2.5, 2.0]  # [dθ, θ, u]
-    update_model_interval = None  # update GP with new data every n-th iteration, None to disable
+    update_model_interval = 1  # update GP with new data every n-th iteration, None to disable
     retrain_gp_interval = None # retrain the gp every n-th iteration, None to disable
 
     # -- Scalable GP specific parameters

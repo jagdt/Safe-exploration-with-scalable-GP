@@ -314,7 +314,7 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_b
         proj_dim = proj_error_per_dim[dim]
         
         if save_dir is not None:
-            save_path = os.path.join(save_dir, f'model_error_1d_u_dim{dim}.png')
+            save_path = os.path.join(save_dir, f'model_error_1d_u_dim{dim}.svg')
         plot_1d_comparison(
             states_1d_u, actions_1d_u, true_error_1d_u, gp_mean_1d_u, gp_std_1d_u,
             state_dim=dim, vary_dim=2,  # u is at index 2
@@ -332,7 +332,7 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_b
         proj_dim = proj_error_per_dim[dim]
         
         if save_dir is not None:
-            save_path = os.path.join(save_dir, f'model_error_1d_theta_dim{dim}.png')
+            save_path = os.path.join(save_dir, f'model_error_1d_theta_dim{dim}.svg')
         plot_1d_comparison(
             states_1d_theta, actions_1d_theta, true_error_1d_theta, gp_mean_1d_theta, gp_std_1d_theta,
             state_dim=dim, vary_dim=1,  # theta is at index 1
@@ -350,7 +350,7 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_b
         proj_dim = proj_error_per_dim[dim]
         
         if save_dir is not None:
-            save_path = os.path.join(save_dir, f'model_error_1d_dtheta_dim{dim}.png')
+            save_path = os.path.join(save_dir, f'model_error_1d_dtheta_dim{dim}.svg')
         plot_1d_comparison(
             states_1d_dtheta, actions_1d_dtheta, true_error_1d_dtheta, gp_mean_1d_dtheta, gp_std_1d_dtheta,
             state_dim=dim, vary_dim=0,  # dtheta is at index 0
@@ -365,7 +365,7 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_b
     # Plot theta vs u
     for dim in range(safempc.n_s):
         if save_dir is not None:
-            save_path = os.path.join(save_dir, f'model_error_2d_theta_u_dim{dim}.png')
+            save_path = os.path.join(save_dir, f'model_error_2d_theta_u_dim{dim}.svg')
         plot_2d_comparison(
             states_2d_theta_u, actions_2d_theta_u, true_error_2d_theta_u, 
             gp_mean_2d_theta_u, gp_std_2d_theta_u,
@@ -381,7 +381,7 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_b
     # Plot dtheta vs u
     for dim in range(safempc.n_s):
         if save_dir is not None:
-            save_path = os.path.join(save_dir, f'model_error_2d_dtheta_u_dim{dim}.png')
+            save_path = os.path.join(save_dir, f'model_error_2d_dtheta_u_dim{dim}.svg')
         plot_2d_comparison(
             states_2d_dtheta_u, actions_2d_dtheta_u, true_error_2d_dtheta_u, 
             gp_mean_2d_dtheta_u, gp_std_2d_dtheta_u,
@@ -397,7 +397,7 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_b
     # Plot dtheta vs theta
     for dim in range(safempc.n_s):
         if save_dir is not None:
-            save_path = os.path.join(save_dir, f'model_error_2d_dtheta_theta_dim{dim}.png')
+            save_path = os.path.join(save_dir, f'model_error_2d_dtheta_theta_dim{dim}.svg')
         plot_2d_comparison(
             states_2d_dtheta_theta, actions_2d_dtheta_theta, true_error_2d_dtheta_theta, 
             gp_mean_2d_dtheta_theta, gp_std_2d_dtheta_theta,
@@ -415,7 +415,7 @@ def plot_model_error_comparison(safempc, env, save_dir=None, n_points=30, plot_b
     true_error_train = compute_true_model_error(safempc, env, states_train_orig, actions_train)
     
     if save_dir is not None:
-        scatter_save_path = os.path.join(save_dir, 'model_error_training_scatter.png')
+        scatter_save_path = os.path.join(save_dir, 'model_error_training_scatter.svg')
     else:
         scatter_save_path = None
     
@@ -517,10 +517,7 @@ def plot_1d_comparison(states, actions, true_error, gp_mean, gp_std,
     plt.tight_layout()
     
     if save_path is not None:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight', facecolor='white')
-        # Also save as PDF
-        # pdf_path = save_path.replace('.png', '.pdf')
-        # plt.savefig(pdf_path, bbox_inches='tight', facecolor='white')
+        plt.savefig(save_path, bbox_inches='tight', facecolor='white')
         print(f"  Saved: {error_names[state_dim]} (1D) -> {save_path}")
         plt.close(fig)
     else:
@@ -659,10 +656,7 @@ def plot_2d_comparison(states, actions, true_error, gp_mean, gp_std,
     cbar3.set_label('Standard deviation')
     
     if save_path is not None:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight', facecolor='white')
-        # Also save as PDF
-        # pdf_path = save_path.replace('.png', '.pdf')
-        # plt.savefig(pdf_path, bbox_inches='tight', facecolor='white')
+        plt.savefig(save_path, bbox_inches='tight', facecolor='white')
         print(f"  Saved: {error_names[state_dim]} (2D) -> {save_path}")
         plt.close(fig)
     else:
@@ -757,14 +751,11 @@ def plot_training_error_scatter(states, actions, true_error, gp_mean, dim_names,
     plt.tight_layout()
     
     if save_path is not None:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight', facecolor='white')
-        # Also save as PDF
-        # pdf_path = save_path.replace('.png', '.pdf')
-        # plt.savefig(pdf_path, bbox_inches='tight', facecolor='white')
+        plt.savefig(save_path, bbox_inches='tight', facecolor='white')
         print(f"  Saved: training error mismatch (3D scatter) -> {save_path}")
         
         # Also save as pickle for interactive viewing
-        pkl_path = save_path.replace('.png', '.pkl')
+        pkl_path = save_path.replace('.svg', '.pkl')
         with open(pkl_path, 'wb') as f:
             pickle.dump(fig, f)
         print(f"  Saved: interactive figure (pickle) -> {pkl_path}")
