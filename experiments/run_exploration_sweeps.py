@@ -79,11 +79,14 @@ def run_exploration_experiment(config, experiment_name="experiment"):
                 # Compute statistics for each timing component
                 metrics['timing'] = {}
                 n_iterations = config.n_iterations
+                initial_training_per_iter = 0.0
+                
                 for key, values in timing_data.items():
                     if key == 'initial_training':
                         # Initial training is a scalar - amortize over all iterations
                         if isinstance(values, (int, float)):
                             per_iter = float(values) / n_iterations
+                            initial_training_per_iter = per_iter
                             metrics['timing'][key] = {
                                 'mean': per_iter,
                                 'total': float(values),
@@ -96,6 +99,11 @@ def run_exploration_experiment(config, experiment_name="experiment"):
                             'total': float(np.sum(values)),
                             'per_iteration': values.tolist()
                         }
+                
+                # Add amortized initial training time to total time
+                if 'total' in metrics['timing'] and initial_training_per_iter > 0:
+                    metrics['timing']['total']['mean'] += initial_training_per_iter
+                    metrics['timing']['total']['total'] += initial_training_per_iter * n_iterations
         
         # Extract information gain
         if 'inf_gain' in results and results['inf_gain']:
@@ -260,7 +268,10 @@ def main():
     }
     
     # Random seeds for statistical robustness
-    seeds = [1,2,3,4,5]
+    # seeds = [1,2,3,4,5]
+    # seeds = [6,7,8,9,10]
+    seeds = [11,12,13,14,15,16,17,18,19,20]
+    # seeds = [6,7,8,9,10]
     # seeds = list(range(2))
     # seeds = [1,2]  # For quick testing - use more seeds for full sweep
     
