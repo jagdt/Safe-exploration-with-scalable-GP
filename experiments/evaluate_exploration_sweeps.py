@@ -603,18 +603,18 @@ def plot_safety_metrics(n_samples_values,
     ax1.axhline(y=95, color='grey', linestyle='--', linewidth=2, alpha=0.6, zorder=1)
     
     ax1.bar(x - width/2, numpy_safety_mean, width, 
-            yerr=numpy_safety_std, label='Standard GP', 
-            color=RWTH_LIGHT_GREEN, alpha=0.8, capsize=5, zorder=3)
+            label='Standard GP', 
+            color=RWTH_LIGHT_GREEN, alpha=0.8, zorder=3)
     ax1.bar(x + width/2, scalable_safety_mean, width,
-            yerr=scalable_safety_std, label='Scalable GP',
-            color=RWTH_LIGHT_BLUE, alpha=0.8, capsize=5, zorder=3)
+            label='Scalable GP',
+            color=RWTH_LIGHT_BLUE, alpha=0.8, zorder=3)
     
     ax1.set_xlabel(r'Number of initial training points $N_{\mathrm{init}}$', labelpad=10, x=0.42)
     ax1.set_ylabel('Safety verification\nsuccess rate (%)', labelpad=15)
     ax1.set_xticks(x)
     ax1.set_xticklabels([str(int(n)) for n in n_samples_values])
     ax1.legend(loc='lower left')
-    ax1.set_ylim([80, 100])
+    ax1.set_ylim([90, 101])
     
     plt.tight_layout()
     
@@ -633,18 +633,18 @@ def plot_safety_metrics(n_samples_values,
     ax2.axhline(y=95, color='grey', linestyle='--', linewidth=6, alpha=0.6, zorder=1)
     
     ax2.bar(x - width/2, numpy_inside_mean, width,
-            yerr=numpy_inside_std, label='Standard GP',
-            color=RWTH_LIGHT_GREEN, alpha=0.8, capsize=5, zorder=3)
+            label='Standard GP',
+            color=RWTH_LIGHT_GREEN, alpha=0.8, zorder=3)
     ax2.bar(x + width/2, scalable_inside_mean, width,
-            yerr=scalable_inside_std, label='Scalable GP',
-            color=RWTH_LIGHT_BLUE, alpha=0.8, capsize=5, zorder=3)
+            label='Scalable GP',
+            color=RWTH_LIGHT_BLUE, alpha=0.8, zorder=3)
     
     ax2.set_xlabel(r'Number of initial training points $N_{\mathrm{init}}$', labelpad=10, x=0.42)
     ax2.set_ylabel('Trajectory inside\nellipsoid rate (%)', labelpad=15)
     ax2.set_xticks(x)
     ax2.set_xticklabels([str(int(n)) for n in n_samples_values])
     ax2.legend(loc='lower left')
-    ax2.set_ylim([80, 102])
+    ax2.set_ylim([90, 101])
     
     plt.tight_layout()
     
@@ -979,7 +979,7 @@ def main():
     """Main evaluation function"""
     
     # Specify result directories
-    timestamp = "20260212_203904"
+    timestamp = "20260214_142605"  # Update this to match the timestamp of your sweep results
     
     initial_samples_dir = f"experiments/results_exploration/initial_samples_sweep_{timestamp}"
     
