@@ -599,15 +599,15 @@ def plot_safety_metrics(n_samples_values,
     # Plot 1: Safety verification success rate
     fig1, ax1 = plt.subplots(figsize=(12, 8))
     
-    # Add grey line at 95% confidence level
-    ax1.axhline(y=95, color='grey', linestyle='--', linewidth=2, alpha=0.6, zorder=1)
-    
     ax1.bar(x - width/2, numpy_safety_mean, width, 
             label='Standard GP', 
             color=RWTH_LIGHT_GREEN, alpha=0.8, zorder=3)
     ax1.bar(x + width/2, scalable_safety_mean, width,
             label='Scalable GP',
             color=RWTH_LIGHT_BLUE, alpha=0.8, zorder=3)
+    
+    # Add grey line at 95% confidence level (on top of bars)
+    ax1.axhline(y=95, color='grey', linestyle='--', linewidth=6, alpha=1.0, zorder=4, label='95% confidence level')
     
     ax1.set_xlabel(r'Number of initial training points $N_{\mathrm{init}}$', labelpad=10, x=0.42)
     ax1.set_ylabel('Safety verification\nsuccess rate (%)', labelpad=15)
@@ -629,15 +629,15 @@ def plot_safety_metrics(n_samples_values,
     # Plot 2: Trajectory fully inside ellipsoid rate
     fig2, ax2 = plt.subplots(figsize=(12, 8))
     
-    # Add grey line at 95% confidence level
-    ax2.axhline(y=95, color='grey', linestyle='--', linewidth=6, alpha=0.6, zorder=1)
-    
     ax2.bar(x - width/2, numpy_inside_mean, width,
             label='Standard GP',
             color=RWTH_LIGHT_GREEN, alpha=0.8, zorder=3)
     ax2.bar(x + width/2, scalable_inside_mean, width,
             label='Scalable GP',
             color=RWTH_LIGHT_BLUE, alpha=0.8, zorder=3)
+    
+    # Add grey line at 95% confidence level (on top of bars)
+    ax2.axhline(y=95, color='grey', linestyle='--', linewidth=6, alpha=1.0, zorder=4, label='95% confidence level')
     
     ax2.set_xlabel(r'Number of initial training points $N_{\mathrm{init}}$', labelpad=10, x=0.42)
     ax2.set_ylabel('Trajectory inside\nellipsoid rate (%)', labelpad=15)
@@ -979,7 +979,7 @@ def main():
     """Main evaluation function"""
     
     # Specify result directories
-    timestamp = "20260214_142605"  # Update this to match the timestamp of your sweep results
+    timestamp = "20260214_162446"  # Update this to match the timestamp of your sweep results
     
     initial_samples_dir = f"experiments/results_exploration/initial_samples_sweep_{timestamp}"
     
