@@ -99,7 +99,7 @@ class DefaultConfigExploration(DefaultConfig):
     save_results = True
     save_vis = True
     visualize_ellipsoids = True
-    visualize_safe_trajectory = False
+    visualize_safe_trajectory = True
     save_dir = None  # the directory such that the overall save location is save_path_base/save_dir/, if None uses timestamp
     save_path_base = "results_exploration"  # the directory such that the overall save location is save_path_base/save_dir/
     data_savename = None

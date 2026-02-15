@@ -215,7 +215,7 @@ def run_exploration(conf, visualize=False):
                                 for j in range(len(x_traj_safe)):
                                     x_unnorm, _ = env.unnormalize(x_traj_safe[j].squeeze())
                                     line, = ax.plot(x_unnorm[0], x_unnorm[1], color=RWTH_GREEN, 
-                                                  marker='o', markersize=2, linestyle='')
+                                                  marker='o', mew=1.2)
                                     traj.append(line)
                         
                         fig.canvas.draw()
@@ -236,6 +236,11 @@ def run_exploration(conf, visualize=False):
                 if visualize:
                     plt.show(block=False)
                     plt.pause(0.25)
+                
+                # Save trajectory plot after each iteration
+                if save_vis and save_path is not None:
+                    iteration_filename = f'trajectory_iter_{i+1:03d}.svg'
+                    save_trajectory_plot(fig, save_path, filename=iteration_filename)
 
             # Apply to system and observe next state
             # only reset the system to a different state in static mode
@@ -284,7 +289,7 @@ def run_exploration(conf, visualize=False):
             x_i = x_next
 
         if save_vis and save_path is not None:
-            save_trajectory_plot(fig, save_path)
+            save_trajectory_plot(fig, save_path, filename='trajectory_final.svg')
             plt.close(fig)
 
         l_inf_gain += [inf_gain]

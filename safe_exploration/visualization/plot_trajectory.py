@@ -14,6 +14,7 @@ from matplotlib.patches import Rectangle, PathPatch
 from matplotlib.path import Path
 from matplotlib.lines import Line2D
 from matplotlib.ticker import MaxNLocator
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from .styles import (
     RWTH_BLACK, RWTH_PETROL, RWTH_GRAY, RWTH_LIGHT_BLUE,
@@ -45,6 +46,9 @@ def setup_trajectory_plot(env, exploration_module, config, n_iterations):
     """
     # Create base plot with safety bounds
     fig, ax = env.plot_safety_bounds(color=RWTH_BLACK, normalize=False)
+    
+    # Set explicit margins to ensure consistent spacing with/without colorbar
+    fig.subplots_adjust(left=0.12, right=0.85, top=0.95, bottom=0.12)
     
     # Set axis labels and title
     ax.set_xlabel(get_axis_label('angular_velocity'))
@@ -87,7 +91,14 @@ def add_trajectory_colorbar_and_legend(fig, ax, config, exploration_module,
     if n_iterations > 1:
         sm = plt.cm.ScalarMappable(cmap=RWTH_CMAP, norm=plt.Normalize(vmin=1, vmax=n_iterations))
         sm.set_array([])
-        cbar = fig.colorbar(sm, ax=ax, pad=0.02, aspect=30)
+        
+        # Manually create colorbar axes in the reserved right space
+        # Get the position of the main axes
+        pos = ax.get_position()
+        # Create colorbar axes: [left, bottom, width, height]
+        # Position it in the reserved space on the right
+        cax = fig.add_axes([0.88, pos.y0, 0.04, pos.height])
+        cbar = fig.colorbar(sm, cax=cax)
         cbar.set_label('Exploration step', rotation=270, labelpad=35)
         cbar.ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     
@@ -290,14 +301,14 @@ def _create_legend_elements(config, exploration_module, verify_safety,
     if show_safe_traj:
         legend_elements.append(
             Line2D([0], [0], color=RWTH_GREEN, linewidth=0, marker='o',
-                   markersize=markersize, label='Safe trajectory')
+                   markersize=markersize, label='Simulated trajectory')
         )
     
     return legend_elements
 
 
-def save_trajectory_plot(fig, save_path, filename='trajectory_final.png'):
-    """Save trajectory plot to file.
+def save_trajectory_plot(fig, save_path, filename='trajectory_final.svg'):
+    """Save trajectory plot to file as SVG.
     
     Parameters
     ----------
@@ -306,22 +317,17 @@ def save_trajectory_plot(fig, save_path, filename='trajectory_final.png'):
     save_path : str
         Directory path to save the plot
     filename : str
-        Filename for the saved plot (default: 'trajectory_final.png')
+        Filename for the saved plot (default: 'trajectory_final.svg')
         
     Returns
     -------
     str
         Full path to saved file
     """
-    # Save as PNG
-    full_path = f"{save_path}/{filename}"
-    fig.savefig(full_path, dpi=300, bbox_inches='tight', facecolor='white')
-    print(f"Saved trajectory plot: {full_path}")
+
     
-    # Save as SVG
-    svg_filename = filename.replace('.png', '.svg')
-    svg_path = f"{save_path}/{svg_filename}"
-    fig.savefig(svg_path, format='svg', bbox_inches='tight', facecolor='white')
-    print(f"Saved trajectory plot (SVG): {svg_path}")
+    svg_path = f"{save_path}/{filename}"
+    fig.savefig(svg_path, format='svg', facecolor='white')
+    print(f"Saved trajectory plot: {svg_path}")
     
-    return full_path
+    return svg_path
