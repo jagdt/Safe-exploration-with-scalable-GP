@@ -223,14 +223,6 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
         handles.append((h3a, h3b))
         labels.append('Standard GP (MPC)')
         bottom_numpy += values
-        
-        # Other - alpha=0.4
-        values = np.array(all_timing_data['numpy']['other'])
-        h4 = ax.bar(x - width/2, values, width,
-               bottom=bottom_numpy, color=RWTH_GREEN, alpha=0.4)
-        handles.append(h4)
-        labels.append('Standard GP (Other)')
-        bottom_numpy += values
     
     # Plot Scalable GP
     if 'scalable' in gp_types and 'scalable' in all_timing_data:
@@ -262,14 +254,6 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
                bottom=bottom_scalable, color='none', alpha=1.0, hatch='//', edgecolor='black', linewidth=0)
         handles.append((h7a, h7b))
         labels.append('Scalable GP (MPC)')
-        bottom_scalable += values
-        
-        # Other - alpha=0.4
-        values = np.array(all_timing_data['scalable']['other'])
-        h8 = ax.bar(x + width/2, values, width,
-               bottom=bottom_scalable, color=RWTH_BLUE, alpha=0.4)
-        handles.append(h8)
-        labels.append('Scalable GP (Other)')
         bottom_scalable += values
     
     ax.set_xlabel(r'Number of initial training points $N_{\mathrm{init}}$')
@@ -979,7 +963,7 @@ def main():
     """Main evaluation function"""
     
     # Specify result directories
-    timestamp = "20260214_162446"  # Update this to match the timestamp of your sweep results
+    timestamp = "20260213_dynamic_20_random_seeds_reduced_plot"  # Update this to match the timestamp of your sweep results
     
     initial_samples_dir = f"experiments/results_exploration/initial_samples_sweep_{timestamp}"
     

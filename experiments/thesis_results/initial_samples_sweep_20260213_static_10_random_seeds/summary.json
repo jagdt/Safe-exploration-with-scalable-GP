@@ -1,0 +1,26 @@
+{
+  "sweep_type": "initial_samples",
+  "gp_types": [
+    "numpy",
+    "scalable"
+  ],
+  "n_values": [
+    400,
+    500,
+    600
+  ],
+  "seeds": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10
+  ],
+  "n_experiments": 60,
+  "n_successful": 60
+}
