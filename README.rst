@@ -1,5 +1,5 @@
 =======================================================================================================
- Learning-based Model Predictive Control for Safe Exploration with scalable Gaussian process regression
+ Learning-based Model Predictive Control with scalable Gaussian process regression for safe exploration
 =======================================================================================================
 
 .. image:: https://img.shields.io/badge/python-3.7+-blue.svg
@@ -14,6 +14,18 @@
 Overview
 --------
 
+**Thesis Scope:**
+
+This repository contains the code accompanying the author's Master's thesis, which develops a scalable Gaussian process (GP) framework that retains uniform uncertainty guarantees for use in learning-based Model Predictive Control (MPC). A paper describing this work is planned and will be linked here once available.
+
+**Thesis Abstract:**
+
+::
+
+   Learning-based Model Predictive Control (MPC) using Gaussian processes (GPs) is an effective approach for safe control in the presence of model mismatch. High probability safety guarantees typically require uniform uncertainty bounds that hold over the entire state–input domain, but existing bounds are available only for full GP regression. Since exact GP inference scales poorly with the number of data points, these approaches become impractical in large-data regimes.
+
+   This thesis closes this gap by developing a scalable GP framework that retains uniform uncertainty guarantees. We propose a finite-dimensional kernel approximation based on discretized trigonometric features, reducing GP regression to Bayesian linear regression in feature space and enabling efficient online updates. We derive a high-probability uniform uncertainty bound for the proposed finite-dimensional kernel approximation, and derive its closed-form solution for the squared-exponential kernel case. Finally, we integrate the proposed scalable GP into a safe learning-based MPC scheme and demonstrate that it achieves uncertainty bounds and exploration performance comparable to a standard GP while improving computational efficiency in large-data regimes.
+
 This implementation builds upon the SafeMPC framework proposed in the following paper:
 
 .. [1] T. Koller, F. Berkenkamp, M. Turchetta, A. Krause,
@@ -21,10 +33,6 @@ This implementation builds upon the SafeMPC framework proposed in the following 
   in Proc. of the Conference on Decision and Control (CDC), 2018
 
 and extends it with a scalable GP model.
-
-**Supported Environment:**
-
-- Inverted Pendulum
 
 **Exploration Modes:**
 
