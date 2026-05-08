@@ -14,24 +14,35 @@ import json
 from pathlib import Path
 from collections import defaultdict
 from matplotlib.ticker import MaxNLocator
+import argparse
 
 # Add parent directory to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-# Configure matplotlib for publication-quality plots
+# Configure matplotlib
 plt.rcParams.update({
     'font.family': 'serif',
     'font.serif': ['Computer Modern Roman', 'Times New Roman', 'DejaVu Serif'],
-    'font.size': 18,
-    'axes.labelsize': 22,
-    'axes.titlesize': 24,
-    'xtick.labelsize': 18,
-    'ytick.labelsize': 18,
-    'legend.fontsize': 16,
-    'lines.linewidth': 3.5,
+    'font.size': 4,
+    'axes.labelsize': 26,
+    'axes.titlesize': 28,
+    'xtick.labelsize': 22,
+    'ytick.labelsize': 22,
+    'legend.fontsize': 20,
+    'lines.linewidth': 4.5,
     'text.usetex': False,
     'mathtext.fontset': 'cm'
 })
+
+# Larger font sizes for subfigure display (will be ~0.48 textwidth instead of 0.85)
+large_plot_params = {
+    'font.size': 30,
+    'axes.labelsize': 36,
+    'xtick.labelsize': 30,
+    'ytick.labelsize': 30,
+    'legend.fontsize': 28,
+    'lines.linewidth': 4.5,
+}
 
 # RWTH colors
 RWTH_BLUE = '#00549F'
@@ -277,7 +288,7 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
     plt.show()
 
 
-def plot_info_gain_trajectories(results_by_type, gp_types, param_name, param_values, output_dir=None):
+def plot_info_gain_trajectories(results_by_type, gp_types, param_name, param_values, output_dir=None, use_large_fonts=True):
     """
     Plot mutual information development over iterations for different parameter values
     
@@ -293,16 +304,14 @@ def plot_info_gain_trajectories(results_by_type, gp_types, param_name, param_val
         Sorted list of parameter values
     output_dir : str, optional
         Directory to save plots
+    use_large_fonts : bool, optional
+        Whether to use larger font sizes for subfigure display (default: True)
     """
-    # Larger font sizes for subfigure display (will be ~0.48 textwidth instead of 0.85)
-    with plt.rc_context({
-        'font.size': 30,
-        'axes.labelsize': 36,
-        'xtick.labelsize': 30,
-        'ytick.labelsize': 30,
-        'legend.fontsize': 28,
-        'lines.linewidth': 4.5,
-    }):
+    if use_large_fonts:
+        # Larger font sizes for subfigure display (will be ~0.48 textwidth instead of 0.85)
+        with plt.rc_context(large_plot_params):
+            plot_info_gain_trajectories_impl(results_by_type, gp_types, param_name, param_values, output_dir)
+    else:
         plot_info_gain_trajectories_impl(results_by_type, gp_types, param_name, param_values, output_dir)
 
 
@@ -549,7 +558,8 @@ def plot_safety_metrics(n_samples_values,
                        scalable_safety_mean, scalable_safety_std,
                        numpy_inside_mean, numpy_inside_std,
                        scalable_inside_mean, scalable_inside_std,
-                       output_dir=None):
+                       output_dir=None,
+                       use_large_fonts=True):
     """
     Plot safety metrics comparison between standard GP and scalable GP
     
@@ -567,16 +577,31 @@ def plot_safety_metrics(n_samples_values,
         Mean and std of trajectory inside ellipsoid rate for scalable GP
     output_dir : str, optional
         Directory to save plots
+    use_large_fonts : bool, optional
+        Whether to use larger font sizes for subfigure display (default: True)
     """
-    # Larger font sizes for subfigure display (will be ~0.48 textwidth instead of 0.85)
-    plt.rcParams.update({
-        'font.size': 30,
-        'axes.labelsize': 36,
-        'xtick.labelsize': 30,
-        'ytick.labelsize': 30,
-        'legend.fontsize': 28,
-    })
-    
+    if use_large_fonts:
+        with plt.rc_context(large_plot_params):
+            _plot_safety_metrics_impl(n_samples_values, numpy_safety_mean, numpy_safety_std,
+                                      scalable_safety_mean, scalable_safety_std,
+                                      numpy_inside_mean, numpy_inside_std,
+                                      scalable_inside_mean, scalable_inside_std,
+                                      output_dir)
+    else:
+        _plot_safety_metrics_impl(n_samples_values, numpy_safety_mean, numpy_safety_std,
+                                  scalable_safety_mean, scalable_safety_std,
+                                  numpy_inside_mean, numpy_inside_std,
+                                  scalable_inside_mean, scalable_inside_std,
+                                  output_dir)
+
+
+def _plot_safety_metrics_impl(n_samples_values, 
+                              numpy_safety_mean, numpy_safety_std,
+                              scalable_safety_mean, scalable_safety_std,
+                              numpy_inside_mean, numpy_inside_std,
+                              scalable_inside_mean, scalable_inside_std,
+                              output_dir=None):
+    """Implementation of plot_safety_metrics."""
     x = np.arange(len(n_samples_values))
     width = 0.35
     
@@ -640,10 +665,19 @@ def plot_safety_metrics(n_samples_values,
     plt.show()
 
 
-def plot_initial_samples_comparison(results_dir, output_dir=None):
+def plot_initial_samples_comparison(results_dir, output_dir=None, use_large_fonts=True):
     """
     Plot timing comparison between standard GP and scalable GP
     for varying number of initial samples
+    
+    Parameters
+    ----------
+    results_dir : str
+        Directory containing result files
+    output_dir : str, optional
+        Directory to save plots
+    use_large_fonts : bool, optional
+        Whether to use larger font sizes for subfigure display (default: True)
     """
     print("\n" + "="*80)
     print("EVALUATING INITIAL SAMPLES SWEEP")
@@ -922,7 +956,7 @@ def plot_initial_samples_comparison(results_dir, output_dir=None):
     
     # Create mutual information trajectory plot
     print("\nCreating mutual information trajectory plots...")
-    plot_info_gain_trajectories(results_by_type, ['numpy', 'scalable'], 'n_safe_samples', n_samples_values.tolist(), output_dir)
+    plot_info_gain_trajectories(results_by_type, ['numpy', 'scalable'], 'n_safe_samples', n_samples_values.tolist(), output_dir, use_large_fonts)
     
     # Create mutual information comparison plot
     print("\nCreating mutual information comparison plot...")
@@ -935,7 +969,7 @@ def plot_initial_samples_comparison(results_dir, output_dir=None):
                        scalable_safety_mean, scalable_safety_std,
                        numpy_inside_ellipsoid_mean, numpy_inside_ellipsoid_std,
                        scalable_inside_ellipsoid_mean, scalable_inside_ellipsoid_std,
-                       output_dir)
+                       output_dir, use_large_fonts)
     
     # Print summary
     print("\n" + "="*80)
@@ -961,19 +995,28 @@ def plot_initial_samples_comparison(results_dir, output_dir=None):
 
 def main():
     """Main evaluation function"""
+    parser = argparse.ArgumentParser(description='Evaluate MPC exploration sweep results')
+    parser.add_argument('--large-fonts', action='store_true',
+                        help='Enable larger font sizes for subfigure display (default: use normal fonts)')
+    parser.add_argument('--timestamp', type=str, default="20260213_static_10_random_seeds",
+                        help='Timestamp of sweep results (default: 20260213_static_10_random_seeds)')
+    args = parser.parse_args()
+    
+    use_large_fonts = args.large_fonts
     
     # Specify result directories
-    timestamp = "20260213_dynamic_20_random_seeds_reduced_plot"  # Update this to match the timestamp of your sweep results
+    timestamp = args.timestamp
     
-    initial_samples_dir = f"experiments/results_exploration/initial_samples_sweep_{timestamp}"
+    initial_samples_dir = f"experiments/thesis_results/initial_samples_sweep_{timestamp}"
     
     # Output directory for evaluation plots
-    output_dir = f"experiments/results_exploration/evaluation_plots_{timestamp}"
+    output_dir = f"experiments/paper_plots/evaluation_plots_{timestamp}"
     
     # Check if directories exist
     if os.path.exists(initial_samples_dir):
         print("Evaluating initial samples sweep...")
-        plot_initial_samples_comparison(initial_samples_dir, output_dir)
+        print(f"Using large fonts: {use_large_fonts}")
+        plot_initial_samples_comparison(initial_samples_dir, output_dir, use_large_fonts)
     else:
         print(f"Initial samples results not found: {initial_samples_dir}")
         print("Please update the timestamp or run the sweep first.")
