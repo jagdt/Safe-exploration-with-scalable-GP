@@ -5,6 +5,7 @@ Evaluation script for MPC exploration initial samples sweep
 Aggregates results across multiple seeds and creates comparison plots
 """
 
+from logging import warning
 import sys
 import os
 import numpy as np
@@ -151,11 +152,13 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
     all_timing_data = {}
     for gp_type in gp_types:
         timing_means = {comp: [] for comp in components}
+        timing_stds = {comp: [] for comp in components}
         
         for param_val in param_values:
             if param_val not in results_by_type[gp_type]:
                 for comp in components:
                     timing_means[comp].append(0.0)
+                    timing_stds[comp].append(0.0)
                 continue
             
             results_list = results_by_type[gp_type][param_val]
@@ -174,12 +177,14 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
                                 # For initial_training, amortize over all iterations
                                 comp_times[comp].append(result['timing'][comp] / n_iterations)
             
-            # Compute mean across seeds
+            # Compute mean and std across seeds
             for comp in components:
                 if comp_times[comp]:
                     timing_means[comp].append(np.mean(comp_times[comp]))
+                    timing_stds[comp].append(np.std(comp_times[comp]))
                 else:
                     timing_means[comp].append(0.0)
+                    timing_stds[comp].append(0.0)
         
         # Calculate 'other' time as total - mpc - gp_training - initial_training
         other_time = []
@@ -189,10 +194,12 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
             gp = timing_means['gp_training'][i]
             initial = timing_means['initial_training'][i]
             other = max(0.0, total - mpc - gp - initial)
+            if other/total > 0.05:
+                warning.warn(f"Large 'other' time detected for {gp_type} at param value {param_values[i]}")
             other_time.append(other)
         
         timing_means['other'] = other_time
-        all_timing_data[gp_type] = timing_means
+        all_timing_data[gp_type] = {'means': timing_means, 'stds': timing_stds}
     
     # Plot grouped stacked bars
     fig, ax = plt.subplots(figsize=(12, 8))
@@ -207,65 +214,91 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
     if 'numpy' in gp_types and 'numpy' in all_timing_data:
         bottom_numpy = np.zeros(len(param_values))
         
-        # Initial Training - solid, alpha=1.0
-        values = np.array(all_timing_data['numpy']['initial_training'])
-        h1 = ax.bar(x - width/2, values, width,
-               bottom=bottom_numpy, color=RWTH_GREEN, alpha=1.0)
-        handles.append(h1)
-        labels.append('Standard GP (Initial Training)')
-        bottom_numpy += values
+        # # Initial Training - solid, alpha=1.0
+        # values = np.array(all_timing_data['numpy']['means']['initial_training'])
+        # h1 = ax.bar(x - width/2, values, width,
+        #        bottom=bottom_numpy, color=RWTH_GREEN, alpha=1.0)
+        # handles.append(h1)
+        # labels.append('Standard GP (Initial Training)')
+        # bottom_numpy += values
         
         # GP Training - solid, alpha=0.8
-        values = np.array(all_timing_data['numpy']['gp_training'])
+        values = np.array(all_timing_data['numpy']['means']['gp_training'])
         h2 = ax.bar(x - width/2, values, width,
-               bottom=bottom_numpy, color=RWTH_GREEN, alpha=0.8)
+               bottom=bottom_numpy, color=RWTH_GREEN, alpha=1.0)
         handles.append(h2)
         labels.append('Standard GP (Online Training)')
         bottom_numpy += values
         
         # MPC Optimization - hatch, alpha=0.6 for color, alpha=1.0 for hatch
-        values = np.array(all_timing_data['numpy']['mpc_optimization'])
+        values = np.array(all_timing_data['numpy']['means']['mpc_optimization'])
         # First layer: colored background with transparency
         h3a = ax.bar(x - width/2, values, width,
-               bottom=bottom_numpy, color=RWTH_GREEN, alpha=0.6, linewidth=0)
+               bottom=bottom_numpy, color=RWTH_GREEN, alpha=0.8, linewidth=0)
         # Second layer: opaque black hatch lines only
         h3b = ax.bar(x - width/2, values, width,
                bottom=bottom_numpy, color='none', alpha=1.0, hatch='//', edgecolor='black', linewidth=0)
         handles.append((h3a, h3b))
         labels.append('Standard GP (MPC)')
         bottom_numpy += values
+        
+        # # Other time - very light color
+        # values = np.array(all_timing_data['numpy']['means']['other'])
+        # h4 = ax.bar(x - width/2, values, width,
+        #        bottom=bottom_numpy, color=RWTH_GREEN, alpha=0.3)
+        # handles.append(h4)
+        # labels.append('Standard GP (Other)')
+        # bottom_numpy += values
+        
+        # Add std dev bar at top of stack
+        combined_means = np.array(all_timing_data['numpy']['means']['gp_training']) + np.array(all_timing_data['numpy']['means']['mpc_optimization'])
+        combined_stds = np.array(all_timing_data['numpy']['stds']['gp_training']) + np.array(all_timing_data['numpy']['stds']['mpc_optimization'])
+        ax.errorbar(x - width/2, combined_means, yerr=combined_stds, fmt='none', ecolor='black', capsize=5, capthick=2, elinewidth=2, alpha=0.7, zorder=10)
     
     # Plot Scalable GP
     if 'scalable' in gp_types and 'scalable' in all_timing_data:
         bottom_scalable = np.zeros(len(param_values))
         
-        # Initial Training - solid, alpha=1.0
-        values = np.array(all_timing_data['scalable']['initial_training'])
-        h5 = ax.bar(x + width/2, values, width,
-               bottom=bottom_scalable, color=RWTH_BLUE, alpha=1.0)
-        handles.append(h5)
-        labels.append('Scalable GP (Initial Training)')
-        bottom_scalable += values
+        # # Initial Training - solid, alpha=1.0
+        # values = np.array(all_timing_data['scalable']['means']['initial_training'])
+        # h5 = ax.bar(x + width/2, values, width,
+        #        bottom=bottom_scalable, color=RWTH_BLUE, alpha=1.0)
+        # handles.append(h5)
+        # labels.append('Scalable GP (Initial Training)')
+        # bottom_scalable += values
         
         # GP Training - solid, alpha=0.8
-        values = np.array(all_timing_data['scalable']['gp_training'])
+        values = np.array(all_timing_data['scalable']['means']['gp_training'])
         h6 = ax.bar(x + width/2, values, width,
-               bottom=bottom_scalable, color=RWTH_BLUE, alpha=0.8)
+               bottom=bottom_scalable, color=RWTH_BLUE, alpha=1.0)
         handles.append(h6)
         labels.append('Scalable GP (Online Training)')
         bottom_scalable += values
         
         # MPC Optimization - hatch, alpha=0.6 for color, alpha=1.0 for hatch
-        values = np.array(all_timing_data['scalable']['mpc_optimization'])
+        values = np.array(all_timing_data['scalable']['means']['mpc_optimization'])
         # First layer: colored background with transparency
         h7a = ax.bar(x + width/2, values, width,
-               bottom=bottom_scalable, color=RWTH_BLUE, alpha=0.6, linewidth=0)
+               bottom=bottom_scalable, color=RWTH_BLUE, alpha=0.8, linewidth=0)
         # Second layer: opaque black hatch lines only
         h7b = ax.bar(x + width/2, values, width,
                bottom=bottom_scalable, color='none', alpha=1.0, hatch='//', edgecolor='black', linewidth=0)
         handles.append((h7a, h7b))
         labels.append('Scalable GP (MPC)')
         bottom_scalable += values
+        
+        # # Other time - very light color
+        # values = np.array(all_timing_data['scalable']['means']['other'])
+        # h8 = ax.bar(x + width/2, values, width,
+        #        bottom=bottom_scalable, color=RWTH_BLUE, alpha=0.3)
+        # handles.append(h8)
+        # labels.append('Scalable GP (Other)')
+        # bottom_scalable += values
+        
+        # Add std dev bar at top of stack
+        combined_means = np.array(all_timing_data['scalable']['means']['gp_training']) + np.array(all_timing_data['scalable']['means']['mpc_optimization'])
+        combined_stds = np.array(all_timing_data['scalable']['stds']['gp_training']) + np.array(all_timing_data['scalable']['stds']['mpc_optimization'])
+        ax.errorbar(x + width/2, combined_means, yerr=combined_stds, fmt='none', ecolor='black', capsize=5, capthick=2, elinewidth=2, alpha=0.7, zorder=10)
     
     ax.set_xlabel(r'Number of initial training points $N_{\mathrm{init}}$')
     ax.set_ylabel('Average time per iteration (s)')
@@ -610,10 +643,10 @@ def _plot_safety_metrics_impl(n_samples_values,
     
     ax1.bar(x - width/2, numpy_safety_mean, width, 
             label='Standard GP', 
-            color=RWTH_LIGHT_GREEN, alpha=0.8, zorder=3)
+            color=RWTH_LIGHT_GREEN, alpha=1.0, zorder=3)
     ax1.bar(x + width/2, scalable_safety_mean, width,
             label='Scalable GP',
-            color=RWTH_LIGHT_BLUE, alpha=0.8, zorder=3)
+            color=RWTH_LIGHT_BLUE, alpha=1.0, zorder=3)
     
     # Add grey line at 95% confidence level (on top of bars)
     ax1.axhline(y=95, color='grey', linestyle='--', linewidth=6, alpha=1.0, zorder=4, label='95% confidence level')
@@ -640,10 +673,10 @@ def _plot_safety_metrics_impl(n_samples_values,
     
     ax2.bar(x - width/2, numpy_inside_mean, width,
             label='Standard GP',
-            color=RWTH_LIGHT_GREEN, alpha=0.8, zorder=3)
+            color=RWTH_LIGHT_GREEN, alpha=1.0, zorder=3)
     ax2.bar(x + width/2, scalable_inside_mean, width,
             label='Scalable GP',
-            color=RWTH_LIGHT_BLUE, alpha=0.8, zorder=3)
+            color=RWTH_LIGHT_BLUE, alpha=1.0, zorder=3)
     
     # Add grey line at 95% confidence level (on top of bars)
     ax2.axhline(y=95, color='grey', linestyle='--', linewidth=6, alpha=1.0, zorder=4, label='95% confidence level')
