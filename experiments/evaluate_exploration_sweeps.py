@@ -153,12 +153,14 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
     for gp_type in gp_types:
         timing_means = {comp: [] for comp in components}
         timing_stds = {comp: [] for comp in components}
+        timing_raws = {comp: [] for comp in components}
         
         for param_val in param_values:
             if param_val not in results_by_type[gp_type]:
                 for comp in components:
                     timing_means[comp].append(0.0)
                     timing_stds[comp].append(0.0)
+                    timing_raws[comp].append([])
                 continue
             
             results_list = results_by_type[gp_type][param_val]
@@ -174,7 +176,7 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
                             if isinstance(result['timing'][comp], dict):
                                 comp_times[comp].append(result['timing'][comp]['mean'])
                             else:
-                                # For initial_training, amortize over all iterations
+                                # For initial_training, amortize over all iterations (if it hasn't been amortized already)
                                 comp_times[comp].append(result['timing'][comp] / n_iterations)
             
             # Compute mean and std across seeds
@@ -182,9 +184,11 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
                 if comp_times[comp]:
                     timing_means[comp].append(np.mean(comp_times[comp]))
                     timing_stds[comp].append(np.std(comp_times[comp]))
+                    timing_raws[comp].append(comp_times[comp])
                 else:
                     timing_means[comp].append(0.0)
                     timing_stds[comp].append(0.0)
+                    timing_raws[comp].append([])
         
         # Calculate 'other' time as total - mpc - gp_training - initial_training
         other_time = []
@@ -199,7 +203,7 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
             other_time.append(other)
         
         timing_means['other'] = other_time
-        all_timing_data[gp_type] = {'means': timing_means, 'stds': timing_stds}
+        all_timing_data[gp_type] = {'means': timing_means, 'stds': timing_stds, 'raw_times': timing_raws}
     
     # Plot grouped stacked bars
     fig, ax = plt.subplots(figsize=(12, 8))
@@ -209,6 +213,10 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
     # Store handles and labels for custom legend
     handles = []
     labels = []
+    
+    # Dummy handles for error bars and scatter points (will add at the end)
+    std_dev_handle = None
+    scatter_handle = None
     
     # Plot Standard GP (numpy)
     if 'numpy' in gp_types and 'numpy' in all_timing_data:
@@ -225,7 +233,7 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
         # GP Training - solid, alpha=0.8
         values = np.array(all_timing_data['numpy']['means']['gp_training'])
         h2 = ax.bar(x - width/2, values, width,
-               bottom=bottom_numpy, color=RWTH_GREEN, alpha=1.0)
+               bottom=bottom_numpy, color=RWTH_GREEN, alpha=0.8)
         handles.append(h2)
         labels.append('Standard GP (Online Training)')
         bottom_numpy += values
@@ -234,7 +242,7 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
         values = np.array(all_timing_data['numpy']['means']['mpc_optimization'])
         # First layer: colored background with transparency
         h3a = ax.bar(x - width/2, values, width,
-               bottom=bottom_numpy, color=RWTH_GREEN, alpha=0.8, linewidth=0)
+               bottom=bottom_numpy, color=RWTH_GREEN, alpha=0.6, linewidth=0)
         # Second layer: opaque black hatch lines only
         h3b = ax.bar(x - width/2, values, width,
                bottom=bottom_numpy, color='none', alpha=1.0, hatch='//', edgecolor='black', linewidth=0)
@@ -253,7 +261,21 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
         # Add std dev bar at top of stack
         combined_means = np.array(all_timing_data['numpy']['means']['gp_training']) + np.array(all_timing_data['numpy']['means']['mpc_optimization'])
         combined_stds = np.array(all_timing_data['numpy']['stds']['gp_training']) + np.array(all_timing_data['numpy']['stds']['mpc_optimization'])
-        ax.errorbar(x - width/2, combined_means, yerr=combined_stds, fmt='none', ecolor='black', capsize=5, capthick=2, elinewidth=2, alpha=0.7, zorder=10)
+        eb = ax.errorbar(x - width/2, combined_means, yerr=combined_stds, fmt='none', ecolor='black', capsize=5, capthick=2, elinewidth=2, alpha=0.7, zorder=10)
+        if std_dev_handle is None:
+            std_dev_handle = eb
+    
+        # Plot individual total-time points to show spread as a vertical stack
+        for idx in range(len(all_timing_data['numpy']['raw_times']['gp_training'])):
+            gp_training = all_timing_data['numpy']['raw_times']['gp_training'][idx]
+            mpc = all_timing_data['numpy']['raw_times']['mpc_optimization'][idx]
+            times = [x + y for x, y in zip(gp_training, mpc)]
+            if not times:
+                continue
+            x_positions = np.full(len(times), x[idx] - width/2)
+            sc = ax.scatter(x_positions, times, color=_rwth_light(RWTH_GREEN,0.75), s=100, edgecolors=_rwth_light(RWTH_GREEN,0.25), linewidth=1.2, zorder=5)
+            if scatter_handle is None:
+                scatter_handle = sc
     
     # Plot Scalable GP
     if 'scalable' in gp_types and 'scalable' in all_timing_data:
@@ -270,7 +292,7 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
         # GP Training - solid, alpha=0.8
         values = np.array(all_timing_data['scalable']['means']['gp_training'])
         h6 = ax.bar(x + width/2, values, width,
-               bottom=bottom_scalable, color=RWTH_BLUE, alpha=1.0)
+               bottom=bottom_scalable, color=RWTH_BLUE, alpha=0.8)
         handles.append(h6)
         labels.append('Scalable GP (Online Training)')
         bottom_scalable += values
@@ -279,7 +301,7 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
         values = np.array(all_timing_data['scalable']['means']['mpc_optimization'])
         # First layer: colored background with transparency
         h7a = ax.bar(x + width/2, values, width,
-               bottom=bottom_scalable, color=RWTH_BLUE, alpha=0.8, linewidth=0)
+               bottom=bottom_scalable, color=RWTH_BLUE, alpha=0.6, linewidth=0)
         # Second layer: opaque black hatch lines only
         h7b = ax.bar(x + width/2, values, width,
                bottom=bottom_scalable, color='none', alpha=1.0, hatch='//', edgecolor='black', linewidth=0)
@@ -300,15 +322,35 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
         combined_stds = np.array(all_timing_data['scalable']['stds']['gp_training']) + np.array(all_timing_data['scalable']['stds']['mpc_optimization'])
         ax.errorbar(x + width/2, combined_means, yerr=combined_stds, fmt='none', ecolor='black', capsize=5, capthick=2, elinewidth=2, alpha=0.7, zorder=10)
     
+        for idx in range(len(all_timing_data['scalable']['raw_times']['gp_training'])):
+            gp_training = all_timing_data['scalable']['raw_times']['gp_training'][idx]
+            mpc = all_timing_data['scalable']['raw_times']['mpc_optimization'][idx]
+            times = [x + y for x, y in zip(gp_training, mpc)]
+            if not times:
+                continue
+            x_positions = np.full(len(times), x[idx] + width/2)
+            ax.scatter(x_positions, times, color=_rwth_light(RWTH_BLUE,0.75), s=100, edgecolors=_rwth_light(RWTH_BLUE,0.25), linewidth=1.2, zorder=5)
+    
     ax.set_xlabel(r'Number of initial training points $N_{\mathrm{init}}$')
     ax.set_ylabel('Average time per iteration (s)')
     ax.set_xticks(x)
     ax.set_xticklabels([str(p) for p in param_values])
-    ax.legend(handles, labels, loc='upper left')
     
-    # Add margin at top (10% extra space)
+    # Add legend entries for std dev and scatter points
+    if std_dev_handle is not None:
+        handles.append(std_dev_handle)
+        labels.append('Std. Dev. (total time)')
+    
+    # Create dummy scatter for legend with neutral color (represents both green and blue points in plot)
+    dummy_scatter = ax.scatter([], [], color='gray', s=100, edgecolors='dimgray', linewidth=1.2, alpha=0.6)
+    handles.append(dummy_scatter)
+    labels.append('Individual Run Times')
+    
+    ax.legend(handles, labels, loc='upper right')
+    
+    # Add margin at top (10% extra space) and ensure y-axis starts at 0
     y_min, y_max = ax.get_ylim()
-    ax.set_ylim([y_min, y_max * 1.1])
+    ax.set_ylim([max(0, y_min), y_max * 1.1])
     
     plt.tight_layout()
     
@@ -1043,7 +1085,7 @@ def main():
     initial_samples_dir = f"experiments/thesis_results/initial_samples_sweep_{timestamp}"
     
     # Output directory for evaluation plots
-    output_dir = f"experiments/paper_plots/evaluation_plots_{timestamp}"
+    output_dir = f"experiments/paper_plots_dev/evaluation_plots_{timestamp}"
     
     # Check if directories exist
     if os.path.exists(initial_samples_dir):
