@@ -25,12 +25,13 @@ plt.rcParams.update({
     'font.family': 'serif',
     'font.serif': ['Computer Modern Roman', 'Times New Roman', 'DejaVu Serif'],
     'font.size': 4,
-    'axes.labelsize': 26,
+    'axes.labelsize': 28,
     'axes.titlesize': 28,
-    'xtick.labelsize': 22,
-    'ytick.labelsize': 22,
-    'legend.fontsize': 20,
-    'lines.linewidth': 4.5,
+    'axes.labelpad': 10,
+    'xtick.labelsize': 24,
+    'ytick.labelsize': 24,
+    'legend.fontsize': 22,
+    'lines.linewidth': 5.0,
     'text.usetex': False,
     'mathtext.fontset': 'cm'
 })
@@ -218,7 +219,7 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
     std_dev_handle = None
     scatter_handle = None
     
-    # Plot Standard GP (numpy)
+    # Plot Full GP (numpy)
     if 'numpy' in gp_types and 'numpy' in all_timing_data:
         bottom_numpy = np.zeros(len(param_values))
         
@@ -227,7 +228,7 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
         # h1 = ax.bar(x - width/2, values, width,
         #        bottom=bottom_numpy, color=RWTH_GREEN, alpha=1.0)
         # handles.append(h1)
-        # labels.append('Standard GP (Initial Training)')
+        # labels.append('Full GP (Initial Training)')
         # bottom_numpy += values
         
         # GP Training - solid, alpha=0.8
@@ -235,7 +236,7 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
         h2 = ax.bar(x - width/2, values, width,
                bottom=bottom_numpy, color=RWTH_GREEN, alpha=0.8)
         handles.append(h2)
-        labels.append('Standard GP (Online Training)')
+        labels.append('Full GP (Online Training)')
         bottom_numpy += values
         
         # MPC Optimization - hatch, alpha=0.6 for color, alpha=1.0 for hatch
@@ -247,7 +248,7 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
         h3b = ax.bar(x - width/2, values, width,
                bottom=bottom_numpy, color='none', alpha=1.0, hatch='//', edgecolor='black', linewidth=0)
         handles.append((h3a, h3b))
-        labels.append('Standard GP (MPC)')
+        labels.append('Full GP (MPC)')
         bottom_numpy += values
         
         # # Other time - very light color
@@ -255,7 +256,7 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
         # h4 = ax.bar(x - width/2, values, width,
         #        bottom=bottom_numpy, color=RWTH_GREEN, alpha=0.3)
         # handles.append(h4)
-        # labels.append('Standard GP (Other)')
+        # labels.append('Full GP (Other)')
         # bottom_numpy += values
         
         # Add std dev bar at top of stack
@@ -286,7 +287,7 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
         # h5 = ax.bar(x + width/2, values, width,
         #        bottom=bottom_scalable, color=RWTH_BLUE, alpha=1.0)
         # handles.append(h5)
-        # labels.append('Scalable GP (Initial Training)')
+        # labels.append('DTF-GP (Initial Training)')
         # bottom_scalable += values
         
         # GP Training - solid, alpha=0.8
@@ -294,7 +295,7 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
         h6 = ax.bar(x + width/2, values, width,
                bottom=bottom_scalable, color=RWTH_BLUE, alpha=0.8)
         handles.append(h6)
-        labels.append('Scalable GP (Online Training)')
+        labels.append('DTF-GP (Online Training)')
         bottom_scalable += values
         
         # MPC Optimization - hatch, alpha=0.6 for color, alpha=1.0 for hatch
@@ -306,7 +307,7 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
         h7b = ax.bar(x + width/2, values, width,
                bottom=bottom_scalable, color='none', alpha=1.0, hatch='//', edgecolor='black', linewidth=0)
         handles.append((h7a, h7b))
-        labels.append('Scalable GP (MPC)')
+        labels.append('DTF-GP (MPC)')
         bottom_scalable += values
         
         # # Other time - very light color
@@ -314,7 +315,7 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
         # h8 = ax.bar(x + width/2, values, width,
         #        bottom=bottom_scalable, color=RWTH_BLUE, alpha=0.3)
         # handles.append(h8)
-        # labels.append('Scalable GP (Other)')
+        # labels.append('DTF-GP (Other)')
         # bottom_scalable += values
         
         # Add std dev bar at top of stack
@@ -357,7 +358,7 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
         filepath = os.path.join(output_dir, f"timing_breakdown_{param_name}.svg")
-        plt.savefig(filepath, bbox_inches='tight')
+        plt.savefig(filepath)
         print(f"\nFigure saved to: {filepath}")
     
     plt.show()
@@ -473,7 +474,7 @@ def plot_info_gain_trajectories_impl(results_by_type, gp_types, param_name, para
                           color=colors[param_idx], alpha=0.2)
         
         ax.set_xlabel('Iteration', labelpad=10)
-        ax.set_ylabel('Mutual information', labelpad=15)
+        ax.set_ylabel('Mutual information', labelpad=10)
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
         ax.legend(loc='upper left')
         # ax.grid(True, alpha=0.3)
@@ -493,7 +494,7 @@ def plot_info_gain_trajectories_impl(results_by_type, gp_types, param_name, para
             
             if output_dir:
                 filepath = os.path.join(output_dir, f"info_gain_trajectory_{gp_type}_{param_name}.svg")
-                plt.savefig(filepath, bbox_inches='tight')
+                plt.savefig(filepath)
                 print(f"Figure saved to: {filepath}")
             
             plt.show()
@@ -501,8 +502,8 @@ def plot_info_gain_trajectories_impl(results_by_type, gp_types, param_name, para
 
 def plot_info_gain_comparison(results_by_type, gp_types, param_name, param_values, output_dir=None):
     """
-    Plot mutual information comparison between Standard GP and Scalable GP in one plot
-    Standard GP in blue (different shades), Scalable GP in green (different shades)
+    Plot mutual information comparison between full GP and Scalable GP in one plot
+    Full GP in blue (different shades), Scalable GP in green (different shades)
     
     Parameters
     ----------
@@ -520,7 +521,7 @@ def plot_info_gain_comparison(results_by_type, gp_types, param_name, param_value
     # Create single plot
     fig, ax = plt.subplots(1, 1, figsize=(12, 8))
     
-    # Generate color shades: Standard GP in blue, Scalable GP in green
+    # Generate color shades: Full GP in blue, Scalable GP in green
     n_params = len(param_values)
 
     def _shades_from_base(hex_color, n, white_mix_max=0.60):
@@ -551,8 +552,8 @@ def plot_info_gain_comparison(results_by_type, gp_types, param_name, param_value
         line_styles = line_styles * ((n_params // len(line_styles)) + 1)
     
     gp_labels = {
-        'numpy': 'Standard GP',
-        'scalable': 'Scalable GP'
+        'numpy': 'Full GP',
+        'scalable': 'DTF-GP'
     }
     
     for param_idx, param_val in enumerate(param_values):
@@ -615,14 +616,14 @@ def plot_info_gain_comparison(results_by_type, gp_types, param_name, param_value
     ax.set_xlabel('Iteration')
     ax.set_ylabel('Mutual information')
     ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-    ax.legend(loc='upper left')
+    ax.legend(loc='lower right')
     # ax.grid(True, alpha=0.3)
     
     plt.tight_layout()
     
     if output_dir:
         filepath = os.path.join(output_dir, f"info_gain_comparison_{param_name}.svg")
-        plt.savefig(filepath, bbox_inches='tight')
+        plt.savefig(filepath)
         print(f"Figure saved to: {filepath}")
     
     plt.show()
@@ -636,7 +637,7 @@ def plot_safety_metrics(n_samples_values,
                        output_dir=None,
                        use_large_fonts=True):
     """
-    Plot safety metrics comparison between standard GP and scalable GP
+    Plot safety metrics comparison between Full GP and scalable GP
     
     Parameters
     ----------
@@ -684,20 +685,20 @@ def _plot_safety_metrics_impl(n_samples_values,
     fig1, ax1 = plt.subplots(figsize=(12, 8))
     
     ax1.bar(x - width/2, numpy_safety_mean, width, 
-            label='Standard GP', 
+            label='Full GP', 
             color=RWTH_LIGHT_GREEN, alpha=1.0, zorder=3)
     ax1.bar(x + width/2, scalable_safety_mean, width,
-            label='Scalable GP',
+            label='DTF-GP',
             color=RWTH_LIGHT_BLUE, alpha=1.0, zorder=3)
     
     # Add grey line at 95% confidence level (on top of bars)
     ax1.axhline(y=95, color='grey', linestyle='--', linewidth=6, alpha=1.0, zorder=4, label='95% confidence level')
     
     ax1.set_xlabel(r'Number of initial training points $N_{\mathrm{init}}$', labelpad=10, x=0.42)
-    ax1.set_ylabel('Safety verification\nsuccess rate (%)', labelpad=15)
+    ax1.set_ylabel('Safety verification\nsuccess rate (%)', labelpad=10)
     ax1.set_xticks(x)
     ax1.set_xticklabels([str(int(n)) for n in n_samples_values])
-    ax1.legend(loc='lower left')
+    ax1.legend(loc='lower right')
     ax1.set_ylim([90, 101])
     
     plt.tight_layout()
@@ -705,7 +706,7 @@ def _plot_safety_metrics_impl(n_samples_values,
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
         filepath = os.path.join(output_dir, "safety_verification_comparison.svg")
-        plt.savefig(filepath, bbox_inches='tight')
+        plt.savefig(filepath)
         print(f"Figure saved to: {filepath}")
     
     plt.show()
@@ -714,27 +715,27 @@ def _plot_safety_metrics_impl(n_samples_values,
     fig2, ax2 = plt.subplots(figsize=(12, 8))
     
     ax2.bar(x - width/2, numpy_inside_mean, width,
-            label='Standard GP',
+            label='Full GP',
             color=RWTH_LIGHT_GREEN, alpha=1.0, zorder=3)
     ax2.bar(x + width/2, scalable_inside_mean, width,
-            label='Scalable GP',
+            label='DTF-GP',
             color=RWTH_LIGHT_BLUE, alpha=1.0, zorder=3)
     
     # Add grey line at 95% confidence level (on top of bars)
     ax2.axhline(y=95, color='grey', linestyle='--', linewidth=6, alpha=1.0, zorder=4, label='95% confidence level')
     
     ax2.set_xlabel(r'Number of initial training points $N_{\mathrm{init}}$', labelpad=10, x=0.42)
-    ax2.set_ylabel('Trajectory inside\nellipsoid rate (%)', labelpad=15)
+    ax2.set_ylabel('Trajectory inside\nellipsoid rate (%)', labelpad=10)
     ax2.set_xticks(x)
     ax2.set_xticklabels([str(int(n)) for n in n_samples_values])
-    ax2.legend(loc='lower left')
+    ax2.legend(loc='lower right')
     ax2.set_ylim([90, 101])
     
     plt.tight_layout()
     
     if output_dir:
         filepath = os.path.join(output_dir, "inside_ellipsoid_comparison.svg")
-        plt.savefig(filepath, bbox_inches='tight')
+        plt.savefig(filepath)
         print(f"Figure saved to: {filepath}")
     
     plt.show()
@@ -742,7 +743,7 @@ def _plot_safety_metrics_impl(n_samples_values,
 
 def plot_initial_samples_comparison(results_dir, output_dir=None, use_large_fonts=True):
     """
-    Plot timing comparison between standard GP and scalable GP
+    Plot timing comparison between full GP and scalable GP
     for varying number of initial samples
     
     Parameters
@@ -798,10 +799,10 @@ def plot_initial_samples_comparison(results_dir, output_dir=None, use_large_font
     for n_samples in n_samples_values:
         print(f"\nn_safe_samples = {n_samples}:")
         
-        # Standard GP
+        # Full GP
         if n_samples in numpy_results:
             results = numpy_results[n_samples]
-            print(f"  Standard GP: {len(results)} runs")
+            print(f"  Full GP: {len(results)} runs")
             
             # Extract timing (total per iteration if available)
             times = []
@@ -901,7 +902,7 @@ def plot_initial_samples_comparison(results_dir, output_dir=None, use_large_font
         # Scalable GP
         if n_samples in scalable_results:
             results = scalable_results[n_samples]
-            print(f"  Scalable GP: {len(results)} runs")
+            print(f"  DTF-GP: {len(results)} runs")
             
             # Extract timing
             times = []
@@ -1054,12 +1055,12 @@ def plot_initial_samples_comparison(results_dir, output_dir=None, use_large_font
         if not np.isnan(numpy_time_mean[i]) or not np.isnan(scalable_time_mean[i]):
             print(f"\nn_safe_samples = {n_val}:")
             if not np.isnan(numpy_time_mean[i]):
-                print(f"  Standard GP:")
+                print(f"  Full GP:")
                 print(f"    Time: {numpy_time_mean[i]:.3f} ± {numpy_time_std[i]:.3f} s")
                 print(f"    Mutual information: {numpy_info_gain_mean[i]:.3f} ± {numpy_info_gain_std[i]:.3f}")
                 print(f"    Feasibility: {numpy_feasible_mean[i]:.1f} ± {numpy_feasible_std[i]:.1f} %")
             if not np.isnan(scalable_time_mean[i]):
-                print(f"  Scalable GP:")
+                print(f"  DTF-GP:")
                 print(f"    Time: {scalable_time_mean[i]:.3f} ± {scalable_time_std[i]:.3f} s")
                 print(f"    Mutual information: {scalable_info_gain_mean[i]:.3f} ± {scalable_info_gain_std[i]:.3f}")
                 print(f"    Feasibility: {scalable_feasible_mean[i]:.1f} ± {scalable_feasible_std[i]:.1f} %")
