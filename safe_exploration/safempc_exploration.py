@@ -436,7 +436,82 @@ class StaticSafeMPCExploration(ExplorationModule):
 
     def find_max_variance_verbose(self, x_0: ndarray, sol_verbose: bool = False) -> Tuple[ndarray, bool, bool, ndarray,
                                                                                           ndarray, ndarray, ndarray]:
-        raise NotImplementedError
+        """Find the most informative static sample and return its safety tube.
+
+        Static exploration optimizes over the sampled state as well as the
+        control sequence. For safety verification we reconstruct the open-loop
+        safety trajectory from the best feasible NLP solution.
+        """
+        sigma_best = 0
+        x_best = None
+        u_best = None
+        k_fb_best = None
+        k_ff_best = None
+        p_best = None
+        q_best = None
+
+        for i in range(self.n_restarts_optimizer):
+            x_init = self.env._sample_start_state(self.sample_mean, self.sample_std)[:, None]
+            u_init = self.env.random_action()[:, None]
+
+            if self.T > 1:
+                k_fb_lqr = self.safempc.lqr_controller.get_control_matrix()
+                k_ff_init = np.zeros((self.T - 1, self.n_u))
+                for j in range(self.T - 1):
+                    k_ff_init[j, :] = self.env.random_action()
+
+                k_fb_init = np.tile(k_fb_lqr.reshape(1, -1), (self.T - 1, 1))
+                params_init = cas_reshape(k_fb_init, (-1, 1))
+                vars_init = np.vstack((x_init, u_init, cas_reshape(k_ff_init, (-1, 1))))
+            else:
+                k_fb_init = np.zeros((0, self.n_u * self.n_s))
+                k_ff_init = np.zeros((0, self.n_u))
+                params_init = np.zeros((0, 1))
+                vars_init = np.vstack((x_init, u_init))
+
+            sol = self.solver(x0=vars_init, p=params_init, lbg=self.lbg, ubg=self.ubg)
+            sigm_i = -float(sol["f"])
+
+            if sigm_i <= sigma_best:
+                continue
+
+            g_sol = np.array(sol["g"]).squeeze()
+            if not self._is_feasible(g_sol, np.array(self.lbg), np.array(self.ubg)):
+                continue
+
+            w_sol = sol["x"]
+            x_candidate = np.array(w_sol[:self.n_s])
+            u_candidate = np.array(w_sol[self.n_s:self.n_s + self.n_u])
+
+            if self.T > 1:
+                k_ff_start = self.n_s + self.n_u
+                k_ff_candidate = np.array(
+                    cas_reshape(w_sol[k_ff_start:], (self.T - 1, self.n_u))
+                )
+            else:
+                k_ff_candidate = np.zeros((0, self.n_u))
+
+            p_candidate, q_candidate = self.f_multistep_eval(
+                x_candidate, u_candidate, k_fb_init, k_ff_candidate
+            )
+
+            x_best = x_candidate
+            u_best = u_candidate
+            k_fb_best = np.array(k_fb_init)
+            k_ff_best = np.vstack((u_candidate.reshape(1, self.n_u), k_ff_candidate))
+            p_best = np.array(p_candidate)
+            q_best = np.array(q_candidate)
+            sigma_best = sigm_i
+
+            if self.verbosity > 0:
+                print(("New optimal sigma found at iteration {}".format(i)))
+                if self.verbosity > 1:
+                    print(("New feasible solution with sigma sum {} found".format(str(sigm_i))))
+
+        if x_best is None or u_best is None:
+            raise ValueError("No feasible solution found in exploration optimization!")
+
+        return x_best, u_best, True, k_fb_best, k_ff_best, p_best, q_best
 
     def update_model(self, x, y, train=False, replace_old=False):
         """ Simple wrapper around the update_model function of SafeMPC"""

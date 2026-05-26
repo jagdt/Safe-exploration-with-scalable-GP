@@ -5,7 +5,6 @@ Created on Tue Nov 21 09:37:59 2017
 @author: tkoller
 """
 
-import warnings
 import numpy as np
 import time
 
@@ -108,10 +107,6 @@ def run_exploration(conf, visualize=False):
         if static_exploration:
             exploration_module = StaticSafeMPCExploration(safempc, env, conf.n_restarts_optimizer,
                                                           conf.init_m_initial_data, conf.init_std_initial_data, conf.verbosity)
-
-            if verify_safety:
-                warnings.warn("Safety_verification not possible in static mode")
-                verify_safety = False
         else:
             exploration_module = DynamicSafeMPCExploration(safempc, env)
 

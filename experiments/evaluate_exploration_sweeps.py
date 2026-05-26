@@ -5,7 +5,7 @@ Evaluation script for MPC exploration initial samples sweep
 Aggregates results across multiple seeds and creates comparison plots
 """
 
-from logging import warning
+import warnings
 import sys
 import os
 import numpy as np
@@ -200,7 +200,7 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
             initial = timing_means['initial_training'][i]
             other = max(0.0, total - mpc - gp - initial)
             if other/total > 0.05:
-                warning.warn(f"Large 'other' time detected for {gp_type} at param value {param_values[i]}")
+                warnings.warn(f"Large 'other' time detected for {gp_type} at param value {param_values[i]}")
             other_time.append(other)
         
         timing_means['other'] = other_time
@@ -1083,11 +1083,13 @@ def main():
     # Specify result directories
     timestamp = args.timestamp
     
-    initial_samples_dir = f"experiments/thesis_results/initial_samples_sweep_{timestamp}"
-    
+    # initial_samples_dir = f"experiments/thesis_results/initial_samples_sweep_{timestamp}"
+    initial_samples_dir = f"results_exploration/initial_samples_sweep_{timestamp}"
+
     # Output directory for evaluation plots
-    output_dir = f"experiments/paper_plots_dev/evaluation_plots_{timestamp}"
-    
+    # output_dir = f"experiments/paper_plots_dev/evaluation_plots_{timestamp}"
+    output_dir = f"results_exploration/evaluation_plots_{timestamp}"
+
     # Check if directories exist
     if os.path.exists(initial_samples_dir):
         print("Evaluating initial samples sweep...")
