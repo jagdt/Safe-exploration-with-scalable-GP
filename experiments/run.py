@@ -7,6 +7,10 @@ Created on Wed Sep 20 10:03:14 2017
 """
 
 from typing import Optional, Tuple
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import torch
 
@@ -60,7 +64,7 @@ def _run_scenario(_run, scenario_file: Optional[str], environment: Optional[str]
     args:
         The parsed arguments (see create_parser for details)
     """
-    if scenario_file is not None and environment is None:
+    if scenario_file is not None:
         conf = load_config(scenario_file)
     elif scenario_file is None and environment is not None:
         conf = load_config(_get_scenario_file_name(environment))

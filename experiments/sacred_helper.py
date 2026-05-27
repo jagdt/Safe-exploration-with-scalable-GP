@@ -4,7 +4,10 @@ import sys
 import sacred
 from sacred.observers import MongoObserver, FileStorageObserver
 
-from experiments import sacred_auth_details
+try:
+    from experiments import sacred_auth_details
+except ImportError:
+    sacred_auth_details = None
 
 ex = sacred.Experiment()
 

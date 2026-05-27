@@ -13,7 +13,7 @@ class Config(DefaultConfigExploration):
     Options class for continued exploration from a previous run
     """
     static_exploration = False
-    n_safe = 2
+    n_safe = 4
     n_iterations = 10
     n_safe_samples = 500
 
@@ -32,10 +32,10 @@ class Config(DefaultConfigExploration):
     enable_objectives = False
 
     # -- GP model
-    gp_type = 'numpy'  # one of 'gpy', 'numpy', 'scalable'
+    gp_type = 'scalable'  # one of 'gpy', 'numpy', 'scalable'
     use_global_opt_first = False
     domain_lengths = [6.0, 2.5, 2.0]  # [dθ, θ, u]
-    update_model_interval = 1  # update GP with new data every n-th iteration, None to disable
+    update_model_interval = None  # update GP with new data every n-th iteration, None to disable
     retrain_gp_interval = None # retrain the gp every n-th iteration, None to disable
 
     # -- Scalable GP specific parameters

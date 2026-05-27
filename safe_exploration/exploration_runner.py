@@ -170,7 +170,7 @@ def run_exploration(conf, visualize=False):
             if verify_safety:
                 x_i, u_i, feasible, k_fb_all, k_ff_all, p_ctrl, q_all = exploration_module.find_max_variance_verbose(x_i
                                                                                                                      )
-
+                print(f"  MPC optimization: {'FEASIBLE' if feasible else 'INFEASIBLE'}")
                 if feasible:
                     h_m_safe_norm, h_safe_norm, h_m_obs_norm, h_obs_norm = env.get_safety_constraints(
                         normalize=True)
