@@ -63,7 +63,7 @@ def _rwth_light(hex_color, white_mix=0.2):
 
 
 RWTH_LIGHT_BLUE = _rwth_light(RWTH_BLUE)
-RWTH_LIGHT_GREEN = _rwth_light(RWTH_GREEN)
+RWTH_LIGHT_ORANGE = _rwth_light(RWTH_ORANGE)
 
 
 def load_results_from_directory(results_dir):
@@ -226,7 +226,7 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
         # # Initial Training - solid, alpha=1.0
         # values = np.array(all_timing_data['numpy']['means']['initial_training'])
         # h1 = ax.bar(x - width/2, values, width,
-        #        bottom=bottom_numpy, color=RWTH_GREEN, alpha=1.0)
+        #        bottom=bottom_numpy, color=RWTH_ORANGE, alpha=1.0)
         # handles.append(h1)
         # labels.append('Full GP (Initial Training)')
         # bottom_numpy += values
@@ -234,7 +234,7 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
         # GP Training - solid, alpha=0.8
         values = np.array(all_timing_data['numpy']['means']['gp_training'])
         h2 = ax.bar(x - width/2, values, width,
-               bottom=bottom_numpy, color=RWTH_GREEN, alpha=0.8)
+               bottom=bottom_numpy, color=RWTH_ORANGE, alpha=0.8)
         handles.append(h2)
         labels.append('Full GP (Online Training)')
         bottom_numpy += values
@@ -243,7 +243,7 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
         values = np.array(all_timing_data['numpy']['means']['mpc_optimization'])
         # First layer: colored background with transparency
         h3a = ax.bar(x - width/2, values, width,
-               bottom=bottom_numpy, color=RWTH_GREEN, alpha=0.6, linewidth=0)
+               bottom=bottom_numpy, color=RWTH_ORANGE, alpha=0.6, linewidth=0)
         # Second layer: opaque black hatch lines only
         h3b = ax.bar(x - width/2, values, width,
                bottom=bottom_numpy, color='none', alpha=1.0, hatch='//', edgecolor='black', linewidth=0)
@@ -254,7 +254,7 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
         # # Other time - very light color
         # values = np.array(all_timing_data['numpy']['means']['other'])
         # h4 = ax.bar(x - width/2, values, width,
-        #        bottom=bottom_numpy, color=RWTH_GREEN, alpha=0.3)
+        #        bottom=bottom_numpy, color=RWTH_ORANGE, alpha=0.3)
         # handles.append(h4)
         # labels.append('Full GP (Other)')
         # bottom_numpy += values
@@ -274,7 +274,7 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
             if not times:
                 continue
             x_positions = np.full(len(times), x[idx] - width/2)
-            sc = ax.scatter(x_positions, times, color=_rwth_light(RWTH_GREEN,0.75), s=100, edgecolors=_rwth_light(RWTH_GREEN,0.25), linewidth=1.2, zorder=5)
+            sc = ax.scatter(x_positions, times, color=_rwth_light(RWTH_ORANGE,0.75), s=100, edgecolors=_rwth_light(RWTH_ORANGE,0.25), linewidth=1.2, zorder=5)
             if scatter_handle is None:
                 scatter_handle = sc
     
@@ -500,10 +500,58 @@ def plot_info_gain_trajectories_impl(results_by_type, gp_types, param_name, para
             plt.show()
 
 
+def _extract_info_gain_trajectories(results_list):
+    """Extract comparable mutual-information trajectories from result records."""
+    trajectories = []
+
+    for result in results_list:
+        info_gain_key = 'information_gain_reference' if 'information_gain_reference' in result else 'information_gain'
+
+        if info_gain_key not in result:
+            continue
+
+        if isinstance(result[info_gain_key], dict):
+            if 'trajectory' in result[info_gain_key]:
+                traj = result[info_gain_key]['trajectory']
+            elif 'per_iteration' in result[info_gain_key]:
+                traj = result[info_gain_key]['per_iteration']
+            else:
+                continue
+        elif isinstance(result[info_gain_key], (list, np.ndarray)):
+            traj = result[info_gain_key]
+        else:
+            continue
+
+        traj = np.array(traj)
+        if traj.ndim > 1:
+            traj = np.sum(traj, axis=1)
+        trajectories.append(traj)
+
+    if not trajectories:
+        return None
+
+    min_len = min(len(t) for t in trajectories)
+    return np.array([t[:min_len] for t in trajectories])
+
+
+def _select_params_for_run_spread(param_values, max_panels=2):
+    """Choose a small number of parameter values so individual runs stay readable."""
+    param_values = list(param_values)
+    if len(param_values) <= max_panels:
+        return param_values
+    if max_panels == 1:
+        return [param_values[len(param_values) // 2]]
+    return [param_values[0], param_values[-1]]
+
+
 def plot_info_gain_comparison(results_by_type, gp_types, param_name, param_values, output_dir=None):
     """
-    Plot mutual information comparison between full GP and Scalable GP in one plot
-    Full GP in blue (different shades), Scalable GP in green (different shades)
+    Plot mutual information comparison with individual seed trajectories.
+
+    To keep the plot readable, only one or two parameter values are shown. Each
+    parameter value gets a distinct line style while each GP keeps its color.
+    The plot displays faint individual runs, a one-standard-deviation band, and
+    marker-styled mean trajectories.
     
     Parameters
     ----------
@@ -518,110 +566,98 @@ def plot_info_gain_comparison(results_by_type, gp_types, param_name, param_value
     output_dir : str, optional
         Directory to save plots
     """
-    # Create single plot
+    selected_params = _select_params_for_run_spread(param_values, max_panels=2)
     fig, ax = plt.subplots(1, 1, figsize=(12, 8))
-    
-    # Generate color shades: Full GP in blue, Scalable GP in green
-    n_params = len(param_values)
 
-    def _shades_from_base(hex_color, n, white_mix_max=0.60):
-        """Return n shades from light (mixed with white) to base color."""
-        base_rgb = np.array(mcolors.to_rgb(hex_color))
-        if n <= 1:
-            return [base_rgb]
-        shades = []
-        for i in range(n):
-            t = i / (n - 1)
-            white_mix = white_mix_max * (1 - t)
-            rgb = (1 - white_mix) * base_rgb + white_mix * np.ones(3)
-            shades.append(rgb)
-        return shades
-
-    numpy_colors = _shades_from_base(RWTH_GREEN, n_params)
-    scalable_colors = _shades_from_base(RWTH_BLUE, n_params)
-    
-    gp_colors = {
-        'numpy': numpy_colors,
-        'scalable': scalable_colors
-    }
-    
-    # Define line styles for different parameter values
-    line_styles = ['-', '--', '-.', ':']
-    if n_params > len(line_styles):
-        # Repeat line styles if needed
-        line_styles = line_styles * ((n_params // len(line_styles)) + 1)
-    
     gp_labels = {
         'numpy': 'Full GP',
         'scalable': 'DTF-GP'
     }
-    
-    for param_idx, param_val in enumerate(param_values):
+
+    gp_colors = {
+        'numpy': RWTH_ORANGE,
+        'scalable': RWTH_BLUE,
+    }
+
+    param_line_styles = ['-', '--']
+    marker = 'o'
+    legend_handles = []
+    legend_labels = []
+
+    for param_idx, param_val in enumerate(selected_params):
         for gp_type in gp_types:
             if param_val not in results_by_type[gp_type]:
                 continue
-            
-            results_list = results_by_type[gp_type][param_val]
-            
-            # Extract information gain trajectories
-            trajectories = []
-            for result in results_list:
-                info_gain_key = 'information_gain_reference' if 'information_gain_reference' in result else 'information_gain'
-                
-                if info_gain_key in result:
-                    # New format: dict with 'trajectory' or 'per_iteration'
-                    if isinstance(result[info_gain_key], dict):
-                        if 'trajectory' in result[info_gain_key]:
-                            traj = result[info_gain_key]['trajectory']
-                        elif 'per_iteration' in result[info_gain_key]:
-                            traj = result[info_gain_key]['per_iteration']
-                        else:
-                            continue
-                        if isinstance(traj, list):
-                            traj = np.array(traj)
-                        # Sum across dimensions if multi-dimensional
-                        if traj.ndim > 1:
-                            traj = np.sum(traj, axis=1)
-                        trajectories.append(traj)
-                    # Legacy format: array
-                    elif isinstance(result[info_gain_key], (list, np.ndarray)):
-                        traj = np.array(result[info_gain_key])
-                        if traj.ndim > 1:
-                            traj = np.sum(traj, axis=1)
-                        trajectories.append(traj)
-            
-            if not trajectories:
-                continue
-            
-            # Ensure all trajectories have the same length
-            min_len = min(len(t) for t in trajectories)
-            trajectories = [t[:min_len] for t in trajectories]
-            trajectories = np.array(trajectories)
-            
-            # Calculate mean across seeds (no std plotted)
-            mean_traj = np.mean(trajectories, axis=0)
-            iterations = np.arange(1, len(mean_traj) + 1)
 
-            # Plot mean trajectory with specific line style
-            label = rf'{gp_labels[gp_type]} ($N_{{\mathrm{{init}}}}={param_val}$)'
-            ax.plot(
+            trajectories = _extract_info_gain_trajectories(results_by_type[gp_type][param_val])
+            if trajectories is None:
+                continue
+
+            mean_traj = np.mean(trajectories, axis=0)
+            std_traj = np.std(trajectories, axis=0)
+            iterations = np.arange(1, len(mean_traj) + 1)
+            color = gp_colors[gp_type]
+            linestyle = param_line_styles[param_idx % len(param_line_styles)]
+
+            for traj in trajectories:
+                ax.plot(
+                    iterations,
+                    traj,
+                    color=color,
+                    linestyle=linestyle,
+                    linewidth=1.0,
+                    alpha=0.3,
+                    zorder=1,
+                )
+
+            ax.fill_between(
+                iterations,
+                mean_traj - std_traj,
+                mean_traj + std_traj,
+                color=color,
+                alpha=0.14,
+                linewidth=0,
+                zorder=2,
+            )
+
+            line, = ax.plot(
                 iterations,
                 mean_traj,
-                color=gp_colors[gp_type][param_idx],
-                linestyle=line_styles[param_idx],
-                label=label,
-                linewidth=3.5,
+                color=color,
+                linestyle=linestyle,
+                marker=marker,
+                markevery=1,
+                markersize=10,
+                # linewidth=3.2,
+                label=rf'{gp_labels[gp_type]} ($N_{{\mathrm{{init}}}}={param_val}$)',
+                zorder=4,
             )
-    
+
+            if line.get_label() not in legend_labels:
+                legend_handles.append(line)
+                legend_labels.append(line.get_label())
+
     ax.set_xlabel('Iteration')
     ax.set_ylabel('Mutual information')
     ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-    ax.legend(loc='lower right')
-    # ax.grid(True, alpha=0.3)
+    ax.tick_params(direction='out', width=1.5, length=6)
+
+    if legend_handles:
+        ax.legend(
+            legend_handles,
+            legend_labels,
+            loc='lower right',
+            frameon=True,
+            framealpha=0.9,
+            handlelength=3.2,
+            handletextpad=0.9,
+            numpoints=1,
+        )
     
     plt.tight_layout()
     
     if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
         filepath = os.path.join(output_dir, f"info_gain_comparison_{param_name}.svg")
         plt.savefig(filepath)
         print(f"Figure saved to: {filepath}")
@@ -686,7 +722,7 @@ def _plot_safety_metrics_impl(n_samples_values,
     
     ax1.bar(x - width/2, numpy_safety_mean, width, 
             label='Full GP', 
-            color=RWTH_LIGHT_GREEN, alpha=1.0, zorder=3)
+            color=RWTH_LIGHT_ORANGE, alpha=1.0, zorder=3)
     ax1.bar(x + width/2, scalable_safety_mean, width,
             label='DTF-GP',
             color=RWTH_LIGHT_BLUE, alpha=1.0, zorder=3)
@@ -716,7 +752,7 @@ def _plot_safety_metrics_impl(n_samples_values,
     
     ax2.bar(x - width/2, numpy_inside_mean, width,
             label='Full GP',
-            color=RWTH_LIGHT_GREEN, alpha=1.0, zorder=3)
+            color=RWTH_LIGHT_ORANGE, alpha=1.0, zorder=3)
     ax2.bar(x + width/2, scalable_inside_mean, width,
             label='DTF-GP',
             color=RWTH_LIGHT_BLUE, alpha=1.0, zorder=3)
