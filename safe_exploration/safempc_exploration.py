@@ -155,13 +155,16 @@ class StaticSafeMPCExploration(ExplorationModule):
         prob = {'f': cost, 'x': opt_vars, 'p': opt_params, 'g': g}
 
         opt = {'error_on_fail': False,
+                'print_time': False,
+                'record_time': False,
                 'ipopt': {'hessian_approximation': 'limited-memory', "max_iter": 120,
                         "expect_infeasible_problem": "no",
                         'acceptable_tol': 1e-4, "acceptable_constr_viol_tol": 1e-5,
                         "bound_frac": 0.5, "start_with_resto": "no",
                         "required_infeasibility_reduction": 0.85,
                         "acceptable_iter": 8,
-                        "print_level": 0}}
+                        "print_level": 0,
+                        "sb": 'yes'}}
                 # 'jit': True,  # Enable just-in-time compilation
                 # 'compiler': 'shell',
                 # 'jit_options': {'flags': ['-O1']}}  # ipopt
