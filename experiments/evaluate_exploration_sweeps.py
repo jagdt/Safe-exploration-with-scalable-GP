@@ -20,30 +20,42 @@ import argparse
 # Add parent directory to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-# Configure matplotlib
+# Automatica/autart dimensions:
+# \textwidth = 42pc = 504pt, with 1in = 72.27pt.
+TEXTWIDTH_IN = 42 * 12 / 72.27
+SINGLE_FIG_WIDTH_IN = 0.45 * TEXTWIDTH_IN
+SINGLE_FIGSIZE = (SINGLE_FIG_WIDTH_IN, SINGLE_FIG_WIDTH_IN / 1.5)
+TIMING_FIGSIZE = (SINGLE_FIG_WIDTH_IN, SINGLE_FIG_WIDTH_IN * 0.95)
+FULL_WIDTH_FIGSIZE = (TEXTWIDTH_IN, 2.55)
+
+# Configure matplotlib for figures saved at their final LaTeX display size.
 plt.rcParams.update({
     'font.family': 'serif',
     'font.serif': ['Computer Modern Roman', 'Times New Roman', 'DejaVu Serif'],
-    'font.size': 4,
-    'axes.labelsize': 28,
-    'axes.titlesize': 28,
-    'axes.labelpad': 10,
-    'xtick.labelsize': 24,
-    'ytick.labelsize': 24,
-    'legend.fontsize': 22,
-    'lines.linewidth': 5.0,
+    'font.size': 8,
+    'axes.labelsize': 8,
+    'axes.titlesize': 8,
+    'axes.labelpad': 3,
+    'xtick.labelsize': 7,
+    'ytick.labelsize': 7,
+    'legend.fontsize': 7,
+    'lines.linewidth': 1.2,
+    'lines.markersize': 3.5,
     'text.usetex': False,
     'mathtext.fontset': 'cm'
 })
 
-# Larger font sizes for subfigure display (will be ~0.48 textwidth instead of 0.85)
+# Kept for call-site compatibility. Figures are now generated at their final
+# LaTeX display size, so no artificial font inflation is needed.
 large_plot_params = {
-    'font.size': 30,
-    'axes.labelsize': 36,
-    'xtick.labelsize': 30,
-    'ytick.labelsize': 30,
-    'legend.fontsize': 28,
-    'lines.linewidth': 4.5,
+    'font.size': 9,
+    'axes.labelsize': 9,
+    'axes.titlesize': 9,
+    'xtick.labelsize': 8,
+    'ytick.labelsize': 8,
+    'legend.fontsize': 8,
+    'lines.linewidth': 1.2,
+    'lines.markersize': 3.5,
 }
 
 # RWTH colors
@@ -144,8 +156,6 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
     output_dir : str, optional
         Directory to save plots
     """
-    fig, ax = plt.subplots(figsize=(12, 8))
-    
     # Timing components to visualize
     components = ['initial_training', 'gp_training', 'mpc_optimization', 'total']
     
@@ -207,7 +217,7 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
         all_timing_data[gp_type] = {'means': timing_means, 'stds': timing_stds, 'raw_times': timing_raws}
     
     # Plot grouped stacked bars
-    fig, ax = plt.subplots(figsize=(12, 8))
+    fig, ax = plt.subplots(figsize=TIMING_FIGSIZE)
     x = np.arange(len(param_values))
     width = 0.35
     
@@ -236,7 +246,7 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
         h2 = ax.bar(x - width/2, values, width,
                bottom=bottom_numpy, color=RWTH_ORANGE, alpha=0.8)
         handles.append(h2)
-        labels.append('Full GP (Online Training)')
+        labels.append('Full GP (Online updates)')
         bottom_numpy += values
         
         # MPC Optimization - hatch, alpha=0.6 for color, alpha=1.0 for hatch
@@ -246,7 +256,7 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
                bottom=bottom_numpy, color=RWTH_ORANGE, alpha=0.6, linewidth=0)
         # Second layer: opaque black hatch lines only
         h3b = ax.bar(x - width/2, values, width,
-               bottom=bottom_numpy, color='none', alpha=1.0, hatch='//', edgecolor='black', linewidth=0)
+               bottom=bottom_numpy, color='none', alpha=1.0, hatch='////', edgecolor='black', linewidth=0)
         handles.append((h3a, h3b))
         labels.append('Full GP (MPC)')
         bottom_numpy += values
@@ -262,7 +272,8 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
         # Add std dev bar at top of stack
         combined_means = np.array(all_timing_data['numpy']['means']['gp_training']) + np.array(all_timing_data['numpy']['means']['mpc_optimization'])
         combined_stds = np.array(all_timing_data['numpy']['stds']['gp_training']) + np.array(all_timing_data['numpy']['stds']['mpc_optimization'])
-        eb = ax.errorbar(x - width/2, combined_means, yerr=combined_stds, fmt='none', ecolor='black', capsize=5, capthick=2, elinewidth=2, alpha=0.7, zorder=10)
+        eb = ax.errorbar(x - width/2, combined_means, yerr=combined_stds, fmt='none', ecolor='black',
+                         capsize=2.5, capthick=0.8, elinewidth=0.8, alpha=0.7, zorder=10)
         if std_dev_handle is None:
             std_dev_handle = eb
     
@@ -274,7 +285,8 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
             if not times:
                 continue
             x_positions = np.full(len(times), x[idx] - width/2)
-            sc = ax.scatter(x_positions, times, color=_rwth_light(RWTH_ORANGE,0.75), s=100, edgecolors=_rwth_light(RWTH_ORANGE,0.25), linewidth=1.2, zorder=5)
+            sc = ax.scatter(x_positions, times, color=_rwth_light(RWTH_ORANGE, 0.75), s=12,
+                            edgecolors=_rwth_light(RWTH_ORANGE, 0.25), linewidth=0.4, zorder=5)
             if scatter_handle is None:
                 scatter_handle = sc
     
@@ -295,7 +307,7 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
         h6 = ax.bar(x + width/2, values, width,
                bottom=bottom_scalable, color=RWTH_BLUE, alpha=0.8)
         handles.append(h6)
-        labels.append('DTF-GP (Online Training)')
+        labels.append('DTF-GP (Online updates)')
         bottom_scalable += values
         
         # MPC Optimization - hatch, alpha=0.6 for color, alpha=1.0 for hatch
@@ -305,7 +317,7 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
                bottom=bottom_scalable, color=RWTH_BLUE, alpha=0.6, linewidth=0)
         # Second layer: opaque black hatch lines only
         h7b = ax.bar(x + width/2, values, width,
-               bottom=bottom_scalable, color='none', alpha=1.0, hatch='//', edgecolor='black', linewidth=0)
+               bottom=bottom_scalable, color='none', alpha=1.0, hatch='////', edgecolor='black', linewidth=0)
         handles.append((h7a, h7b))
         labels.append('DTF-GP (MPC)')
         bottom_scalable += values
@@ -321,7 +333,8 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
         # Add std dev bar at top of stack
         combined_means = np.array(all_timing_data['scalable']['means']['gp_training']) + np.array(all_timing_data['scalable']['means']['mpc_optimization'])
         combined_stds = np.array(all_timing_data['scalable']['stds']['gp_training']) + np.array(all_timing_data['scalable']['stds']['mpc_optimization'])
-        ax.errorbar(x + width/2, combined_means, yerr=combined_stds, fmt='none', ecolor='black', capsize=5, capthick=2, elinewidth=2, alpha=0.7, zorder=10)
+        ax.errorbar(x + width/2, combined_means, yerr=combined_stds, fmt='none', ecolor='black',
+                    capsize=2.5, capthick=0.8, elinewidth=0.8, alpha=0.7, zorder=10)
     
         for idx in range(len(all_timing_data['scalable']['raw_times']['gp_training'])):
             gp_training = all_timing_data['scalable']['raw_times']['gp_training'][idx]
@@ -330,9 +343,10 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
             if not times:
                 continue
             x_positions = np.full(len(times), x[idx] + width/2)
-            ax.scatter(x_positions, times, color=_rwth_light(RWTH_BLUE,0.75), s=100, edgecolors=_rwth_light(RWTH_BLUE,0.25), linewidth=1.2, zorder=5)
+            ax.scatter(x_positions, times, color=_rwth_light(RWTH_BLUE, 0.75), s=12,
+                       edgecolors=_rwth_light(RWTH_BLUE, 0.25), linewidth=0.4, zorder=5)
     
-    ax.set_xlabel(r'Number of initial training points $N_{\mathrm{init}}$')
+    ax.set_xlabel(r'Initial samples $N_{\mathrm{init}}$')
     ax.set_ylabel('Average time per iteration (s)')
     ax.set_xticks(x)
     ax.set_xticklabels([str(p) for p in param_values])
@@ -341,19 +355,37 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
     if std_dev_handle is not None:
         handles.append(std_dev_handle)
         labels.append('Std. Dev. (total time)')
-    
+
     # Create dummy scatter for legend with neutral color (represents both green and blue points in plot)
-    dummy_scatter = ax.scatter([], [], color='gray', s=100, edgecolors='dimgray', linewidth=1.2, alpha=0.6)
+    dummy_scatter = ax.scatter([], [], color='gray', s=12, edgecolors='dimgray', linewidth=0.4, alpha=0.6)
     handles.append(dummy_scatter)
-    labels.append('Individual Run Times')
+    labels.append('Individual runs')
+
+    # Matplotlib fills legends row-wise. With two columns this order keeps one
+    # long online-update label and one short MPC label per row.
+    if len(handles) == 6:
+        legend_order = [0, 2, 4, 1, 3, 5]
+        handles = [handles[i] for i in legend_order]
+        labels = [labels[i] for i in legend_order]
     
-    ax.legend(handles, labels, loc='upper right')
+    fig.legend(
+        handles,
+        labels,
+        loc='lower center',
+        bbox_to_anchor=(0.55, 0.03),
+        ncol=2,
+        frameon=True,
+        handlelength=1.8,
+        handletextpad=0.6,
+        borderpad=0.5,
+        labelspacing=0.25,
+    )
     
     # Add margin at top (10% extra space) and ensure y-axis starts at 0
     y_min, y_max = ax.get_ylim()
     ax.set_ylim([max(0, y_min), y_max * 1.1])
     
-    plt.tight_layout()
+    plt.tight_layout(rect=[0, 0.22, 1, 1], pad=0.35)
     
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
@@ -417,7 +449,7 @@ def plot_info_gain_trajectories_impl(results_by_type, gp_types, param_name, para
     
     for gp_type in gp_types:
         # Create separate figure for each GP type
-        fig, ax = plt.subplots(figsize=(12, 8))
+        fig, ax = plt.subplots(figsize=SINGLE_FIGSIZE)
         
         for param_idx, param_val in enumerate(param_values):
             if param_val not in results_by_type[gp_type]:
@@ -473,8 +505,8 @@ def plot_info_gain_trajectories_impl(results_by_type, gp_types, param_name, para
             ax.fill_between(iterations, mean_traj - std_traj, mean_traj + std_traj, 
                           color=colors[param_idx], alpha=0.2)
         
-        ax.set_xlabel('Iteration', labelpad=10)
-        ax.set_ylabel('Mutual information', labelpad=10)
+        ax.set_xlabel('Iteration')
+        ax.set_ylabel('Mutual information')
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
         ax.legend(loc='upper left')
         # ax.grid(True, alpha=0.3)
@@ -548,10 +580,9 @@ def plot_info_gain_comparison(results_by_type, gp_types, param_name, param_value
     """
     Plot mutual information comparison with individual seed trajectories.
 
-    To keep the plot readable, only one or two parameter values are shown. Each
-    parameter value gets a distinct line style while each GP keeps its color.
-    The plot displays faint individual runs, a one-standard-deviation band, and
-    marker-styled mean trajectories.
+    Each selected parameter value gets its own subplot. The plot displays faint
+    individual runs, a one-standard-deviation band, and marker-styled mean
+    trajectories.
     
     Parameters
     ----------
@@ -566,8 +597,17 @@ def plot_info_gain_comparison(results_by_type, gp_types, param_name, param_value
     output_dir : str, optional
         Directory to save plots
     """
-    selected_params = _select_params_for_run_spread(param_values, max_panels=2)
-    fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+    selected_params = list(param_values[:3])
+    if not selected_params:
+        return
+
+    fig, axes = plt.subplots(
+        1,
+        len(selected_params),
+        figsize=FULL_WIDTH_FIGSIZE,
+        sharey=True,
+    )
+    axes = np.atleast_1d(axes)
 
     gp_labels = {
         'numpy': 'Full GP',
@@ -579,12 +619,11 @@ def plot_info_gain_comparison(results_by_type, gp_types, param_name, param_value
         'scalable': RWTH_BLUE,
     }
 
-    param_line_styles = ['-', '--']
     marker = 'o'
     legend_handles = []
     legend_labels = []
 
-    for param_idx, param_val in enumerate(selected_params):
+    for ax, param_val in zip(axes, selected_params):
         for gp_type in gp_types:
             if param_val not in results_by_type[gp_type]:
                 continue
@@ -597,16 +636,14 @@ def plot_info_gain_comparison(results_by_type, gp_types, param_name, param_value
             std_traj = np.std(trajectories, axis=0)
             iterations = np.arange(1, len(mean_traj) + 1)
             color = gp_colors[gp_type]
-            linestyle = param_line_styles[param_idx % len(param_line_styles)]
 
             for traj in trajectories:
                 ax.plot(
                     iterations,
                     traj,
                     color=color,
-                    linestyle=linestyle,
-                    linewidth=1.0,
-                    alpha=0.3,
+                    linewidth=0.25,
+                    alpha=0.22,
                     zorder=1,
                 )
 
@@ -624,12 +661,9 @@ def plot_info_gain_comparison(results_by_type, gp_types, param_name, param_value
                 iterations,
                 mean_traj,
                 color=color,
-                linestyle=linestyle,
                 marker=marker,
                 markevery=1,
-                markersize=10,
-                # linewidth=3.2,
-                label=rf'{gp_labels[gp_type]} ($N_{{\mathrm{{init}}}}={param_val}$)',
+                label=gp_labels[gp_type],
                 zorder=4,
             )
 
@@ -637,25 +671,30 @@ def plot_info_gain_comparison(results_by_type, gp_types, param_name, param_value
                 legend_handles.append(line)
                 legend_labels.append(line.get_label())
 
-    ax.set_xlabel('Iteration')
-    ax.set_ylabel('Mutual information')
-    ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-    ax.tick_params(direction='out', width=1.5, length=6)
+        ax.set_title(rf'$N_{{\mathrm{{init}}}}={param_val}$')
+        ax.set_xlabel('Iteration')
+        ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+        ax.tick_params(direction='out', width=0.8, length=3)
+
+    axes[0].set_ylabel('Mutual information')
 
     if legend_handles:
-        ax.legend(
+        fig.legend(
             legend_handles,
             legend_labels,
-            loc='lower right',
+            loc='lower center',
+            bbox_to_anchor=(0.5, 0.05),
+            ncol=len(legend_handles),
             frameon=True,
             framealpha=0.9,
-            handlelength=3.2,
-            handletextpad=0.9,
+            handlelength=2.4,
+            handletextpad=0.6,
+            borderaxespad=0.0,
             numpoints=1,
         )
-    
-    plt.tight_layout()
-    
+
+    plt.tight_layout(rect=[0, 0.12, 1, 1])
+
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
         filepath = os.path.join(output_dir, f"info_gain_comparison_{param_name}.svg")
@@ -718,7 +757,7 @@ def _plot_safety_metrics_impl(n_samples_values,
     width = 0.35
     
     # Plot 1: Safety verification success rate
-    fig1, ax1 = plt.subplots(figsize=(12, 8))
+    fig1, ax1 = plt.subplots(figsize=SINGLE_FIGSIZE)
     
     ax1.bar(x - width/2, numpy_safety_mean, width, 
             label='Full GP', 
@@ -728,10 +767,10 @@ def _plot_safety_metrics_impl(n_samples_values,
             color=RWTH_LIGHT_BLUE, alpha=1.0, zorder=3)
     
     # Add grey line at 95% confidence level (on top of bars)
-    ax1.axhline(y=95, color='grey', linestyle='--', linewidth=6, alpha=1.0, zorder=4, label='95% confidence level')
+    ax1.axhline(y=95, color='grey', linestyle='--', linewidth=1.2, alpha=1.0, zorder=4, label='95% confidence level')
     
-    ax1.set_xlabel(r'Number of initial training points $N_{\mathrm{init}}$', labelpad=10, x=0.42)
-    ax1.set_ylabel('Safety verification\nsuccess rate (%)', labelpad=10)
+    ax1.set_xlabel(r'Number of initial training points $N_{\mathrm{init}}$', x=0.42)
+    ax1.set_ylabel('Safety verification\nsuccess rate (%)')
     ax1.set_xticks(x)
     ax1.set_xticklabels([str(int(n)) for n in n_samples_values])
     ax1.legend(loc='lower right')
@@ -748,7 +787,7 @@ def _plot_safety_metrics_impl(n_samples_values,
     plt.show()
     
     # Plot 2: Trajectory fully inside ellipsoid rate
-    fig2, ax2 = plt.subplots(figsize=(12, 8))
+    fig2, ax2 = plt.subplots(figsize=SINGLE_FIGSIZE)
     
     ax2.bar(x - width/2, numpy_inside_mean, width,
             label='Full GP',
@@ -758,10 +797,10 @@ def _plot_safety_metrics_impl(n_samples_values,
             color=RWTH_LIGHT_BLUE, alpha=1.0, zorder=3)
     
     # Add grey line at 95% confidence level (on top of bars)
-    ax2.axhline(y=95, color='grey', linestyle='--', linewidth=6, alpha=1.0, zorder=4, label='95% confidence level')
+    ax2.axhline(y=95, color='grey', linestyle='--', linewidth=1.2, alpha=1.0, zorder=4, label='95% confidence level')
     
-    ax2.set_xlabel(r'Number of initial training points $N_{\mathrm{init}}$', labelpad=10, x=0.42)
-    ax2.set_ylabel('Trajectory inside\nellipsoid rate (%)', labelpad=10)
+    ax2.set_xlabel(r'Number of initial training points $N_{\mathrm{init}}$', x=0.42)
+    ax2.set_ylabel('Trajectory inside\nellipsoid rate (%)')
     ax2.set_xticks(x)
     ax2.set_xticklabels([str(int(n)) for n in n_samples_values])
     ax2.legend(loc='lower right')

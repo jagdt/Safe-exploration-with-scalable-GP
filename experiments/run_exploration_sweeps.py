@@ -258,8 +258,8 @@ def main():
     # Common overrides for all experiments
     base_overrides = {
         'verbose': 1,
-        'static_exploration': True,
-        'n_iterations': 1,
+        'static_exploration': False,
+        'n_iterations': 20,
         'save_results': True,
         'save_vis': True,
         'visualize': False,
@@ -272,7 +272,7 @@ def main():
     # seeds = [6,7,8,9,10]
     # seeds = [1,2,3,4,5,6,7,8,9,10]
     # seeds = [11,12,13,14,15,16,17,18,19,20]
-    seeds = list(range(41, 61))
+    seeds = list(range(51, 81))
     # seeds = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]
     # seeds = list(range(2))
     # seeds = [1,2]  # For quick testing - use more seeds for full sweep
