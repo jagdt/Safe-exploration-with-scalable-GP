@@ -116,8 +116,8 @@ AXIS_LABELS = {
     'Δ(dθ)_short': r'$\Delta \dot{\vartheta}$',
     'Δ(θ)_short': r'$\Delta \vartheta$',
     # Full descriptive labels
-    'angular_velocity': r'Angular velocity $\dot{\vartheta}$ [rad/s]',
-    'angle': r'Angle $\vartheta$ [rad]',
+    'angular_velocity': r'$\dot{\vartheta}$ [rad/s]',
+    'angle': r'$\vartheta$ [rad]',
 }
 
 

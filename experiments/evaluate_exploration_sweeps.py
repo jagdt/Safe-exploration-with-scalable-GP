@@ -11,6 +11,7 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import colors as mcolors
+from matplotlib.patches import Rectangle
 import json
 from pathlib import Path
 from collections import defaultdict
@@ -20,6 +21,8 @@ import argparse
 # Add parent directory to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+from safe_exploration.visualization.styles import RWTH_BLACK, RWTH_CMAP, RWTH_PETROL, get_axis_label
+
 # Automatica/autart dimensions:
 # \textwidth = 42pc = 504pt, with 1in = 72.27pt.
 TEXTWIDTH_IN = 42 * 12 / 72.27
@@ -27,6 +30,7 @@ SINGLE_FIG_WIDTH_IN = 0.45 * TEXTWIDTH_IN
 SINGLE_FIGSIZE = (SINGLE_FIG_WIDTH_IN, SINGLE_FIG_WIDTH_IN / 1.5)
 TIMING_FIGSIZE = (SINGLE_FIG_WIDTH_IN, SINGLE_FIG_WIDTH_IN * 0.95)
 FULL_WIDTH_FIGSIZE = (TEXTWIDTH_IN, 2.55)
+STATE_SPACE_COMPARISON_FIGSIZE = (0.5 * TEXTWIDTH_IN, 2.35)
 
 # Configure matplotlib for figures saved at their final LaTeX display size.
 plt.rcParams.update({
@@ -66,6 +70,16 @@ RWTH_ORANGE = '#F6A800'
 RWTH_PURPLE = '#612158'
 RWTH_TURQUOISE = '#0098A1'
 
+# Fallback pendulum plot geometry, taken from the experiment config and
+# InvertedPendulum._init_safety_constraints.
+PENDULUM_MAX_DEG = 20.0
+PENDULUM_MAX_RAD = np.deg2rad(PENDULUM_MAX_DEG)
+PENDULUM_MAX_DTHETA = 1.2
+PENDULUM_MAX_DTHETA_THETA_0 = 0.8
+PENDULUM_NORM_X = np.array([1.0, np.deg2rad(20.0)])
+PENDULUM_DOMAIN_LENGTHS = np.array([6.0, 2.5, 2.0])
+PENDULUM_SIMPLE_CONSTRAINTS = False
+
 
 def _rwth_light(hex_color, white_mix=0.2):
     """Return a lighter variant of a hex color by mixing with white."""
@@ -104,6 +118,8 @@ def load_results_from_directory(results_dir):
                 # Convert lists back to numpy arrays where appropriate
                 if 'information_gain' in data and isinstance(data['information_gain'], list):
                     data['information_gain'] = np.array(data['information_gain'])
+                data['_results_dir'] = str(results_path)
+                data['_json_path'] = str(json_file)
                 results_list.append(data)
         except Exception as e:
             print(f"Error loading {json_file}: {e}")
@@ -393,7 +409,7 @@ def plot_timing_breakdown(results_by_type, gp_types, param_name, param_values, o
         plt.savefig(filepath)
         print(f"\nFigure saved to: {filepath}")
     
-    plt.show()
+    plt.close(fig)
 
 
 def plot_info_gain_trajectories(results_by_type, gp_types, param_name, param_values, output_dir=None, use_large_fonts=True):
@@ -529,7 +545,7 @@ def plot_info_gain_trajectories_impl(results_by_type, gp_types, param_name, para
                 plt.savefig(filepath)
                 print(f"Figure saved to: {filepath}")
             
-            plt.show()
+            plt.close(fig)
 
 
 def _extract_info_gain_trajectories(results_list):
@@ -574,6 +590,357 @@ def _select_params_for_run_spread(param_values, max_panels=2):
     if max_panels == 1:
         return [param_values[len(param_values) // 2]]
     return [param_values[0], param_values[-1]]
+
+
+def _load_run_res_data(result):
+    """Load the per-run numpy result dictionary belonging to a JSON summary."""
+    if 'res_data' in result:
+        return result['res_data']
+
+    results_dir = Path(result.get('_results_dir', '.'))
+    experiment_name = result.get('experiment_name')
+
+    candidate_paths = []
+    if experiment_name:
+        candidate_paths.append(results_dir / experiment_name / 'res_data.npy')
+
+    config = result.get('config', {})
+    gp_type = config.get('gp_type')
+    n_samples = config.get('n_safe_samples')
+    seed = config.get('seed')
+    if gp_type is not None and n_samples is not None and seed is not None:
+        candidate_paths.append(results_dir / f'{gp_type}_n{n_samples}_seed{seed}' / 'res_data.npy')
+
+    for path in candidate_paths:
+        if path.exists():
+            return np.load(path, allow_pickle=True).item()
+
+    return None
+
+
+def _extract_explored_state_trajectory(result, n_state_dims=2):
+    """Extract explored state points from z_all and convert them to physical units."""
+    z_all = result.get('z_all')
+    if z_all is None:
+        res_data = _load_run_res_data(result)
+        if res_data is None:
+            return None
+        z_all = res_data.get('z_all')
+
+    if z_all is None:
+        return None
+
+    if isinstance(z_all, (list, tuple)) and len(z_all) > 0:
+        z_all = z_all[0]
+
+    z_all = np.asarray(z_all)
+    if z_all.ndim == 3:
+        z_all = z_all[0]
+    if z_all.ndim != 2 or z_all.shape[1] < n_state_dims:
+        return None
+
+    states = np.asarray(z_all[:, :n_state_dims], dtype=float)
+    valid_rows = np.all(np.isfinite(states), axis=1)
+    states = states[valid_rows]
+
+    if len(states) == 0:
+        return None
+
+    return states * PENDULUM_NORM_X[:n_state_dims]
+
+
+def _pendulum_safety_polygon(simple_constraints=PENDULUM_SIMPLE_CONSTRAINTS):
+    """Return the unnormalized pendulum safe-region polygon used by the environment."""
+    if simple_constraints:
+        return np.array([
+            [-PENDULUM_MAX_DTHETA_THETA_0, PENDULUM_MAX_RAD],
+            [PENDULUM_MAX_DTHETA_THETA_0, PENDULUM_MAX_RAD],
+            [PENDULUM_MAX_DTHETA_THETA_0, -PENDULUM_MAX_RAD],
+            [-PENDULUM_MAX_DTHETA_THETA_0, -PENDULUM_MAX_RAD],
+        ])
+
+    return np.array([
+        [-PENDULUM_MAX_DTHETA, PENDULUM_MAX_RAD],
+        [PENDULUM_MAX_DTHETA_THETA_0, 0.0],
+        [PENDULUM_MAX_DTHETA, -PENDULUM_MAX_RAD],
+        [-PENDULUM_MAX_DTHETA_THETA_0, 0.0],
+    ])
+
+
+def _pendulum_domain_bounds(domain_lengths=PENDULUM_DOMAIN_LENGTHS):
+    """Return physical state-domain bounds from normalized GP domain lengths."""
+    domain_lengths = np.asarray(domain_lengths, dtype=float)
+    state_domain_lengths = domain_lengths[:2] * PENDULUM_NORM_X
+    return np.column_stack((-state_domain_lengths / 2.0, state_domain_lengths / 2.0))
+
+
+def _apply_state_space_reference_bounds(ax, trajectories):
+    """Add pendulum safety and GP domain bounds to a state-space axis."""
+    safety_polygon = _pendulum_safety_polygon()
+    closed_safety_polygon = np.vstack((safety_polygon, safety_polygon[0]))
+    domain_bounds = _pendulum_domain_bounds()
+    x_min, x_max = domain_bounds[0]
+    y_min, y_max = domain_bounds[1]
+
+    reference_points = [
+        safety_polygon,
+        np.array([[x_min, y_min], [x_max, y_max]]),
+    ]
+    reference_points.extend(trajectories)
+    all_points = np.vstack(reference_points)
+    x_data_min, y_data_min = np.min(all_points, axis=0)
+    x_data_max, y_data_max = np.max(all_points, axis=0)
+
+    x_margin = max(0.08 * (x_data_max - x_data_min), 0.05)
+    y_margin = max(0.08 * (y_data_max - y_data_min), 0.02)
+    ax.set_xlim(x_data_min - x_margin, x_data_max + x_margin)
+    ax.set_ylim(y_data_min - y_margin, y_data_max + y_margin)
+
+    xlim = ax.get_xlim()
+    ylim = ax.get_ylim()
+    domain_alpha = 0.08
+    ax.axvspan(xlim[0], x_min, color=RWTH_PETROL, alpha=domain_alpha, linewidth=0, zorder=0)
+    ax.axvspan(x_max, xlim[1], color=RWTH_PETROL, alpha=domain_alpha, linewidth=0, zorder=0)
+    ax.fill_between([x_min, x_max], ylim[0], y_min, color=RWTH_PETROL, alpha=domain_alpha,
+                    linewidth=0, zorder=0)
+    ax.fill_between([x_min, x_max], y_max, ylim[1], color=RWTH_PETROL, alpha=domain_alpha,
+                    linewidth=0, zorder=0)
+    ax.add_patch(Rectangle((x_min, y_min), x_max - x_min, y_max - y_min,
+                           linewidth=0.9, edgecolor=RWTH_PETROL, facecolor='none',
+                           zorder=1, label=r'Domain $\mathcal{Z}$'))
+    ax.plot(closed_safety_polygon[:, 0], closed_safety_polygon[:, 1],
+            color=RWTH_BLACK, linewidth=0.9, zorder=3,
+            label=r'Terminal safe region $\mathcal{X}_{\mathrm{safe}}$')
+
+
+def _collect_state_space_trajectories(results_by_type, gp_types, param_values):
+    """Collect physical-unit state-space trajectories grouped by GP type and parameter value."""
+    trajectories_by_type = {gp_type: {} for gp_type in gp_types}
+    max_iterations = 0
+
+    for gp_type in gp_types:
+        for param_val in param_values:
+            if param_val not in results_by_type[gp_type]:
+                continue
+
+            trajectories = []
+            for result in results_by_type[gp_type][param_val]:
+                states = _extract_explored_state_trajectory(result)
+                if states is None:
+                    continue
+                trajectories.append(states)
+                max_iterations = max(max_iterations, len(states))
+
+            if trajectories:
+                trajectories_by_type[gp_type][param_val] = trajectories
+
+    return trajectories_by_type, max_iterations
+
+
+def _plot_state_space_trajectories_on_axis(ax, trajectories, norm):
+    """Plot one collection of state-space trajectories on an axis."""
+    _apply_state_space_reference_bounds(ax, trajectories)
+
+    for states in trajectories:
+        iterations = np.arange(1, len(states) + 1)
+        ax.plot(
+            states[:, 0],
+            states[:, 1],
+            color=RWTH_BLUE,
+            linewidth=0.35,
+            alpha=0.18,
+            zorder=1,
+        )
+        ax.scatter(
+            states[:, 0],
+            states[:, 1],
+            c=iterations,
+            cmap=RWTH_CMAP,
+            norm=norm,
+            s=13,
+            linewidths=0.0,
+            alpha=0.9,
+            zorder=2,
+        )
+
+    ax.set_xlabel(get_axis_label('angular_velocity'))
+    ax.set_xticks([-2, 0, 2])
+    ax.tick_params(direction='out', width=0.8, length=3)
+
+
+def plot_state_space_exploration_progress(results_by_type, gp_types, param_name, param_values,
+                                          output_dir=None, max_panels=3):
+    """
+    Plot explored state-space trajectories colored by exploration iteration.
+
+    The state coordinates are read from z_all in the per-run res_data.npy files.
+    z_all stores state-action samples, so the first two columns are the pendulum
+    state: angular velocity and angle.
+    """
+    selected_params = list(param_values[:max_panels])
+    if not selected_params:
+        return
+
+    gp_labels = {
+        'numpy': 'Full GP',
+        'scalable': 'DTF-GP',
+    }
+
+    for gp_type in gp_types:
+        available_params = [
+            param_val for param_val in selected_params
+            if param_val in results_by_type[gp_type]
+        ]
+        if not available_params:
+            continue
+
+        trajectories_by_type, max_iterations = _collect_state_space_trajectories(
+            results_by_type, [gp_type], available_params
+        )
+        trajectories_by_param = trajectories_by_type[gp_type]
+
+        if not trajectories_by_param:
+            print(f"No state trajectories found for {gp_type}; skipping state-space plot.")
+            continue
+
+        plotted_params = [param_val for param_val in available_params if param_val in trajectories_by_param]
+
+        fig, axes = plt.subplots(
+            1,
+            len(plotted_params),
+            figsize=FULL_WIDTH_FIGSIZE,
+            sharex=True,
+            sharey=True,
+        )
+        axes = np.atleast_1d(axes)
+
+        norm = plt.Normalize(vmin=1, vmax=max_iterations)
+        mappable = plt.cm.ScalarMappable(norm=norm, cmap=RWTH_CMAP)
+        mappable.set_array([])
+
+        for ax, param_val in zip(axes, plotted_params):
+            trajectories = trajectories_by_param[param_val]
+            _plot_state_space_trajectories_on_axis(ax, trajectories, norm)
+            ax.set_title(rf'$N_{{\mathrm{{init}}}}={param_val}$')
+
+        # fig.supxlabel(r'$\dot{\vartheta}$ [rad/s]', y=0.08)
+        axes[0].set_ylabel(get_axis_label('angle'))
+        # axes[0].set_xlabel('')
+        # axes[1].set_xlabel('')
+        fig.suptitle(gp_labels.get(gp_type, gp_type), y=0.98)
+
+        cbar = fig.colorbar(mappable, ax=axes, pad=0.03, fraction=0.035, aspect=25)
+        cbar.set_label('Iteration')
+        cbar.set_ticks([5, 10, 15, 20])
+
+        legend_handles, legend_labels = axes[0].get_legend_handles_labels()
+        if legend_handles:
+            fig.legend(
+                legend_handles,
+                legend_labels,
+                loc='lower center',
+                bbox_to_anchor=(0.48, 0.05),
+                ncol=len(legend_handles),
+                frameon=True,
+                framealpha=0.9,
+                handlelength=2.2,
+                handletextpad=0.6,
+                borderaxespad=0.0,
+            )
+
+        fig.subplots_adjust(left=0.08, right=0.88, bottom=0.28, top=0.82, wspace=0.25)
+
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
+            filepath = os.path.join(output_dir, f"state_space_trajectory_{gp_type}_{param_name}.svg")
+            plt.savefig(filepath)
+            print(f"Figure saved to: {filepath}")
+
+        plt.close(fig)
+
+
+def plot_state_space_gp_comparison_by_param(results_by_type, gp_types, param_name, param_values,
+                                            output_dir=None):
+    """
+    Create one state-space trajectory comparison figure per parameter value.
+
+    Each figure places Full GP and DTF-GP next to each other. No figure or panel
+    titles are added, so the figure can be captioned externally.
+    """
+    gp_labels = {
+        'numpy': 'Full GP',
+        'scalable': 'DTF-GP',
+    }
+    comparison_gp_types = [gp_type for gp_type in gp_types if gp_type in gp_labels]
+    if not comparison_gp_types:
+        return
+
+    trajectories_by_type, max_iterations = _collect_state_space_trajectories(
+        results_by_type, comparison_gp_types, param_values
+    )
+    if max_iterations == 0:
+        print("No state trajectories found; skipping state-space GP comparison plots.")
+        return
+
+    norm = plt.Normalize(vmin=1, vmax=max_iterations)
+
+    for param_val in param_values:
+        plotted_gp_types = [
+            gp_type for gp_type in comparison_gp_types
+            if param_val in trajectories_by_type[gp_type]
+        ]
+        if len(plotted_gp_types) < 2:
+            continue
+
+        fig, axes = plt.subplots(
+            1,
+            len(plotted_gp_types),
+            figsize=STATE_SPACE_COMPARISON_FIGSIZE,
+            sharex=True,
+            sharey=True,
+        )
+        axes = np.atleast_1d(axes)
+        mappable = plt.cm.ScalarMappable(norm=norm, cmap=RWTH_CMAP)
+        mappable.set_array([])
+
+        for ax, gp_type in zip(axes, plotted_gp_types):
+            trajectories = trajectories_by_type[gp_type][param_val]
+            _plot_state_space_trajectories_on_axis(ax, trajectories, norm)
+            ax.set_title(gp_labels[gp_type])
+
+        axes[0].set_ylabel(get_axis_label('angle'))
+
+        fig.subplots_adjust(left=0.14, right=0.82, bottom=0.32, top=0.84, wspace=0.12)
+        cbar_ax = fig.add_axes([0.85, 0.32, 0.025, 0.52])
+        cbar = fig.colorbar(mappable, cax=cbar_ax)
+        cbar.set_label('Iteration')
+        cbar.set_ticks([5, 10, 15, 20])
+
+        legend_handles, legend_labels = axes[0].get_legend_handles_labels()
+        if legend_handles:
+            fig.legend(
+                legend_handles,
+                legend_labels,
+                loc='lower center',
+                bbox_to_anchor=(0.515, 0.02),
+                ncol=len(legend_handles),
+                frameon=True,
+                framealpha=0.9,
+                handlelength=2.2,
+                handletextpad=0.6,
+                borderaxespad=0.0,
+            )
+
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
+            filepath = os.path.join(
+                output_dir,
+                f"state_space_trajectory_gp_comparison_{param_name}_{param_val}.svg"
+            )
+            plt.savefig(filepath)
+            print(f"Figure saved to: {filepath}")
+
+        plt.close(fig)
 
 
 def plot_info_gain_comparison(results_by_type, gp_types, param_name, param_values, output_dir=None):
@@ -701,7 +1068,7 @@ def plot_info_gain_comparison(results_by_type, gp_types, param_name, param_value
         plt.savefig(filepath)
         print(f"Figure saved to: {filepath}")
     
-    plt.show()
+    plt.close(fig)
 
 
 def plot_safety_metrics(n_samples_values, 
@@ -784,7 +1151,7 @@ def _plot_safety_metrics_impl(n_samples_values,
         plt.savefig(filepath)
         print(f"Figure saved to: {filepath}")
     
-    plt.show()
+    plt.close(fig1)
     
     # Plot 2: Trajectory fully inside ellipsoid rate
     fig2, ax2 = plt.subplots(figsize=SINGLE_FIGSIZE)
@@ -813,7 +1180,7 @@ def _plot_safety_metrics_impl(n_samples_values,
         plt.savefig(filepath)
         print(f"Figure saved to: {filepath}")
     
-    plt.show()
+    plt.close(fig2)
 
 
 def plot_initial_samples_comparison(results_dir, output_dir=None, use_large_fonts=True):
@@ -1112,6 +1479,14 @@ def plot_initial_samples_comparison(results_dir, output_dir=None, use_large_font
     # Create mutual information comparison plot
     print("\nCreating mutual information comparison plot...")
     plot_info_gain_comparison(results_by_type, ['numpy', 'scalable'], 'n_safe_samples', n_samples_values.tolist(), output_dir)
+
+    # Create state-space exploration progress plots
+    print("\nCreating state-space exploration progress plots...")
+    plot_state_space_exploration_progress(results_by_type, ['numpy', 'scalable'], 'n_safe_samples',
+                                          n_samples_values.tolist(), output_dir)
+    print("\nCreating per-sample-count state-space GP comparison plots...")
+    plot_state_space_gp_comparison_by_param(results_by_type, ['numpy', 'scalable'], 'n_safe_samples',
+                                            n_samples_values.tolist(), output_dir)
     
     # Create safety metrics plot
     print("\nCreating safety metrics comparison...")
